@@ -81,12 +81,13 @@ function gftables(q)
 end
 
 # Creates fields for the priors: the closest to y, the stronger the field
-# The prior distr is given by exp(field)
-function extfields(q::Int, y::Vector{Int}, L::Real=1.0)
+# The prior distr is given by exp(-field)
+# A small noise with amplitude sigma is added to break the symmetry
+function extfields(q::Int, y::Vector{Int}, L::Real=1.0, sigma::Real=1e-3)
     fields = [OffsetArray(fill(1.0, q), 0:q-1) for v in eachindex(y)]
     for v in eachindex(fields)
         for a in 0:q-1
-            fields[v][a] = L*hd(a,y[v])
+            fields[v][a] = L*hd(a,y[v]) + sigma*randn()
         end
     end
     return fields
@@ -99,4 +100,22 @@ end
 
 function hd(x::Vector{Int}, y::Vector{Int})
     sum(x.!=y)
+end
+
+# Works only for GF(2^k)
+function paritycheck(FG::FactorGraph, y::Vector{Int})
+    H = adjmat(FG)
+    mult
+    k,n = size(H)
+    @assert length(y) == n
+    z = zeros(Int, k)
+    for i in eachindex(z)
+        s = 0
+        for j in eachindex(y)
+            s = xor(s, FG.mult[H[i,j], y[j]])
+        end
+        z[i] = s
+    end
+    sum(z) != 0 && println("Parity not fulfilled")
+    return z
 end

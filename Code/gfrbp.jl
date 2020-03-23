@@ -66,8 +66,10 @@ function beliefs(FG::FactorGraph, algo::BP)
         if neigs_of_v != []
             neigs = [FG.mfv[f][v] for f in neigs_of_v]
             g[v] = exp.(-FG.fields[v]) .* prod(neigs)   # I defined '*' for OffsetArray, hence also prod is well defined
-            g[v] ./= sum(g[v])
+        else
+            g[v] = exp.(-FG.fields[v])
         end
+        g[v] ./= sum(g[v])
     end
     return g
 end
@@ -79,8 +81,10 @@ function beliefs(FG::FactorGraph, algo::MS)
         if neigs_of_v != []
             neigs = [FG.mfv[f][v] for f in neigs_of_v]
             g[v] = -FG.fields[v] + sum(neigs)
-            g[v] .-= maximum(g[v])
+        else
+            g[v] = -FG.fields[v] + sum(neigs)
         end
+        g[v] .-= maximum(g[v])
     end
     return g
 end

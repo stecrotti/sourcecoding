@@ -17,7 +17,7 @@ function onebpiter!(FG::FactorGraph, algo::BP)
                     # find all messages f'->v'
                     neigs = [FG.mfv[fprime][vprime] for fprime in FG.Vneigs[vprime] if fprime!=f]
                     # product
-                    func = exp.(-FG.fields[vprime]) .* (neigs==[] ? Fun(q,1) : prod(neigs))
+                    func = exp.(-FG.fields[vprime]) * (neigs==[] ? Fun(q,1) : prod(neigs))
                     # adjust for weights
                     func .= func[mult[mult[FG.hfv[f][v],gfinv[FG.hfv[f][vprime]]],:]]
                     push!(funclist, func)
@@ -53,7 +53,7 @@ function onebpiter!(FG::FactorGraph, algo::MS)
             end
             FG.mfv[f][v] = gfconvlist(funclist)
             FG.mfv[f][v] .-= maximum(FG.mfv[f][v])
-            domain!(FG.mfv[f][v], FG.q, typemin(Int))   # Ensure the correct length by padding with neutral element
+            domain!(FG.mfv[f][v], FG.q, -Inf)   # Ensure the correct length by padding with neutral element
         end
     end
     return guesses(FG, algo)
@@ -82,7 +82,7 @@ function beliefs(FG::FactorGraph, algo::MS)
             neigs = [FG.mfv[f][v] for f in neigs_of_v]
             g[v] = -FG.fields[v] + sum(neigs)
         else
-            g[v] = -FG.fields[v] + sum(neigs)
+            g[v] = -FG.fields[v]
         end
         g[v] .-= maximum(g[v])
     end
@@ -93,8 +93,8 @@ function guesses(FG::FactorGraph, algo::Union{BP,MS})
     return [findmax(b)[2] for b in beliefs(FG,algo)]
 end
 
-function bp!(FG::FactorGraph, algo::Union{BP,MS}=BP(); max_iter=Int(3e2),
-    gamma=0, nmax=10, verbose=false)
+function bp!(FG::FactorGraph, algo::Union{BP,MS}; max_iter=Int(3e2),
+    gamma=0, nmin=10, verbose=false)
     newguesses = zeros(Int,FG.n)
     oldguesses = guesses(FG,algo)
     n = 0   # number of consecutive times for which the guesses are left unchanged by one BP iteration
@@ -102,10 +102,12 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}=BP(); max_iter=Int(3e2),
         newguesses = onebpiter!(FG, algo)
         if newguesses == oldguesses
             n += 1
-            if n >= nmax
+            if n >= nmin
                 verbose && println("BP/MS converged after $it steps")
                 return newguesses
             end
+        else
+            n=0
         end
         # Soft decimation
         for (v,gv) in enumerate(beliefs(FG,algo))

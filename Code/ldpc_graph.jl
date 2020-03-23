@@ -1,6 +1,6 @@
 function ldpc_graph(q::Int, n::Int, k::Int,
     nedges::Int, lambda::Vector{T}=[0.0, 1.0], rho::Vector{T}=[0.0, 0.5, 0.5],
-    fields = [OffsetArray(fill(1/q, q), 0:q-1) for v in 1:n]) where {T<:AbstractFloat}
+    fields = [Fun(1e-3*randn(q)) for v in 1:n]; verbose=false) where {T<:AbstractFloat}
 
     ### Argument validation ###
     if sum(lambda) != 1 || sum(rho) != 1
@@ -44,6 +44,9 @@ function ldpc_graph(q::Int, n::Int, k::Int,
                 ########
                 # If we want to avoid multi-edges, this is probably the right place to do something about it
                 ########
+                if findall(isequal(v), Fneigs[f])!=[]
+                    verbose && println("Warning: I'm building a multi-edge")
+                end
                 # Initialize neighbors
                 push!(Fneigs[f], v)
                 push!(Vneigs[v], f)
@@ -83,8 +86,8 @@ end
 # Creates fields for the priors: the closest to y, the stronger the field
 # The prior distr is given by exp(-field)
 # A small noise with amplitude sigma is added to break the symmetry
-function extfields(q::Int, y::Vector{Int}, L::Real=1.0, sigma::Real=1e-3)
-    fields = [OffsetArray(fill(1.0, q), 0:q-1) for v in eachindex(y)]
+function extfields(q::Int, y::Vector{Int}, L::Real=1.0, sigma::Real=1e-6)
+    fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in eachindex(y)]
     for v in eachindex(fields)
         for a in 0:q-1
             fields[v][a] = L*hd(a,y[v]) + sigma*randn()
@@ -103,19 +106,20 @@ function hd(x::Vector{Int}, y::Vector{Int})
 end
 
 # Works only for GF(2^k)
-function paritycheck(FG::FactorGraph, y::Vector{Int})
-    H = adjmat(FG)
-    mult
+function paritycheck(H::Array{Int,2}, y::Vector{Int}, mult::OffsetArray{Int,2,Array{Int,2}})
     k,n = size(H)
     @assert length(y) == n
     z = zeros(Int, k)
     for i in eachindex(z)
         s = 0
         for j in eachindex(y)
-            s = xor(s, FG.mult[H[i,j], y[j]])
+            s = xor(s, mult[H[i,j], y[j]])
         end
         z[i] = s
     end
-    sum(z) != 0 && println("Parity not fulfilled")
     return z
+end
+
+function paritycheck(FG::FactorGraph, algo::Union{BP,MS})
+    return paritycheck(adjmat(FG), guesses(FG,algo), FG.mult)
 end

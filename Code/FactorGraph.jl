@@ -24,7 +24,7 @@ function FactorGraph(q::Int, n::Int, k::Int)
 end
 
 # Construct graph from adjacency matrix (for checks with simple examples)
-function FactorGraph(q::Int, A::Array{Int,2}, fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in 1:size(A,2)])
+function FactorGraph(q::Int, A::Array{Int,2}, fields = [Fun(1e-3*randn(q)) for v in 1:size(A,2)])
     k,n = size(A)
     Vneigs = [Int[] for v in 1:n]
     Fneigs = [Int[] for f in 1:k]

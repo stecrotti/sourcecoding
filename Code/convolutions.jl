@@ -9,6 +9,10 @@ domain!(f::Fun, n::Int, v=zero(eltype(f))) = n <= length(f.parent) ?  resize!(f.
     append!(f.parent, fill(v, n - length(f)))
 import Base.*
 *(f1::Fun, f2::Fun) = Fun(f1.parent .* f2.parent)
+import Base.exp
+exp(f::Fun) = exp.(f)
+import Base.abs
+abs(f::Fun) = abs.(f)
 
 # Normal convolution
 function convolution(f1::Fun, f2::Fun)

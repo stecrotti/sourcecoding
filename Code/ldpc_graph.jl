@@ -86,7 +86,7 @@ end
 # Creates fields for the priors: the closest to y, the stronger the field
 # The prior distr is given by exp(-field)
 # A small noise with amplitude sigma is added to break the symmetry
-function extfields(q::Int, y::Vector{Int}, L::Real=1.0, sigma::Real=1e-6)
+function extfields(q::Int, y::Vector{Int}, L::Real=1.0, sigma::Real=1e-3)
     fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in eachindex(y)]
     for v in eachindex(fields)
         for a in 0:q-1
@@ -118,8 +118,4 @@ function paritycheck(H::Array{Int,2}, y::Vector{Int}, mult::OffsetArray{Int,2,Ar
         z[i] = s
     end
     return z
-end
-
-function paritycheck(FG::FactorGraph, algo::Union{BP,MS})
-    return paritycheck(adjmat(FG), guesses(FG,algo), FG.mult)
 end

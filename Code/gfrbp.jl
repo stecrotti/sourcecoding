@@ -89,25 +89,63 @@ function beliefs(FG::FactorGraph, algo::MS)
     return g
 end
 
+function guesses(beliefs::AbstractVector)
+    return [findmax(b)[2] for b in beliefs]
+end
 function guesses(FG::FactorGraph, algo::Union{BP,MS})
-    return [findmax(b)[2] for b in beliefs(FG,algo)]
+    return guesses(beliefs(FG,algo))
 end
 
-function bp!(FG::FactorGraph, algo::Union{BP,MS}; max_iter=Int(3e2),
-    gamma=0, nmin=10, verbose=false)
-    newguesses = zeros(Int,FG.n)
-    oldguesses = guesses(FG,algo)
-    n = 0   # number of consecutive times for which the guesses are left unchanged by one BP iteration
-    for it in 1:max_iter
-        newguesses = onebpiter!(FG, algo)
-        if newguesses == oldguesses
-            n += 1
-            if n >= nmin
-                verbose && println("BP/MS converged after $it steps")
-                return newguesses
+# function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
+#     gamma=0, nmin=10, verbose=false)
+#     nmin > maxiter && error("nmin must be smaller than maxiter")
+#     newguesses = zeros(Int,FG.n)
+#     oldguesses = guesses(FG,algo)
+#     n = 0   # number of consecutive times for which the guesses are left unchanged by one BP iteration
+#     for it in 1:maxiter
+#         newguesses = onebpiter!(FG, algo)
+#         if newguesses == oldguesses
+#             n += 1
+#             if n >= nmin
+#                 verbose && println("BP/MS converged after $it steps")
+#                 return newguesses
+#             end
+#         else
+#             n=0
+#         end
+#         # Soft decimation
+#         for (v,gv) in enumerate(beliefs(FG,algo))
+#             if typeof(algo)==BP
+#                 FG.fields[v] .+= (gamma*log.(gv))
+#             else
+#                 FG.fields[v] .+= gamma*gv
+#             end
+#         end
+#         oldguesses = newguesses
+#     end
+#     # error("BP/MS unconverged after $max_iter steps")
+#     return :unconverged
+# end
+
+function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
+    gamma=0, tol=1e-4, verbose=false)
+    oldmessages = deepcopy(FG.mfv)
+    maxchange = 0.0     # Maximum change in messages from last step
+    for it in 1:maxiter
+        onebpiter!(FG, algo)
+        newmessages = FG.mfv
+        for f in eachindex(newmessages)
+            for (v,msg) in newmessages[f]
+                change = maximum(abs(msg - oldmessages[f][v]))
+                if change > maxchange
+                    maxchange = change
+                end
             end
-        else
-            n=0
+        end
+
+        if maxchange < tol
+            verbose && println("BP/MS converged after $it steps")
+            return guesses(FG,algo)
         end
         # Soft decimation
         for (v,gv) in enumerate(beliefs(FG,algo))
@@ -117,8 +155,13 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}; max_iter=Int(3e2),
                 FG.fields[v] .+= gamma*gv
             end
         end
-        oldguesses = newguesses
+        oldmessages = deepcopy(newmessages)
     end
     # error("BP/MS unconverged after $max_iter steps")
     return :unconverged
+end
+
+
+function paritycheck(FG::FactorGraph, algo::Union{BP,MS})
+    return paritycheck(adjmat(FG), guesses(FG,algo), FG.mult)
 end

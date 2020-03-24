@@ -23,7 +23,6 @@ function onebpiter!(FG::FactorGraph, algo::BP)
                     push!(funclist, func)
                 end
             end
-
             FG.mfv[f][v] = gfconvlist(funclist)
             FG.mfv[f][v] ./= sum(FG.mfv[f][v])
             domain!(FG.mfv[f][v], FG.q, 0.0)   # Ensure the correct length by padding with neutral element
@@ -147,6 +146,7 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
             verbose && println("BP/MS converged after $it steps")
             return guesses(FG,algo)
         end
+        maxchange = 0.0
         # Soft decimation
         for (v,gv) in enumerate(beliefs(FG,algo))
             if typeof(algo)==BP

@@ -151,3 +151,7 @@ function Nfactors(FG::FactorGraph)    # number of hyperedges in the core
      end
      return Nfact
 end
+
+function priors(FG::FactorGraph)
+    return exp.(-FG.fields)
+end

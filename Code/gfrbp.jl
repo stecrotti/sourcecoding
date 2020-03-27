@@ -4,7 +4,8 @@ end
 struct BP
 end
 
-function onebpiter!(FG::FactorGraph, algo::BP)
+function onebpiter!(FG::FactorGraph, algo::BP,
+     neutral=Fun(x == 0 ? 1.0 : 0.0 for x=0:FG.q-1))
     mult = FG.mult
     gfinv = FG.gfinv
     # factor -> variable
@@ -23,15 +24,15 @@ function onebpiter!(FG::FactorGraph, algo::BP)
                     push!(funclist, func)
                 end
             end
-            FG.mfv[f][v] = gfconvlist(funclist)
+            FG.mfv[f][v] = reduce(gfconv, funclist, init=neutral)
             FG.mfv[f][v] ./= sum(FG.mfv[f][v])
-            domain!(FG.mfv[f][v], FG.q, 0.0)   # Ensure the correct length by padding with neutral element
         end
     end
     return guesses(FG, algo)
 end
 
-function onebpiter!(FG::FactorGraph, algo::MS)
+function onebpiter!(FG::FactorGraph, algo::MS,
+     neutral=Fun(x == 0 ? 0.0 : -Inf for x=0:FG.q-1))
     mult = FG.mult
     gfinv = FG.gfinv
     # factor -> variable
@@ -50,9 +51,8 @@ function onebpiter!(FG::FactorGraph, algo::MS)
                     push!(funclist, func)
                 end
             end
-            FG.mfv[f][v] = gfconvlist(funclist)
+            FG.mfv[f][v] = reduce(gfmsc, funclist, init=neutral)
             FG.mfv[f][v] .-= maximum(FG.mfv[f][v])
-            domain!(FG.mfv[f][v], FG.q, -Inf)   # Ensure the correct length by padding with neutral element
         end
     end
     return guesses(FG, algo)
@@ -95,43 +95,54 @@ function guesses(FG::FactorGraph, algo::Union{BP,MS})
     return guesses(beliefs(FG,algo))
 end
 
-# function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
-#     gamma=0, nmin=10, verbose=false)
-#     nmin > maxiter && error("nmin must be smaller than maxiter")
-#     newguesses = zeros(Int,FG.n)
-#     oldguesses = guesses(FG,algo)
-#     n = 0   # number of consecutive times for which the guesses are left unchanged by one BP iteration
-#     for it in 1:maxiter
-#         newguesses = onebpiter!(FG, algo)
-#         if newguesses == oldguesses
-#             n += 1
-#             if n >= nmin
-#                 verbose && println("BP/MS converged after $it steps")
-#                 return newguesses
-#             end
-#         else
-#             n=0
-#         end
-#         # Soft decimation
-#         for (v,gv) in enumerate(beliefs(FG,algo))
-#             if typeof(algo)==BP
-#                 FG.fields[v] .+= (gamma*log.(gv))
-#             else
-#                 FG.fields[v] .+= gamma*gv
-#             end
-#         end
-#         oldguesses = newguesses
-#     end
-#     # error("BP/MS unconverged after $max_iter steps")
-#     return :unconverged
-# end
-
+# BP with convergence criterion: guesses
 function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
+    gamma=0, nmin=100, verbose=false)
+    if  typeof(algo) == BP
+        neutral = Fun(x == 0 ? 1.0 : 0.0 for x=0:FG.q-1)
+    else
+        neutral = Fun(x == 0 ? 0.0 : -Inf for x=0:FG.q-1)
+    end
+    newguesses = zeros(Int,FG.n)
+    oldguesses = guesses(FG,algo)
+    n = 0   # number of consecutive times for which the guesses are left unchanged by one BP iteration
+    for it in 1:maxiter
+        newguesses = onebpiter!(FG, algo)
+        if newguesses == oldguesses
+            n += 1
+            if n >= nmin
+                verbose && println("BP/MS converged after $it steps")
+                return newguesses
+            end
+        else
+            n=0
+        end
+        oldguesses = newguesses
+        # Soft decimation
+        for (v,gv) in enumerate(beliefs(FG,algo))
+            if typeof(algo)==BP
+                FG.fields[v] .+= (gamma*log.(gv))
+            else
+                FG.fields[v] .+= gamma*gv
+            end
+        end
+    end
+    # error("BP/MS unconverged after $max_iter steps")
+    return :unconverged
+end
+
+# BP with convergence criterion: messages
+function bp_msg!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
     gamma=0, tol=1e-4, verbose=false)
+    if  typeof(algo) == BP
+        neutral = Fun(x == 0 ? 1.0 : 0.0 for x=0:FG.q-1)
+    else
+        neutral = Fun(x == 0 ? 0.0 : -Inf for x=0:FG.q-1)
+    end
     oldmessages = deepcopy(FG.mfv)
     maxchange = 0.0     # Maximum change in messages from last step
     for it in 1:maxiter
-        onebpiter!(FG, algo)
+        onebpiter!(FG, algo, neutral)
         newmessages = FG.mfv
         for f in eachindex(newmessages)
             for (v,msg) in newmessages[f]

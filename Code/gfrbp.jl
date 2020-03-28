@@ -10,22 +10,22 @@ function onebpiter!(FG::FactorGraph, algo::BP,
     gfinv = FG.gfinv
     # factor -> variable
     for f in randperm(length(FG.Fneigs))
-        for v in FG.Fneigs[f]
+        for (v_idx, v) in enumerate(FG.Fneigs[f])
             # Define functions for weighted convolution
             funclist = Fun[]
-            for vprime in FG.Fneigs[f]
+            for (vprime_idx,vprime) in enumerate(FG.Fneigs[f])
                 if vprime != v
                     # find all messages f'->v'
-                    neigs = [FG.mfv[fprime][vprime] for fprime in FG.Vneigs[vprime] if fprime!=f]
+                    neigs = [FG.mfv[fprime][findfirst(isequal(vprime),FG.Fneigs[fprime])] for fprime in FG.Vneigs[vprime] if fprime!=f]
                     # product
                     func = exp.(-FG.fields[vprime]) * (neigs==[] ? Fun(q,1) : prod(neigs))
                     # adjust for weights
-                    func .= func[mult[mult[FG.hfv[f][v],gfinv[FG.hfv[f][vprime]]],:]]
+                    func .= func[mult[mult[FG.hfv[f][v_idx],gfinv[FG.hfv[f][vprime_idx]]],:]]
                     push!(funclist, func)
                 end
             end
-            FG.mfv[f][v] = reduce(gfconv, funclist, init=neutral)
-            FG.mfv[f][v] ./= sum(FG.mfv[f][v])
+            FG.mfv[f][v_idx] = reduce(gfconv, funclist, init=neutral)
+            FG.mfv[f][v_idx] ./= sum(FG.mfv[f][v_idx])
         end
     end
     return guesses(FG, algo)
@@ -37,22 +37,22 @@ function onebpiter!(FG::FactorGraph, algo::MS,
     gfinv = FG.gfinv
     # factor -> variable
     for f in randperm(length(FG.Fneigs))
-        for v in FG.Fneigs[f]
+        for (v_idx, v) in enumerate(FG.Fneigs[f])
             # Define functions for weighted convolution
             funclist = Fun[]
-            for vprime in FG.Fneigs[f]
+            for (vprime_idx, vprime) in enumerate(FG.Fneigs[f])
                 if vprime != v
                     # find all messages f'->v'
-                    neigs = [FG.mfv[fprime][vprime] for fprime in FG.Vneigs[vprime] if fprime!=f]
+                    neigs = [FG.mfv[fprime][findfirst(isequal(vprime),FG.Fneigs[fprime])] for fprime in FG.Vneigs[vprime] if fprime!=f]
                     # product
-                    func = -FG.fields[vprime] .+ (neigs==[] ? Fun(q,) : sum(neigs))
+                    func = -FG.fields[vprime] .+ (neigs==[] ? Fun(q,0) : sum(neigs))
                     # adjust for weights
-                    func .= func[mult[mult[FG.hfv[f][v],gfinv[FG.hfv[f][vprime]]],:]]
+                    func .= func[mult[mult[FG.hfv[f][v_idx],gfinv[FG.hfv[f][vprime_idx]]],:]]
                     push!(funclist, func)
                 end
             end
-            FG.mfv[f][v] = reduce(gfmsc, funclist, init=neutral)
-            FG.mfv[f][v] .-= maximum(FG.mfv[f][v])
+            FG.mfv[f][v_idx] = reduce(gfmsc, funclist, init=neutral)
+            FG.mfv[f][v_idx] .-= maximum(FG.mfv[f][v_idx])
         end
     end
     return guesses(FG, algo)
@@ -63,7 +63,7 @@ function beliefs(FG::FactorGraph, algo::BP)
     g = [OffsetArray(fill(1/q, q), 0:q-1) for v in 1:FG.n]
     for (v, neigs_of_v) in enumerate(FG.Vneigs)
         if neigs_of_v != []
-            neigs = [FG.mfv[f][v] for f in neigs_of_v]
+            neigs = [FG.mfv[f][findfirst(isequal(v),FG.Fneigs[f])] for f in neigs_of_v]
             g[v] = exp.(-FG.fields[v]) .* prod(neigs)   # I defined '*' for OffsetArray, hence also prod is well defined
         else
             g[v] = exp.(-FG.fields[v])
@@ -78,7 +78,7 @@ function beliefs(FG::FactorGraph, algo::MS)
     g = [OffsetArray(fill(0.0, q), 0:q-1) for v in 1:FG.n]
     for (v, neigs_of_v) in enumerate(FG.Vneigs)
         if neigs_of_v != []
-            neigs = [FG.mfv[f][v] for f in neigs_of_v]
+            neigs = [FG.mfv[f][findfirst(isequal(v),FG.Fneigs[f])] for f in neigs_of_v]
             g[v] = -FG.fields[v] + sum(neigs)
         else
             g[v] = -FG.fields[v]
@@ -127,7 +127,7 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
             end
         end
     end
-    # error("BP/MS unconverged after $max_iter steps")
+    verbose && println("BP/MS converged after $maxiter steps")
     return :unconverged
 end
 
@@ -168,7 +168,7 @@ function bp_msg!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
         end
         oldmessages = deepcopy(newmessages)
     end
-    # error("BP/MS unconverged after $max_iter steps")
+    verbose && println("BP/MS converged after $maxiter steps")
     return :unconverged
 end
 

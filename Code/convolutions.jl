@@ -50,23 +50,6 @@ function gfmsc(f1::Fun, f2::Fun)
     return f3
 end
 
-function gfconvlist(lf, conv=gfconv)
-    n = length(lf)
-    n == 1 && return lf[1]
-    n == 0 && return Fun([1])    # return neutral element of convolution
-    f1 = gfconvlist(lf[1:n÷2], conv)
-    f2 = gfconvlist(lf[n÷2+1:end], conv)
-    conv(f1, f2)
-end
-
-function gfmsclist(lf, conv=gfmsc)
-    n = length(lf)
-    n == 1 && return lf[1]
-    n == 0 && return Fun([0])   # return neutral element of MSC
-    f1 = gfmsclist(lf[1:n÷2], conv)
-    f2 = gfmsclist(lf[n÷2+1:end], conv)
-    conv(f1, f2)
-end
 
 ### Not used
 function gfconvweighted(f1::Fun, f2::Fun, w1::Int=1, w2::Int=1;
@@ -85,4 +68,22 @@ function gfmscweighted(f1::Fun, f2::Fun, w1::Int=1, w2::Int=1;
     g1 = f1[mult[gfinv[w1],:]]
     g2 = f2[mult[gfinv[w2],:]]
     return gfmsc(g1,g2)
+end
+
+function gfconvlist(lf, conv=gfconv)
+    n = length(lf)
+    n == 1 && return lf[1]
+    n == 0 && return Fun([1])    # return neutral element of convolution
+    f1 = gfconvlist(lf[1:n÷2], conv)
+    f2 = gfconvlist(lf[n÷2+1:end], conv)
+    conv(f1, f2)
+end
+
+function gfmsclist(lf, conv=gfmsc)
+    n = length(lf)
+    n == 1 && return lf[1]
+    n == 0 && return Fun([0])   # return neutral element of MSC
+    f1 = gfmsclist(lf[1:n÷2], conv)
+    f2 = gfmsclist(lf[n÷2+1:end], conv)
+    conv(f1, f2)
 end

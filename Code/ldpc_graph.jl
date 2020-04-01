@@ -45,7 +45,7 @@ function ldpc_graph(q::Int, n::Int, m::Int,
                 # If we want to avoid multi-edges, this is probably the right place to do something about it
                 ########
                 if findall(isequal(v), Fneigs[f])!=[]
-                    verbose && println("Warning: I'm building a multi-edge")
+                    verbose && println("Multi-edge discarded")
                     continue
                 end
                 # Initialize neighbors
@@ -85,13 +85,14 @@ function gftables(q)
 end
 
 # Creates fields for the priors: the closest to y, the stronger the field
-# The prior distr is given by exp(-field)
+# The prior distr is given by exp(field)
 # A small noise with amplitude sigma is added to break the symmetry
-function extfields(q::Int, y::Vector{Int}, L::Real=1.0, sigma::Real=1e-4)
+function extfields(q::Int, y::Vector{Int}, algo::Union{BP,MS}, L::Real=1.0, sigma::Real=1e-4)
     fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in eachindex(y)]
     for v in eachindex(fields)
         for a in 0:q-1
-            fields[v][a] = L*hd(a,y[v]) + sigma*randn()
+            fields[v][a] = -L*hd(a,y[v]) + sigma*randn()
+            typeof(algo)==BP && (fields[v][a] .= exp.(fields[v][a]))
         end
     end
     return fields

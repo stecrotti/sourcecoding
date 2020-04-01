@@ -73,7 +73,6 @@ end
 function vardegree(FG::FactorGraph, v::Int)::Int
     v > FG.n && error("Variable $v is not in the graph")
     return length(FG.Vneigs[v])
-
 end
 
 # Degree of factor node
@@ -90,19 +89,19 @@ function deleteval!(vec::Vector{T}, val::T) where T
     deleteat!(vec, findall(x->x==val, vec))
 end
 
-function deletefactor!(FG::FactorGraph, f::Int)
+function deletefactor!(FG::FactorGraph, f::Int=rand(filter(ff -> factdegree(FG,ff)!=0, 1:FG.m)))
     for v in FG.Fneigs[f]
         # delete factor from its neighbors' lists
         deleteval!(FG.Vneigs[v],f)
     end
     # delete messages from f
-    OffsetArray{Float64,1,Array{Float64,1}}[]
+    FG.mfv[f] = OffsetArray{Float64,1,Array{Float64,1}}[]
     # delete factor f
     FG.Fneigs[f] = []
-    return FG.Fneigs
+    return f
 end
 
-function deletevar!(FG::FactorGraph, v::Int)
+function deletevar!(FG::FactorGraph, v::Int=rand(filter(vv -> vardegree(FG,vv)!=0, 1:FG.n)))
     for f in eachindex(FG.Fneigs)
         # delete i from its neighbors' neighbor lists
         v_idx = findall(isequal(v), FG.Fneigs[f])
@@ -114,7 +113,7 @@ function deletevar!(FG::FactorGraph, v::Int)
     end
     # delete node v
     FG.Vneigs[v] = []
-    return FG.Fneigs
+    return v
 end
 
 # Leaf removal

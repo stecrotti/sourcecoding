@@ -11,8 +11,8 @@ import Base.*
 *(f1::Fun, f2::Fun) = Fun(f1.parent .* f2.parent)
 import Base.exp
 exp(f::Fun) = exp.(f)
-import Base.abs
-abs(f::Fun) = abs.(f)
+# import Base.abs
+# abs(f::Fun) = abs.(f)
 
 # Normal convolution
 function convolution(f1::Fun, f2::Fun)

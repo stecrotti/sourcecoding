@@ -21,7 +21,8 @@ function Simulation(
     maxiter = Int(1e3),                 # Max number of iteration for each run of BP
     convergence = :decvars,             # Convergence criterion: can be either :decvars or :messages
     nmin = 100,                         # If :decvars is chosen
-    tol = 1e-7,                         # if :messages is chosen
+    tol = 1e-7,                         # If :messages is chosen
+    b = 0,                              # Number of factors to be removed
     gamma = 0,                          # Reinforcement parameter
     verbose = false)
 
@@ -35,24 +36,26 @@ function Simulation(
             yield()
             println("---- Starting m = ", m[j], " ----")
             FG = ldpc_graph(q, n, m[j], nedges[j], lambda[j], rho[j], verbose=verbose)
+            # b-reduction
+            for _ in 1:b
+                deletefactor!(FG)
+            end
             for it in 1:navg
                 y = rand(0:q-1, n)
-                FG.fields .= extfields(q,y,L)
+                FG.fields .= extfields(q,y,algo,L)
                 if convergence == :decvars
                     (res, runtimes[j][it]) = @timed bp!(FG, algo, maxiter=maxiter, gamma=gamma, nmin=nmin, verbose=verbose)
                 elseif convergence == :messages
-                    (res, runtimes[j][it]) = @timed bp_msg!(FG, algo, maxiter=maxiter, tol=tol, nmin=nmin, verbose=verbose)
+                    (res, runtimes[j][it]) = @timed bp_msg!(FG, algo, maxiter=maxiter, gamma=gamma, tol=tol, verbose=verbose)
                 else
                     error("Field 'convergence' must be either :decvars or :messages")
                 end
-                if res != :unconverged
-                    converged[j][it] = true
-                end
+                res != :unconverged && (converged[j][it] = true)
                 parity[j][it] = sum(paritycheck(FG, algo))
                 rawdistortion[j][it] = hd(guesses(FG, algo),y)/n
                 refresh!(FG)
                 yield()
-                mod(it,5)==0 && println("Finished iter ", it)
+                mod(it,10)==0 && println("Finished iter ", it)
             end
         end
     end
@@ -66,6 +69,7 @@ function show(io::IO, sim::Simulation)
 end
 
 # Plot distortions
+import PyPlot.plot
 function plot(sim::Simulation)
     d = LinRange(0.001,0.5-0.001,100)
     r = LinRange(0, 1, 100)
@@ -80,6 +84,7 @@ function plot(sim::Simulation)
     plt.:xlabel("Rate")
     plt.:ylabel("Distortion")
     plt.:legend(["Lower bound", "Random compression"])
+    plt.:title("Mean disortion for instances that fulfill parity \n n = $(sim.n)")
 end
 
 # Print results
@@ -131,7 +136,7 @@ end
 
 ### Used internally
 function distortions(sim::Simulation)
-    return [mean(sim.rawdistortion[j][sim.parity[j].==0]) for j in 1:length(sim.m)]
+    return [mean(sim.rawdistortion[j][(sim.parity[j].==0) .& (sim.converged[j].==true)]) for j in 1:length(sim.m)]
 end
 
 rdb(D) = 1-(-D*log2(D)-(1-D)*log2(1-D))

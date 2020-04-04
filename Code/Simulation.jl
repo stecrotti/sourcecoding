@@ -35,12 +35,12 @@ function Simulation(
         for j in 1:length(m)
             yield()
             println("---- Starting m = ", m[j], " ----")
-            FG = ldpc_graph(q, n, m[j], nedges[j], lambda[j], rho[j], verbose=verbose)
-            # b-reduction
-            for _ in 1:b
-                deletefactor!(FG)
-            end
             for it in 1:navg
+                FG = ldpc_graph(q, n, m[j], nedges[j], lambda[j], rho[j], verbose=verbose)
+                # b-reduction
+                for _ in 1:b
+                    deletefactor!(FG)
+                end
                 y = rand(0:q-1, n)
                 FG.fields .= extfields(q,y,algo,L)
                 if convergence == :decvars
@@ -53,7 +53,7 @@ function Simulation(
                 res != :unconverged && (converged[j][it] = true)
                 parity[j][it] = sum(paritycheck(FG, algo))
                 rawdistortion[j][it] = hd(guesses(FG, algo),y)/n
-                refresh!(FG)
+                # refresh!(FG)
                 yield()
                 mod(it,10)==0 && println("Finished iter ", it)
             end
@@ -79,7 +79,7 @@ function plot(sim::Simulation)
     R = 1 .- sim.m/sim.n
     dist = distortions(sim)
     for j in 1:length(sim.m)
-        PyPlot.plot(R[j], dist[j], "o")
+        PyPlot.plot(R[j], dist[j], "o", ms=5)
     end
     plt.:xlabel("Rate")
     plt.:ylabel("Distortion")
@@ -128,6 +128,7 @@ function print(io::IO, sim::Simulation)
         avg_sec = Int(round(mod(mean(sim.runtimes[j]),60)))
         println(io, "Runtime: ", time_min, "m ", time_sec, "s. Average runtime per instance: ",
             avg_min, "m ", avg_sec, "s")
+        println("Average distortion for instances that fulfill parity: ", round(distortions(sim)[j],digits=2))
         pretty_table(io, data, ["" "Total" "Parity Y" "Parity N"], alignment=:c,
             hlines = [1,2], highlighters = h)
     end

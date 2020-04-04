@@ -122,6 +122,10 @@ function paritycheck(H::Array{Int,2}, y::Vector{Int}, mult::OffsetArray{Int,2,Ar
     return z
 end
 
+function paritycheck(FG::FactorGraph)
+    return paritycheck(adjmat(FG), guesses(FG), FG.mult)
+end
+
 #### Not used
 function ldpc_adjmat(q::Int, n::Int, m::Int,
     nedges::Int, lambda::Vector{T}=[0.0, 1.0], rho::Vector{T}=[0.0, 0.5, 0.5];

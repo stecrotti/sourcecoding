@@ -1,10 +1,11 @@
 struct Simulation
     n::Int
-    m::Vector{Int}
-    converged::Vector{BitArray{1}}
-    parity::Vector{Vector{Int}}
-    rawdistortion::Vector{Vector{Float64}}
-    runtimes::Vector{Vector{Float64}}
+    m::Int
+    converged::BitArray{1}
+    parity::Vector{Int}
+    rawdistortion::Vector{Float64}
+    iterations::Vector{Int}
+    runtimes::Vector{Float64}
     totaltime::Float64
 end
 
@@ -12,11 +13,11 @@ end
 function Simulation(
     algo::Union{BP,MS}, q::Int,
     n::Int,                             # Number of nodes, fixed
-    m::Vector{Int},                     # Vector with values of m=n-k, the number of rows in the system
+    m::Int,                             # m=n-k, the number of rows in the system
     L::Real,                            # Factor in the fields expression
-    nedges::Vector{Int},                #
-    lambda::Vector{Vector{Float64}},    # Parameters for graph construction
-    rho::Vector{Vector{Float64}};       #
+    nedges::Int,                        #
+    lambda::Vector{Float64},            # Parameters for graph construction
+    rho::Vector{Float64};               #
     navg = 10,                          # Number of runs for each value of m
     maxiter = Int(1e3),                 # Max number of iteration for each run of BP
     convergence = :decvars,             # Convergence criterion: can be either :decvars or :messages
@@ -26,38 +27,39 @@ function Simulation(
     gamma = 0,                          # Reinforcement parameter
     verbose = false)
 
-    converged = [falses(navg) for _ in 1:length(m)]
-    parity = [zeros(Int,navg) for _ in 1:length(m)]
-    runtimes = [zeros(navg) for _ in 1:length(m)]
-    rawdistortion = [zeros(navg) for _ in 1:length(m)]
+    converged = falses(navg)
+    parity = zeros(Int,navg)
+    runtimes = zeros(navg)
+    rawdistortion = zeros(navg)
+    iterations = zeros(Int,navg)
+
+    println("----------- Simulation starting -----------")
 
     t = @timed begin
-        for j in 1:length(m)
-            yield()
-            println("---- Starting m = ", m[j], " ----")
-            for it in 1:navg
-                FG = ldpc_graph(q, n, m[j], nedges[j], lambda[j], rho[j], verbose=verbose)
-                # b-reduction
-                for _ in 1:b
-                    deletefactor!(FG)
-                end
-                y = rand(0:q-1, n)
-                FG.fields .= extfields(q,y,algo,L)
-                if convergence == :decvars
-                    (res, runtimes[j][it]) = @timed bp!(FG, algo, maxiter=maxiter, gamma=gamma, nmin=nmin, verbose=verbose)
-                elseif convergence == :messages
-                    (res, runtimes[j][it]) = @timed bp_msg!(FG, algo, maxiter=maxiter, gamma=gamma, tol=tol, verbose=verbose)
-                else
-                    error("Field 'convergence' must be either :decvars or :messages")
-                end
-                res != :unconverged && (converged[j][it] = true)
-                parity[j][it] = sum(paritycheck(FG, algo))
-                rawdistortion[j][it] = hd(guesses(FG, algo),y)/n
-                # refresh!(FG)
-                yield()
-                mod(it,10)==0 && println("Finished iter ", it)
+        for it in 1:navg
+            FG = ldpc_graph(q, n, m, nedges, lambda, rho, verbose=verbose)
+            # b-reduction
+            for _ in 1:b
+                deletefactor!(FG)
+                m -= 1
             end
+            y = rand(0:q-1, n)
+            FG.fields .= extfields(q,y,algo,L)
+            if convergence == :decvars
+                ((res,iters), runtimes[it]) = @timed bp!(FG, algo, maxiter=maxiter, gamma=gamma, nmin=nmin, verbose=verbose)
+            elseif convergence == :messages
+                ((res,iters), runtimes[it]) = @timed bp_msg!(FG, algo, maxiter=maxiter, gamma=gamma, tol=tol, verbose=verbose)
+            else
+                error("Field 'convergence' must be either :decvars or :messages")
+            end
+            res != :unconverged && (converged[it] = true)
+            parity[it] = sum(paritycheck(FG))
+            rawdistortion[it] = hd(guesses(FG),y)/n
+            # refresh!(FG)
+            yield()
+            isinteger(10*it/maxiter) && println("Finished ", Int(it/maxiter*100), "%")
         end
+
     end
     totaltime = t[2]
     return Simulation(n,m,converged, parity, rawdistortion, runtimes, totaltime)

@@ -29,7 +29,7 @@ function onebpiter!(FG::FactorGraph, algo::BP,
             FG.fields[v] .= FG.fields[v] .* FG.mfv[f][v_idx]
         end
     end
-    return guesses(FG, algo)
+    return (FG)
 end
 
 function onebpiter!(FG::FactorGraph, algo::MS,
@@ -55,52 +55,14 @@ function onebpiter!(FG::FactorGraph, algo::MS,
             FG.fields[v] .+= FG.mfv[f][v_idx]
         end
     end
-    return guesses(FG, algo)
+    return guesses(FG)
 end
-
-# function beliefs(FG::FactorGraph, algo::BP)
-#     q = FG.q
-#     g = [OffsetArray(fill(1/q, q), 0:q-1) for v in 1:FG.n]
-#     for (v, neigs_of_v) in enumerate(FG.Vneigs)
-#         if neigs_of_v != []
-#             neigs = [FG.mfv[f][findfirst(isequal(v),FG.Fneigs[f])] for f in neigs_of_v]
-#             g[v] = exp.(-FG.fields[v]) .* prod(neigs)   # I defined '*' for OffsetArray, hence also prod is well defined
-#         else
-#             g[v] = exp.(-FG.fields[v])
-#         end
-#         g[v] ./= sum(g[v])
-#     end
-#     return g
-# end
-
-function beliefs(FG::FactorGraph, algo::BP)
-    return FG.fields
-end
-
-function beliefs(FG::FactorGraph, algo::MS)
-    return FG.fields
-end
-
-# function beliefs(FG::FactorGraph, algo::MS)
-#     q = FG.q
-#     g = [OffsetArray(fill(0.0, q), 0:q-1) for v in 1:FG.n]
-#     for (v, neigs_of_v) in enumerate(FG.Vneigs)
-#         if neigs_of_v != []
-#             neigs = [FG.mfv[f][findfirst(isequal(v),FG.Fneigs[f])] for f in neigs_of_v]
-#             g[v] = -FG.fields[v] + sum(neigs)
-#         else
-#             g[v] = -FG.fields[v]
-#         end
-#         g[v] .-= maximum(g[v])
-#     end
-#     return g
-# end
 
 function guesses(beliefs::AbstractVector)
     return [findmax(b)[2] for b in beliefs]
 end
-function guesses(FG::FactorGraph, algo::Union{BP,MS})
-    return guesses(beliefs(FG,algo))
+function guesses(FG::FactorGraph)
+    return guesses(FG.fields)
 end
 
 # BP with convergence criterion: guesses
@@ -112,7 +74,7 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
         neutral = Fun(x == 0 ? 0.0 : -Inf for x=0:FG.q-1)
     end
     newguesses = zeros(Int,FG.n)
-    oldguesses = guesses(FG,algo)
+    oldguesses = guesses(FG)
     n = 0   # number of consecutive times for which the guesses are left unchanged by one BP iteration
     for it in 1:maxiter
         newguesses = onebpiter!(FG, algo, neutral)
@@ -120,23 +82,23 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
             n += 1
             if n >= nmin
                 verbose && println("BP/MS converged after $it steps")
-                return :converged
+                return :converged, it
             end
         else
             n=0
         end
         oldguesses = newguesses
         # Soft decimation
-        for (v,gv) in enumerate(beliefs(FG,algo))
+        for (v,gv) in enumerate(FG.fields)
             if typeof(algo)==BP
-                FG.fields[v] .*= gv^gamma
+                FG.fields[v] .*= gv^(gamma*it)
             else
-                FG.fields[v] .+= gamma*gv
+                FG.fields[v] .+= (gamma*it)*gv
             end
         end
     end
     verbose && println("BP/MS unconverged after $maxiter steps")
-    return :unconverged
+    return :unconverged, maxiter
 end
 
 # BP with convergence criterion: messages
@@ -164,23 +126,18 @@ function bp_msg!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
 
         if maxchange < tol
             verbose && println("BP/MS converged after $it steps")
-            return :converged
+            return :converged, it
         end
         # Soft decimation
-        for (v,gv) in enumerate(beliefs(FG,algo))
+        for (v,gv) in enumerate(FG.fields)
             if typeof(algo)==BP
-                FG.fields[v] .+= (gamma*log.(gv))
+                FG.fields[v] .*= gv^(gamma*it)
             else
-                FG.fields[v] .+= gamma*gv
+                FG.fields[v] .+= (gamma*it)*gv
             end
         end
         oldmessages = deepcopy(newmessages)
     end
     verbose && println("BP/MS unconverged after $maxiter steps. Max change in messages: $maxchange")
-    return :unconverged
-end
-
-
-function paritycheck(FG::FactorGraph, algo::Union{BP,MS})
-    return paritycheck(adjmat(FG), guesses(FG,algo), FG.mult)
+    return :unconverged, maxiter
 end

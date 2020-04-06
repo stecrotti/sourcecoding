@@ -104,6 +104,8 @@ end
 # BP with convergence criterion: messages
 function bp_msg!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
     gamma=0, tol=1e-4)
+
+    f3 = Fun(FG.q)
     if  typeof(algo) == BP
         neutral = Fun(x == 0 ? 1.0 : 0.0 for x=0:FG.q-1)
     else
@@ -113,7 +115,7 @@ function bp_msg!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
     maxchange = 0.0     # Maximum change in messages from last step
     for it in 1:maxiter
         maxchange = 0.0
-        onebpiter!(FG, algo, neutral)
+        onebpiter!(FG, algo, f3, neutral)
         newmessages = FG.mfv
         for f in eachindex(newmessages)
             for (v_idx,msg) in enumerate(newmessages[f])

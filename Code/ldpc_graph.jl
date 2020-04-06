@@ -45,7 +45,7 @@ function ldpc_graph(q::Int, n::Int, m::Int,
                 # If we want to avoid multi-edges, this is probably the right place to do something about it
                 ########
                 if findall(isequal(v), Fneigs[f])!=[]
-                    verbose && println("Multi-edge discarded")
+                    # verbose && println("Multi-edge discarded")
                     continue
                 end
                 # Initialize neighbors

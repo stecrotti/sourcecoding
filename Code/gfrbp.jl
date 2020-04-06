@@ -70,7 +70,7 @@ end
 
 # BP with convergence criterion: guesses
 function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
-    gamma=0, nmin=100, verbose=false)
+    gamma=0, nmin=100)
     if  typeof(algo) == BP
         neutral = Fun(x == 0 ? 1.0 : 0.0 for x=0:FG.q-1)
     else
@@ -84,7 +84,6 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
         if newguesses == oldguesses
             n += 1
             if n >= nmin
-                verbose && println("BP/MS converged after $it steps")
                 return :converged, it
             end
         else
@@ -100,13 +99,12 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
             end
         end
     end
-    verbose && println("BP/MS unconverged after $maxiter steps")
     return :unconverged, maxiter
 end
 
 # BP with convergence criterion: messages
 function bp_msg!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
-    gamma=0, tol=1e-4, verbose=false)
+    gamma=0, tol=1e-4)
     if  typeof(algo) == BP
         neutral = Fun(x == 0 ? 1.0 : 0.0 for x=0:FG.q-1)
     else
@@ -128,7 +126,6 @@ function bp_msg!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
         end
 
         if maxchange < tol
-            verbose && println("BP/MS converged after $it steps")
             return :converged, it
         end
         # Soft decimation
@@ -141,6 +138,5 @@ function bp_msg!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
         end
         oldmessages = deepcopy(newmessages)
     end
-    verbose && println("BP/MS unconverged after $maxiter steps. Max change in messages: $maxchange")
     return :unconverged, maxiter
 end

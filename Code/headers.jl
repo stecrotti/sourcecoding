@@ -1,5 +1,5 @@
 using OffsetArrays, GaloisFields, Random, Primes, LinearAlgebra, Statistics,
-    PrettyTables, PyPlot
+    PrettyTables, PyPlot, JLD
 
 include("FactorGraph.jl")
 include("convolutions.jl")

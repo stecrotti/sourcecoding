@@ -5,10 +5,8 @@ struct BP
 end
 
 function onebpiter!(FG::FactorGraph, algo::BP,
-     neutral=Fun(x == 0 ? 1.0 : 0.0 for x=0:FG.q-1))
-    mult = FG.mult
-    gfinv = FG.gfinv
-    # factor -> variable
+    f3=Fun(FG.q), neutral=Fun(x == 0 ? 1.0 : 0.0 for x=0:FG.q-1))
+
     for f in randperm(length(FG.Fneigs))
         for (v_idx, v) in enumerate(FG.Fneigs[f])
             # Divide message from belief
@@ -19,11 +17,11 @@ function onebpiter!(FG::FactorGraph, algo::BP,
                 if vprime != v
                     func = FG.fields[vprime] ./ FG.mfv[f][vprime_idx]
                     # adjust for weights
-                    func .= func[mult[mult[FG.hfv[f][v_idx],gfinv[FG.hfv[f][vprime_idx]]],:]]
+                    func .= func[FG.mult[FG.mult[FG.hfv[f][v_idx],FG.gfinv[FG.hfv[f][vprime_idx]]],:]]
                     push!(funclist, func)
                 end
             end
-            FG.mfv[f][v_idx] = reduce(gfconv, funclist, init=neutral)
+            FG.mfv[f][v_idx] = reduce((f1,f2)->gfconv!(f3,f1,f2), funclist, init=neutral)
             FG.mfv[f][v_idx] ./= sum(FG.mfv[f][v_idx])
             # Update belief after updating the message
             FG.fields[v] .= FG.fields[v] .* FG.mfv[f][v_idx]
@@ -33,7 +31,7 @@ function onebpiter!(FG::FactorGraph, algo::BP,
 end
 
 function onebpiter!(FG::FactorGraph, algo::MS,
-    neutral=Fun(x == 0 ? 0.0 : -Inf for x=0:FG.q-1),
+    f3=Fun(FG.q), neutral=Fun(x == 0 ? 0.0 : -Inf for x=0:FG.q-1);
     wrong = Fun(q, -Inf))
 
     for f in randperm(length(FG.Fneigs))
@@ -50,7 +48,7 @@ function onebpiter!(FG::FactorGraph, algo::MS,
                     push!(funclist, func)
                 end
             end
-            FG.mfv[f][v_idx] = reduce(gfmsc, funclist, init=neutral)
+            FG.mfv[f][v_idx] = reduce((f1,f2)->gfmsc!(f3,f1,f2), funclist, init=neutral)
             FG.mfv[f][v_idx] .-= maximum(FG.mfv[f][v_idx])
             # Send warning if messages are all -Inf
             FG.mfv[f][v_idx] == wrong && println("Warning: message $f->$v is all -Inf")
@@ -76,11 +74,12 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
     else
         neutral = Fun(x == 0 ? 0.0 : -Inf for x=0:FG.q-1)
     end
+    f3 = Fun(FG.q)
     newguesses = zeros(Int,FG.n)
     oldguesses = guesses(FG)
     n = 0   # number of consecutive times for which the guesses are left unchanged by one BP iteration
     for it in 1:maxiter
-        newguesses = onebpiter!(FG, algo, neutral)
+        newguesses = onebpiter!(FG, algo, f3, neutral)
         if newguesses == oldguesses
             n += 1
             if n >= nmin

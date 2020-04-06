@@ -60,8 +60,7 @@ function Simulation(
             deletefactor!(FG)
             m -= 1
         end
-        y .= rand(0:q-1, n)
-        H[it] .= adjmat(FG)
+        y = rand(0:q-1, n)
     end
     t = @timed begin
         for it in 1:navg
@@ -72,10 +71,11 @@ function Simulation(
                     deletefactor!(FG)
                     m -= 1
                 end
-                y .= rand(0:q-1, n)
-                H[it] .= adjmat(FG)
+                y = rand(0:q-1, n)
+
             end
-            Y[it] = y
+            Y[it] .= y
+            H[it] .= adjmat(FG)
             FG.fields .= extfields(q,y,algo,L)
             if convergence == :decvars
                 ((res,iters), runtimes[it]) = @timed bp!(FG, algo, maxiter=maxiter, gamma=gamma, nmin=nmin)

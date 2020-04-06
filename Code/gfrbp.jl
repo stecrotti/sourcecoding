@@ -33,7 +33,8 @@ function onebpiter!(FG::FactorGraph, algo::BP,
 end
 
 function onebpiter!(FG::FactorGraph, algo::MS,
-    neutral=Fun(x == 0 ? 0.0 : -Inf for x=0:FG.q-1))
+    neutral=Fun(x == 0 ? 0.0 : -Inf for x=0:FG.q-1),
+    wrong = Fun(q, -Inf))
 
     for f in randperm(length(FG.Fneigs))
         for (v_idx, v) in enumerate(FG.Fneigs[f])
@@ -51,6 +52,8 @@ function onebpiter!(FG::FactorGraph, algo::MS,
             end
             FG.mfv[f][v_idx] = reduce(gfmsc, funclist, init=neutral)
             FG.mfv[f][v_idx] .-= maximum(FG.mfv[f][v_idx])
+            # Send warning if messages are all -Inf
+            FG.mfv[f][v_idx] == wrong && println("Warning: message $f->$v is all -Inf")
             # Update belief after updating the message
             FG.fields[v] .+= FG.mfv[f][v_idx]
         end

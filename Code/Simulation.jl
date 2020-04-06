@@ -7,6 +7,7 @@ struct Simulation
     iterations::Vector{Int}
     runtimes::Vector{Float64}
     totaltime::Float64
+    maxiter::Int
 end
 
 # Run simulation and store
@@ -55,14 +56,15 @@ function Simulation(
             res != :unconverged && (converged[it] = true)
             parity[it] = sum(paritycheck(FG))
             rawdistortion[it] = hd(guesses(FG),y)/n
-            # refresh!(FG)
-            yield()
-            isinteger(10*it/maxiter) && println("Finished ", Int(it/maxiter*100), "%")
+            iterations[it] = iters
+            if isinteger(10*it/navg)
+                println("Finished ",Int(it/navg*100), "%")
+            end
         end
 
     end
     totaltime = t[2]
-    return Simulation(n,m,converged, parity, rawdistortion, runtimes, totaltime)
+    return Simulation(n,m,converged, parity, rawdistortion, iterations, runtimes, totaltime, maxiter)
 end
 
 import Base.show
@@ -72,74 +74,90 @@ end
 
 # Plot distortions
 import PyPlot.plot
-function plot(sim::Simulation)
+function plot(sim::Simulation; pltiters::Bool=false)
     d = LinRange(0.001,0.5-0.001,100)
     r = LinRange(0, 1, 100)
     PyPlot.plot(rdb.(d),d);
     PyPlot.plot(r, (1 .- r)/2)
 
-    R = 1 .- sim.m/sim.n
-    dist = distortions(sim)
-    for j in 1:length(sim.m)
-        PyPlot.plot(R[j], dist[j], "o", ms=5)
-    end
+    R = 1 - sim.m/sim.n
+    dist = meandist(sim)
+    PyPlot.plot(R, dist, "o", ms=5)
     plt.:xlabel("Rate")
     plt.:ylabel("Distortion")
     plt.:legend(["Lower bound", "Random compression"])
     plt.:title("Mean disortion for instances that fulfill parity \n n = $(sim.n)")
+
+    if pltiters
+        figure()
+        x = 1:length(sim.converged)
+        PyPlot.plot(x[sim.converged], sim.iterations[sim.converged], "o")
+        PyPlot.plot(x[.!sim.converged], sim.iterations[.!sim.converged], "o")
+        plt.:ylim((0,sim.maxiter+100))
+        plt.:xticks(x)
+        plt.:xlabel("Index")
+        plt.:ylabel("Iterations")
+        plt.:legend(["Converged", "Non-converged"])
+        plt.:title("Number of iterations for each instance")
+    end
 end
+
+function plot(sims::Vector{Simulation})
+    for sim in sims
+        plot(sim)
+    end
+end
+
 
 # Print results
 import Base.print
 function print(io::IO, sim::Simulation)
-    R = 1 .- sim.m/sim.n
+    R = 1 - sim.m/sim.n
     println(io, "Simulation with n = ", sim.n, ", average over ",
-        length(sim.converged[1]), " trials")
-    println(io, "k = ", sim.n .- sim.m)
-    println(io, "R = ", round.(R, digits=2))
+        length(sim.converged), " trials")
+    println(io, "k = ", sim.n - sim.m)
+    println(io, "R = ", round(R, digits=2))
     totaltime_min = Int(fld(sim.totaltime,60))
     totaltime_sec = Int(round(mod(sim.totaltime,60)))
     println(io, "Total elapsed time: ", totaltime_min, "m ",
         totaltime_sec, "s\n")
 
-    for j in 1:length(sim.m)
-        println(io, "---------------------------------------------")
-        println(io, "\t    k = $(sim.n-sim.m[j])  /  R = ", round(R[j], digits=2))
-        println(io, "---------------------------------------------\n")
+    println(io, "---------------------------------------------")
+    println(io, "\t    k = $(sim.n-sim.m)  /  R = ", round(R, digits=2))
+    println(io, "---------------------------------------------\n")
 
-        M = fill("",3,3)
-        M[2,2] = string(sum(sim.converged[j].*(sim.parity[j].==0)))
-        M[2,3] = string(sum(sim.converged[j].*(sim.parity[j].!=0)))
-        M[3,2] = string(sum(.!sim.converged[j].*(sim.parity[j].==0)))
-        M[3,3] = string(sum(.!sim.converged[j].*(sim.parity[j].!=0)))
-        M[2,1] = string(sum(sim.converged[j]))
-        M[3,1] = string(sum(.!sim.converged[j]))
-        M[1,2] = string(sum(sim.parity[j].==0))
-        M[1,3] = string(sum(sim.parity[j].!=0))
-        M[1,1] = string(length(sim.converged[1]))
+    M = fill("",3,3)
+    M[2,2] = string(sum(sim.converged.*(sim.parity.==0)))
+    M[2,3] = string(sum(sim.converged.*(sim.parity.!=0)))
+    M[3,2] = string(sum(.!sim.converged.*(sim.parity.==0)))
+    M[3,3] = string(sum(.!sim.converged.*(sim.parity.!=0)))
+    M[2,1] = string(sum(sim.converged))
+    M[3,1] = string(sum(.!sim.converged))
+    M[1,2] = string(sum(sim.parity.==0))
+    M[1,3] = string(sum(sim.parity.!=0))
+    M[1,1] = string(length(sim.converged))
 
-        h = Highlighter(
-            f = (data,i,j) -> (i,j) in [(2,4)] && data[i,j] != "0";
-            crayon = crayon"red bold"
-        )
+    h = Highlighter(
+        f = (data,i,j) -> (i,j) in [(2,4)] && data[i,j] != "0";
+        crayon = crayon"red bold"
+    )
 
-        data = hcat(["Total"; "Convergence Y"; "Convergence N"], M)
-        time_min = Int(fld(sum(sim.runtimes[j]),60))
-        time_sec = Int(round(mod(sum(sim.runtimes[j]),60)))
-        avg_min = Int(fld(mean(sim.runtimes[j]),60))
-        avg_sec = Int(round(mod(mean(sim.runtimes[j]),60)))
-        println(io, "Runtime: ", time_min, "m ", time_sec, "s. Average runtime per instance: ",
-            avg_min, "m ", avg_sec, "s")
-        println("Average distortion for instances that fulfill parity: ", round(distortions(sim)[j],digits=2))
-        pretty_table(io, data, ["" "Total" "Parity Y" "Parity N"], alignment=:c,
-            hlines = [1,2], highlighters = h)
-    end
+    data = hcat(["Total"; "Convergence Y"; "Convergence N"], M)
+    time_min = Int(fld(sum(sim.runtimes),60))
+    time_sec = Int(round(mod(sum(sim.runtimes),60)))
+    avg_min = Int(fld(mean(sim.runtimes),60))
+    avg_sec = Int(round(mod(mean(sim.runtimes),60)))
+    println(io, "Runtime: ", time_min, "m ", time_sec, "s. Average runtime per instance: ",
+        avg_min, "m ", avg_sec, "s")
+    println("Average distortion for instances that fulfill parity: ", round(meandist(sim),digits=2))
+    pretty_table(io, data, ["" "Total" "Parity Y" "Parity N"], alignment=:c,
+        hlines = [1,2], highlighters = h)
 end
 
 
 ### Used internally
-function distortions(sim::Simulation)
-    return [mean(sim.rawdistortion[j][(sim.parity[j].==0) .& (sim.converged[j].==true)]) for j in 1:length(sim.m)]
+function meandist(sim::Simulation)
+    return mean(sim.rawdistortion[(sim.parity.==0) .& (sim.converged.==true)])
 end
 
 rdb(D) = 1-(-D*log2(D)-(1-D)*log2(1-D))

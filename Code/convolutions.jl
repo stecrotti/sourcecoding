@@ -41,10 +41,24 @@ end
 # Max-Sum convolution on GF(2^k)
 function gfmsc(f1::Fun, f2::Fun)
     q = length(f1)
-    f3 = Fun(q, -Inf)   # MAX-sum
-    for x1 in 0:q-1
-        for x2 in 0:q-1
-            f3[xor(x1,x2)] = max(f3[xor(x1,x2)], f1[x1]+f2[x2])
+    f3 = Fun(q, -Inf)
+    for x3 in 0:q-1
+        @inbounds for x1 in 0:q-1
+            v = f1[x1] + f2[xor(x1, x3)]
+            f3[x3] < v && (f3[x3] = v)
+        end
+    end
+    return f3
+end
+
+
+function gfmsc!(f3::Fun, f1::Fun, f2::Fun)
+    q = length(f1)
+    for x3 in 0:q-1
+        f3[x3] = f1[0] + f2[x3]
+        @inbounds for x1 in 1:q-1
+            v = f1[x1] + f2[xor(x1, x3)]
+            f3[x3] < v && (f3[x3] = v)
         end
     end
     return f3

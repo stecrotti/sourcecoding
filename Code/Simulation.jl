@@ -21,6 +21,7 @@ struct Simulation
     samegraph::Bool
     samevector::Bool
     y::Vector{Vector{Int}}
+    H::Vector{Array{Int,2}}
 end
 
 # Run simulation and store
@@ -49,6 +50,7 @@ function Simulation(
     rawdistortion = zeros(navg)
     iterations = zeros(Int,navg)
     Y = [zeros(Int,n) for _ in 1:navg]
+    H = [Array{Int,2}(undef,m,n) for _ in 1:navg]
 
     verbose && println("----------- Simulation starting -----------")
     if samegraph
@@ -58,7 +60,8 @@ function Simulation(
             deletefactor!(FG)
             m -= 1
         end
-        y = rand(0:q-1, n)
+        y .= rand(0:q-1, n)
+        H[it] .= adjmat(FG)
     end
     t = @timed begin
         for it in 1:navg
@@ -69,7 +72,8 @@ function Simulation(
                     deletefactor!(FG)
                     m -= 1
                 end
-                y = rand(0:q-1, n)
+                y .= rand(0:q-1, n)
+                H[it] .= adjmat(FG)
             end
             Y[it] = y
             FG.fields .= extfields(q,y,algo,L)
@@ -93,7 +97,7 @@ function Simulation(
     totaltime = t[2]
     return Simulation(n, m, navg, converged, parity, rawdistortion, iterations,
         runtimes, totaltime, maxiter, L, nedges, lambda, rho, convergence, nmin,
-        tol, b, gamma, samegraph, samevector, Y)
+        tol, b, gamma, samegraph, samevector, Y, H)
 end
 
 import Base.show

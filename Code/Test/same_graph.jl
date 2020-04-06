@@ -8,7 +8,7 @@ include("../headers.jl")
 PyPlot.close("all")
 
 # Number of simulations to be run = number of pairs graph,vector
-nsim = 2
+nsim = 30
 sims = Simulation[]
 
 gamma = 1e-4
@@ -27,7 +27,7 @@ for s in 1:nsim
     println("               Simulation $s     ")
     println("---------------------------------------------")
     sim = Simulation(MS(), q, n, m, L, nedges, lambda, rho,
-        navg=1, convergence=:decvars, maxiter=Int(1e4), gamma=gamma, nmin=300, b=2,
+        navg=30, convergence=:decvars, maxiter=Int(1e4), gamma=gamma, nmin=300, b=2,
         samegraph=true, samevector=true, verbose = false)
     push!(sims, sim)
     print(stdout, sim, options=:short)

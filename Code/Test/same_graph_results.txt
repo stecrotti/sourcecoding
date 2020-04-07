@@ -1,0 +1,638 @@
+
+#################### Info ####################
+Some simulations with same graph, same input vector, gamma non-zero.
+GOAL: find out whether there are some configurations {graph,vector} that
+ give bad distortions no matter how many trials
+##############################################
+
+---------------------------------------------
+               Simulation 1     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.51
+Total elapsed time: 13m 16s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 13m 16s. Average runtime per instance: 0m 16s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    28    │    22    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    28    │    22    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 2     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.48
+Total elapsed time: 14m 14s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 14m 14s. Average runtime per instance: 0m 17s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    36    │    14    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    36    │    14    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 3     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.21
+Total elapsed time: 4m 58s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 4m 57s. Average runtime per instance: 0m 6s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    50    │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    50    │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 4     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.46
+Total elapsed time: 11m 58s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 11m 58s. Average runtime per instance: 0m 14s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    34    │    16    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    34    │    16    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 5     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.26
+Total elapsed time: 5m 25s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 5m 25s. Average runtime per instance: 0m 7s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    42    │    8     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    42    │    8     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 6     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.34
+Total elapsed time: 8m 3s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 8m 3s. Average runtime per instance: 0m 10s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    50    │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    50    │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 7     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.44
+Total elapsed time: 11m 44s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 11m 44s. Average runtime per instance: 0m 14s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    40    │    10    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    40    │    10    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 8     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.49
+Total elapsed time: 12m 21s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 12m 21s. Average runtime per instance: 0m 15s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    31    │    19    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    31    │    19    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 9     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.5
+Total elapsed time: 31m 19s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 31m 19s. Average runtime per instance: 0m 38s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    50    │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    50    │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 10     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.26
+Total elapsed time: 22m 5s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 22m 5s. Average runtime per instance: 0m 27s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    20    │    30    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    20    │    30    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 11     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.2
+Total elapsed time: 11m 0s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 11m 0s. Average runtime per instance: 0m 13s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    33    │    17    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    33    │    17    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 12     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.27
+Total elapsed time: 14m 0s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 14m 0s. Average runtime per instance: 0m 17s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    48    │    2     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    48    │    2     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 13     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.38
+Total elapsed time: 28m 43s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 28m 43s. Average runtime per instance: 0m 34s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    50    │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    50    │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 14     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.54
+Total elapsed time: 26m 11s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 26m 10s. Average runtime per instance: 0m 31s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    15    │    35    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    15    │    35    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 15     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.52
+Total elapsed time: 32m 6s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 32m 6s. Average runtime per instance: 0m 39s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    50    │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    50    │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 16     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.37
+Total elapsed time: 24m 12s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 24m 12s. Average runtime per instance: 0m 29s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    48    │    2     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    48    │    2     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 17     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.3
+Total elapsed time: 14m 32s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 14m 32s. Average runtime per instance: 0m 17s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    39    │    11    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    39    │    11    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 18     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.23
+Total elapsed time: 8m 12s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 8m 12s. Average runtime per instance: 0m 10s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    50    │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    50    │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 19     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.51
+Total elapsed time: 36m 26s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 36m 26s. Average runtime per instance: 0m 44s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    33    │    17    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    33    │    17    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 20     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.47
+Total elapsed time: 24m 19s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 24m 19s. Average runtime per instance: 0m 29s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    15    │    35    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    15    │    35    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 21     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.49
+Total elapsed time: 22m 42s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 22m 42s. Average runtime per instance: 0m 27s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    6     │    44    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    6     │    44    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 22     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.53
+Total elapsed time: 32m 52s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 32m 52s. Average runtime per instance: 0m 39s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    29    │    21    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    29    │    21    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 23     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.18
+Total elapsed time: 8m 40s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 8m 40s. Average runtime per instance: 0m 10s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    40    │    10    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    40    │    10    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 24     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.36
+Total elapsed time: 30m 10s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 30m 10s. Average runtime per instance: 0m 36s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    48    │    2     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    48    │    2     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 25     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.44
+Total elapsed time: 56m 14s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 56m 14s. Average runtime per instance: 1m 7s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    46    │    4     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    46    │    4     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 26     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.24
+Total elapsed time: 23m 18s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 23m 18s. Average runtime per instance: 0m 28s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    48    │    2     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    48    │    2     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 27     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.2
+Total elapsed time: 15m 41s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 15m 40s. Average runtime per instance: 0m 19s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    49    │    1     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    49    │    1     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 28     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.49
+Total elapsed time: 74m 52s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 74m 52s. Average runtime per instance: 1m 30s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    50    │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    50    │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 29     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.35
+Total elapsed time: 40m 54s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 40m 54s. Average runtime per instance: 0m 49s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    44    │    6     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    44    │    6     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 30     
+---------------------------------------------
+
+Simulation with n = 480, average over 50 trials
+Average distortion for instances that fulfill parity: 0.38
+Total elapsed time: 18m 55s
+
+	    k = 202  /  R = 0.42
+
+Runtime: 18m 55s. Average runtime per instance: 0m 23s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  50   │    16    │    34    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │  50   │    16    │    34    │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   0   │    0     │    0     │
+└───────────────┴───────┴──────────┴──────────┘
+
+

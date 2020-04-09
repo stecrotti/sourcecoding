@@ -1,0 +1,97 @@
+
+############################ Info ############################
+Some simulations with GF(4).
+b = 5, gamma=1.0e-6
+##############################################################
+
+---------------------------------------------
+               Simulation 1     
+---------------------------------------------
+----------- Simulation starting -----------
+Finished 10%
+Finished 20%
+Finished 30%
+Finished 40%
+Finished 50%
+Finished 60%
+Finished 70%
+Finished 80%
+Finished 90%
+Finished 100%
+
+Simulation with n = 480, average over 10 trials
+Average distortion for instances that fulfill parity: 0.15
+Total elapsed time: 15m 4s
+
+Runtime: 15m 1s. Average runtime per instance: 1m 30s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  10   │    1     │    9     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │   1   │    1     │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   9   │    0     │    9     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 2     
+---------------------------------------------
+----------- Simulation starting -----------
+Finished 10%
+Finished 20%
+Finished 30%
+Finished 40%
+Finished 50%
+Finished 60%
+Finished 70%
+Finished 80%
+Finished 90%
+Finished 100%
+
+Simulation with n = 480, average over 10 trials
+Average distortion for instances that fulfill parity: 0.16
+Total elapsed time: 9m 32s
+
+Runtime: 9m 32s. Average runtime per instance: 0m 57s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  10   │    5     │    5     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │   5   │    5     │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   5   │    0     │    5     │
+└───────────────┴───────┴──────────┴──────────┘
+
+---------------------------------------------
+               Simulation 3     
+---------------------------------------------
+----------- Simulation starting -----------
+Finished 10%
+Finished 20%
+Finished 30%
+Finished 40%
+Finished 50%
+Finished 60%
+Finished 70%
+Finished 80%
+Finished 90%
+Finished 100%
+
+Simulation with n = 480, average over 10 trials
+Average distortion for instances that fulfill parity: 0.15
+Total elapsed time: 14m 17s
+
+Runtime: 14m 17s. Average runtime per instance: 1m 26s
+┌───────────────┬───────┬──────────┬──────────┐
+│               │ Total │ Parity Y │ Parity N │
+├───────────────┼───────┼──────────┼──────────┤
+│     Total     │  10   │    2     │    8     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence Y │   2   │    2     │    0     │
+├───────────────┼───────┼──────────┼──────────┤
+│ Convergence N │   8   │    0     │    8     │
+└───────────────┴───────┴──────────┴──────────┘
+
+

@@ -53,40 +53,43 @@ function Simulation(
     H = [Array{Int,2}(undef,m,n) for _ in 1:navg]
 
     verbose && println("----------- Simulation starting -----------")
-    if samegraph
-        FG = ldpc_graph(q, n, m, nedges, lambda, rho, verbose=verbose)
-        # b-reduction
-        for _ in 1:b
-            deletefactor!(FG)
-            m -= 1
-        end
-        y = rand(0:q-1, n)
+
+    FG = ldpc_graph(q, n, m, nedges, lambda, rho, verbose=verbose)
+    # b-reduction
+    for _ in 1:b
+        deletefactor!(FG)
     end
+    H[1] .= adjmat(FG)
+    y = rand(0:q-1, n)
+    Y[1] .= y
+
     t = @timed begin
         for it in 1:navg
+            if !samevector
+                y .= rand(0:q-1, n)
+                Y[it] .= y
+            end
             if !samegraph
-                FG = ldpc_graph(q, n, m, nedges, lambda, rho, verbose=verbose)
+                FG .= ldpc_graph(q, n, m, nedges, lambda, rho, verbose=verbose)
                 # b-reduction
                 for _ in 1:b
                     deletefactor!(FG)
-                    m -= 1
                 end
-                y = rand(0:q-1, n)
-
+                H[it] .= adjmat(FG)
             end
-            Y[it] .= y
-            H[it] .= adjmat(FG)
             FG.fields .= extfields(q,y,algo,L)
             if convergence == :decvars
-                ((res,iters), runtimes[it]) = @timed bp!(FG, algo, maxiter=maxiter, gamma=gamma, nmin=nmin)
+                ((res,iters), runtimes[it]) = @timed bp!(FG, algo, maxiter=maxiter,
+                    gamma=gamma, nmin=nmin)
             elseif convergence == :messages
-                ((res,iters), runtimes[it]) = @timed bp_msg!(FG, algo, maxiter=maxiter, gamma=gamma, tol=tol)
+                ((res,iters), runtimes[it]) = @timed bp_msg!(FG, algo, maxiter=maxiter,
+                    gamma=gamma, tol=tol)
             else
                 error("Field 'convergence' must be either :decvars or :messages")
             end
             res != :unconverged && (converged[it] = true)
             parity[it] = sum(paritycheck(FG))
-            rawdistortion[it] = hd(guesses(FG),y)/n
+            rawdistortion[it] = hd(guesses(FG),y)/(n*log2(q))
             iterations[it] = iters
                         if verbose && isinteger(10*it/navg)
                 println("Finished ",Int(it/navg*100), "%")
@@ -198,7 +201,7 @@ function print(io::IO, sim::Simulation; options=:short)
     println(io, "Total elapsed time: ", totaltime_min, "m ",
         totaltime_sec, "s\n")
 
-    println(io, "\t    k = $(sim.n-sim.m)  /  R = ", round(R, digits=2), "\n")
+    # println(io, "\t    k = $(sim.n-sim.m)  /  R = ", round(R, digits=2), "\n")
 
     M = fill("",3,3)
     M[2,2] = string(sum(sim.converged.*(sim.parity.==0)))
@@ -256,7 +259,7 @@ function print(io::IO, sim::Simulation; options=:short)
 end
 
 
-### Used internally
+# Returns mean distortion of instances that converged and fulfill parity
 function meandist(sim::Simulation)
     return mean(sim.distortions[(sim.parity.==0) .& (sim.converged.==true)])
 end

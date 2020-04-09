@@ -21,7 +21,7 @@ function onebpiter!(FG::FactorGraph, algo::BP,
                     push!(funclist, func)
                 end
             end
-            FG.mfv[f][v_idx] = reduce((f1,f2)->gfconv!(f3,f1,f2), funclist, init=neutral)
+            FG.mfv[f][v_idx] = reduce(gfconv, funclist, init=neutral)
             FG.mfv[f][v_idx] ./= sum(FG.mfv[f][v_idx])
             # Update belief after updating the message
             FG.fields[v] .= FG.fields[v] .* FG.mfv[f][v_idx]
@@ -31,7 +31,7 @@ function onebpiter!(FG::FactorGraph, algo::BP,
 end
 
 function onebpiter!(FG::FactorGraph, algo::MS,
-    f3=Fun(FG.q), neutral=Fun(x == 0 ? 0.0 : -Inf for x=0:FG.q-1);
+    neutral=Fun(x == 0 ? 0.0 : -Inf for x=0:FG.q-1);
     wrong = Fun(q, -Inf))
 
     for f in randperm(length(FG.Fneigs))
@@ -48,12 +48,16 @@ function onebpiter!(FG::FactorGraph, algo::MS,
                     push!(funclist, func)
                 end
             end
-            FG.mfv[f][v_idx] = reduce((f1,f2)->gfmsc!(f3,f1,f2), funclist, init=neutral)
+            FG.mfv[f][v_idx] .= reduce(gfmsc, funclist, init=neutral)
             FG.mfv[f][v_idx] .-= maximum(FG.mfv[f][v_idx])
             # Send warning if messages are all -Inf
-            FG.mfv[f][v_idx] == wrong && println("Warning: message $f->$v is all -Inf")
+            FG.mfv[f][v_idx] == wrong && error("Message $f->$v is all -Inf")
+            # Send warning if messages are all NaN
+            sum(isnan.(FG.mfv[f][v_idx]))==FG.q && error("Message ($f,$v) is all NaN")
             # Update belief after updating the message
             FG.fields[v] .+= FG.mfv[f][v_idx]
+            # Normalize belief
+            FG.fields[v] .-= maximum(FG.fields[v])
         end
     end
     return guesses(FG)
@@ -67,24 +71,21 @@ function guesses(FG::FactorGraph)
 end
 
 # BP with convergence criterion: guesses
-function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
-    gamma=0, nmin=100)
+function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(1e3),
+    gamma=0, nmin=300)
     if  typeof(algo) == BP
         neutral = Fun(x == 0 ? 1.0 : 0.0 for x=0:FG.q-1)
     else
         neutral = Fun(x == 0 ? 0.0 : -Inf for x=0:FG.q-1)
     end
-    f3 = Fun(FG.q)
     newguesses = zeros(Int,FG.n)
     oldguesses = guesses(FG)
     n = 0   # number of consecutive times for which the guesses are left unchanged by one BP iteration
     for it in 1:maxiter
-        newguesses = onebpiter!(FG, algo, f3, neutral)
+        newguesses = onebpiter!(FG, algo, neutral)
         if newguesses == oldguesses
             n += 1
-            if n >= nmin
-                return :converged, it
-            end
+            n >= nmin && return :converged, it
         else
             n=0
         end
@@ -105,7 +106,6 @@ end
 function bp_msg!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
     gamma=0, tol=1e-4)
 
-    f3 = Fun(FG.q)
     if  typeof(algo) == BP
         neutral = Fun(x == 0 ? 1.0 : 0.0 for x=0:FG.q-1)
     else
@@ -115,7 +115,7 @@ function bp_msg!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
     maxchange = 0.0     # Maximum change in messages from last step
     for it in 1:maxiter
         maxchange = 0.0
-        onebpiter!(FG, algo, f3, neutral)
+        onebpiter!(FG, algo, neutral)
         newmessages = FG.mfv
         for f in eachindex(newmessages)
             for (v_idx,msg) in enumerate(newmessages[f])

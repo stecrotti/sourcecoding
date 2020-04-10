@@ -72,7 +72,8 @@ end
 
 # BP with convergence criterion: guesses
 function bp!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(1e3),
-    gamma=0, nmin=300)
+    gamma=0, nmin=300, randseed::Int=0)
+    randseed != 0 && Random.seed!(randseed)      # for reproducibility
     if  typeof(algo) == BP
         neutral = Fun(x == 0 ? 1.0 : 0.0 for x=0:FG.q-1)
     else
@@ -104,7 +105,8 @@ end
 
 # BP with convergence criterion: messages
 function bp_msg!(FG::FactorGraph, algo::Union{BP,MS}; maxiter=Int(3e2),
-    gamma=0, tol=1e-4)
+    gamma=0, tol=1e-4, randseed::Int=0)
+    randseed != 0 && Random.seed!(randseed)      # for reproducibility
 
     if  typeof(algo) == BP
         neutral = Fun(x == 0 ? 1.0 : 0.0 for x=0:FG.q-1)

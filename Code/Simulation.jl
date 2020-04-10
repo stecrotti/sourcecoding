@@ -1,6 +1,7 @@
 struct Simulation
     n::Int
     m::Int
+    R::Float64
     navg::Int
     converged::BitArray{1}
     parity::Vector{Int}
@@ -20,8 +21,6 @@ struct Simulation
     gamma::Float64
     samegraph::Bool
     samevector::Bool
-    y::Vector{Vector{Int}}
-    H::Vector{Array{Int,2}}
 end
 
 # Run simulation and store
@@ -42,6 +41,7 @@ function Simulation(
     gamma = 0,                          # Reinforcement parameter
     samegraph = false,                  # If true, only 1 graph is extracted and all |navg| simulations are run on it
     samevector = false,                 # If true, only 1 vector is extracted and all |navg| simulations are run on it
+    randseed = 100,                     # For reproducibility
     verbose = false)
 
     converged = falses(navg)
@@ -54,36 +54,27 @@ function Simulation(
 
     verbose && println("----------- Simulation starting -----------")
 
-    FG = ldpc_graph(q, n, m, nedges, lambda, rho, verbose=verbose)
-    # b-reduction
-    for _ in 1:b
-        deletefactor!(FG)
-    end
-    H[1] .= adjmat(FG)
-    y = rand(0:q-1, n)
-    Y[1] .= y
+    FG = ldpc_graph(q, n, m, nedges, lambda, rho, verbose=verbose, randseed=randseed)
+    breduction!(FG, b, randseed=randseed)
+    y = rand(MersenneTwister(randseed), 0:q-1, n)
 
     t = @timed begin
         for it in 1:navg
             if !samevector
-                y .= rand(0:q-1, n)
-                Y[it] .= y
+                y .= rand(MersenneTwister(randseed+it), 0:q-1, n)
             end
             if !samegraph
-                FG .= ldpc_graph(q, n, m, nedges, lambda, rho, verbose=verbose)
-                # b-reduction
-                for _ in 1:b
-                    deletefactor!(FG)
-                end
-                H[it] .= adjmat(FG)
+                FG = ldpc_graph(q, n, m, nedges, lambda, rho, verbose=verbose,
+                    randseed=randseed+it)
+                breduction!(FG, b, randseed=randseed+it)
             end
-            FG.fields .= extfields(q,y,algo,L)
+            FG.fields .= extfields(q,y,algo,L, randseed=randseed+it)
             if convergence == :decvars
                 ((res,iters), runtimes[it]) = @timed bp!(FG, algo, maxiter=maxiter,
-                    gamma=gamma, nmin=nmin)
+                    gamma=gamma, nmin=nmin, randseed=randseed+it)
             elseif convergence == :messages
                 ((res,iters), runtimes[it]) = @timed bp_msg!(FG, algo, maxiter=maxiter,
-                    gamma=gamma, tol=tol)
+                    gamma=gamma, tol=tol, randseed=randseed+it)
             else
                 error("Field 'convergence' must be either :decvars or :messages")
             end
@@ -98,32 +89,36 @@ function Simulation(
         end
     end
     totaltime = t[2]
-    return Simulation(n, m, navg, converged, parity, rawdistortion, iterations,
+    R = 1-(m-b)/n
+    return Simulation(n, m, R, navg, converged, parity, rawdistortion, iterations,
         runtimes, totaltime, maxiter, L, nedges, lambda, rho, convergence, nmin,
-        tol, b, gamma, samegraph, samevector, Y, H)
+        tol, b, gamma, samegraph, samevector)
 end
 
 import Base.show
 function show(io::IO, sim::Simulation)
-    print(io, sim, options=:short)
+    println(io, "Simulation with n=", sim.n, ", R=", round(sim.R,digits=2),
+     " average over ", sim.navg, " instances.")
 end
 
-
-import PyPlot.plot
-function plot(sim::Simulation; options=:short)
+function plotdist(D::Vector{Float64}, R::Vector{Float64})
     d = LinRange(0.001,0.5-0.001,100)
     r = LinRange(0, 1, 100)
     fig1 = PyPlot.figure("Rate-distortion bound")
     PyPlot.plot(rdb.(d),d);
     PyPlot.plot(r, (1 .- r)/2)
-
-    R = 1 - sim.m/sim.n
-    dist = meandist(sim)
-    PyPlot.plot(R, dist, "o", ms=5)
+    PyPlot.plot(R, D, "o", ms=5)
     plt.:xlabel("Rate")
     plt.:ylabel("Distortion")
     plt.:legend(["Lower bound", "Random compression"])
-    plt.:title("Mean disortion for instances that fulfill parity \n n = $(sim.n)")
+    return fig1
+end
+
+import PyPlot.plot
+function plot(sim::Simulation; options=:short)
+    dist = meandist(sim, convergedonly=true)
+    fig1 = plotdist(dist, sim.R)
+    plt.:title("Mean disortion for instances that converged \n n = $(sim.n)")
 
     if options==:full
         fig2 = PyPlot.figure("Detailed plots")
@@ -131,7 +126,7 @@ function plot(sim::Simulation; options=:short)
         ax1 = PyPlot.gca()
         x = 1:sim.navg
         ax1.plot(x, sim.iterations, "bo")
-        ax1.axhline(sim.maxiter,c="b", ls="--", lw=0.8)
+        ax1.axhline(sim.maxiter, c="b", ls="--", lw=0.8)
         ax1.set_ylim((0,sim.maxiter+100))
         ax1.set_xticks(x)
         ax1.set_xlabel("Index")
@@ -192,14 +187,17 @@ end
 import Base.print
 function print(io::IO, sim::Simulation; options=:short)
     println(io)
-    R = 1 - sim.m/sim.n
+    println(io, "Rate R =", round(sim.R,digits=2))
     println(io, "Simulation with n = ", sim.n, ", average over ",
         length(sim.converged), " trials")
-    println("Average distortion for instances that fulfill parity: ", round(meandist(sim),digits=2))
+    println("Average distortion for instances that converged: ",
+        round(meandist(sim,convergedonly=true),digits=2))
+        println("Average distortion for all instances: ",
+            round(meandist(sim,convergedonly=false),digits=2))
     totaltime_min = Int(fld(sim.totaltime,60))
     totaltime_sec = Int(round(mod(sim.totaltime,60)))
     println(io, "Total elapsed time: ", totaltime_min, "m ",
-        totaltime_sec, "s\n")
+        totaltime_sec, "s")
 
     # println(io, "\t    k = $(sim.n-sim.m)  /  R = ", round(R, digits=2), "\n")
 
@@ -253,15 +251,21 @@ function print(io::IO, sim::Simulation; options=:short)
         else
             println("A new input vector was created each time")
         end
-    else
-        options != :short && println("Option $option not available")
+    elseif options != :short
+        println("Option $option not available")
     end
 end
 
-
-# Returns mean distortion of instances that converged and fulfill parity
-function meandist(sim::Simulation)
-    return mean(sim.distortions[(sim.parity.==0) .& (sim.converged.==true)])
+# Returns mean distortion
+# If parityonly is set to false, a distortion 0.5 is added for each instance
+# that
+function meandist(sim::Simulation; convergedonly::Bool=true)
+    dist = sim.distortions[sim.converged]
+    if ! convergedonly
+        unconverged = sum(.!sim.converged)
+        convergedonly || (append!(dist, 0.5*ones(unconverged)))
+    end
+    return mean(dist)
 end
 
 rdb(D) = 1-(-D*log2(D)-(1-D)*log2(1-D))

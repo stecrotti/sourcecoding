@@ -1,6 +1,9 @@
 function ldpc_graph(q::Int, n::Int, m::Int,
     nedges::Int, lambda::Vector{T}=[0.0, 1.0], rho::Vector{T}=[0.0, 0.5, 0.5],
-    fields = [Fun(1e-3*randn(q)) for v in 1:n]; verbose=false) where {T<:AbstractFloat}
+    fields = [Fun(1e-3*randn(q)) for v in 1:n]; verbose=false,
+    randseed::Int=0) where {T<:AbstractFloat}
+
+    randseed != 0 && Random.seed!(randseed)      # for reproducibility
 
     ### Argument validation ###
     if sum(lambda) != 1 || sum(rho) != 1
@@ -87,7 +90,9 @@ end
 # Creates fields for the priors: the closest to y, the stronger the field
 # The prior distr is given by exp(field)
 # A small noise with amplitude sigma is added to break the symmetry
-function extfields(q::Int, y::Vector{Int}, algo::Union{BP,MS}, L::Real=1.0, sigma::Real=1e-4)
+function extfields(q::Int, y::Vector{Int}, algo::Union{BP,MS}, L::Real=1.0,
+    sigma::Real=1e-4; randseed::Int=0)
+    randseed != 0 && Random.seed!(randseed)      # for reproducibility
     fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in eachindex(y)]
     for v in eachindex(fields)
         for a in 0:q-1

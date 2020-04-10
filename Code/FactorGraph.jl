@@ -24,7 +24,9 @@ function FactorGraph(q::Int, n::Int, m::Int)
 end
 
 # Construct graph from adjacency matrix (for checks with simple examples)
-function FactorGraph(q::Int, A::Array{Int,2}, fields = [Fun(1e-3*randn(q)) for v in 1:size(A,2)])
+function FactorGraph(q::Int, A::Array{Int,2},
+    fields = [Fun(1e-3*randn(q)) for v in 1:size(A,2)])
+
     m,n = size(A)
     Vneigs = [Int[] for v in 1:n]
     Fneigs = [Int[] for f in 1:m]
@@ -161,6 +163,9 @@ function nfacts(FG::FactorGraph)    # number of hyperedges in the core
      return Nfact
 end
 
-function priors(FG::FactorGraph)
-    return exp.(-FG.fields)
+function breduction!(FG::FactorGraph, b::Int; randseed::Int=0)
+    randseed != 0 && Random.seed!(randseed)     # for reproducibility
+    for _ in 1:b
+        deletefactor!(FG)
+    end
 end

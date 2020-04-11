@@ -8,7 +8,6 @@ struct Simulation
     distortions::Vector{Float64}
     iterations::Vector{Int}
     runtimes::Vector{Float64}
-    totaltime::Float64
     maxiter::Int
     L::Real
     nedges::Int
@@ -52,8 +51,6 @@ function Simulation(
     Y = [zeros(Int,n) for _ in 1:navg]
     H = [Array{Int,2}(undef,m,n) for _ in 1:navg]
 
-    verbose && println("----------- Simulation starting -----------")
-
     FG = ldpc_graph(q, n, m, nedges, lambda, rho, verbose=verbose, randseed=randseed)
     breduction!(FG, b, randseed=randseed)
     y = rand(MersenneTwister(randseed), 0:q-1, n)
@@ -91,7 +88,7 @@ function Simulation(
     totaltime = t[2]
     R = 1-(m-b)/n
     return Simulation(n, m, R, navg, converged, parity, rawdistortion, iterations,
-        runtimes, totaltime, maxiter, L, nedges, lambda, rho, convergence, nmin,
+        runtimes, maxiter, L, nedges, lambda, rho, convergence, nmin,
         tol, b, gamma, samegraph, samevector)
 end
 
@@ -101,80 +98,97 @@ function show(io::IO, sim::Simulation)
      " average over ", sim.navg, " instances.")
 end
 
-function plotdist(D::Vector{Float64}, R::Vector{Float64})
+function plotdist(D::Vector{Float64}, R::Vector{Float64}, backend=:pyplot;
+    linename="Simulation results")
+
     d = LinRange(0.001,0.5-0.001,100)
     r = LinRange(0, 1, 100)
-    fig1 = PyPlot.figure("Rate-distortion bound")
-    PyPlot.plot(rdb.(d),d);
-    PyPlot.plot(r, (1 .- r)/2)
-    PyPlot.plot(R, D, "o", ms=5)
-    plt.:xlabel("Rate")
-    plt.:ylabel("Distortion")
-    plt.:legend(["Lower bound", "Random compression"])
-    return fig1
+    if backend==:pyplot
+        fig1 = PyPlot.figure("Rate-distortion bound")
+        PyPlot.plot(rdb.(d),d);
+        PyPlot.plot(r, (1 .- r)/2)
+        PyPlot.plot(R, D, "o", ms=5)
+        plt.:xlabel("Rate")
+        plt.:ylabel("Distortion")
+        plt.:legend(["Lower bound", "Naive compression", linename])
+        return fig1
+    elseif backend==:unicode
+        myplt = lineplot(rdb.(d),d, name="RDB", xlabel = "R", ylabel="D",
+            canvas = DotCanvas, width=60, height = 20)
+        lineplot!(myplt, r, (1 .- r)/2, name="Naive compression")
+        scatterplot!(myplt, R, D, name=linename)
+        return myplt
+    else
+        error("Backend $backend not supported")
+    end
 end
 
 import PyPlot.plot
-function plot(sim::Simulation; options=:short)
+function plot(sim::Simulation; options=:short, backend=:pyplot)
     dist = meandist(sim, convergedonly=true)
-    fig1 = plotdist(dist, sim.R)
-    plt.:title("Mean disortion for instances that converged \n n = $(sim.n)")
+    if backend==:pyplot
+        fig1 = plotdist(dist, sim.R)
+        plt.:title("Mean disortion for instances that converged \n n = $(sim.n)")
+        if options==:full
+            fig2 = PyPlot.figure("Detailed plots")
+            PyPlot.subplot(311)
+            ax1 = PyPlot.gca()
+            x = 1:sim.navg
+            ax1.plot(x, sim.iterations, "bo")
+            ax1.axhline(sim.maxiter, c="b", ls="--", lw=0.8)
+            ax1.set_ylim((0,sim.maxiter+100))
+            ax1.set_xticks(x)
+            ax1.set_xlabel("Index")
+            ax1.set_ylabel("Iterations", color="b")
+            ax2 = ax1.twinx()
+            ax2.plot(x, sim.parity, "ro")
+            ax2.set_yticks(0:maximum(sim.parity)[1])
+            ax2.axhline(0,c="r", ls="--", lw=0.8)
+            ax2.set_ylabel("Unfulfilled checks", color="r")
+            ax1.set_title("Number of iterations and unfulfilled parity checks")
+            PyPlot.tight_layout()
 
-    if options==:full
-        fig2 = PyPlot.figure("Detailed plots")
-        PyPlot.subplot(311)
-        ax1 = PyPlot.gca()
-        x = 1:sim.navg
-        ax1.plot(x, sim.iterations, "bo")
-        ax1.axhline(sim.maxiter, c="b", ls="--", lw=0.8)
-        ax1.set_ylim((0,sim.maxiter+100))
-        ax1.set_xticks(x)
-        ax1.set_xlabel("Index")
-        ax1.set_ylabel("Iterations", color="b")
-        ax2 = ax1.twinx()
-        ax2.plot(x, sim.parity, "ro")
-        ax2.set_yticks(0:maximum(sim.parity)[1])
-        ax2.axhline(0,c="r", ls="--", lw=0.8)
-        ax2.set_ylabel("Unfulfilled checks", color="r")
-        ax1.set_title("Number of iterations and unfulfilled parity checks")
-        PyPlot.tight_layout()
+            PyPlot.subplot(312)
+            ax1 = PyPlot.gca()
+            x = 1:sim.navg
+            ax1.plot(x, sim.distortions, "go")
+            ax1.axhline(1/2,c="g", ls="--", lw=0.8)
+            ax1.set_ylim((0,1))
+            ax1.set_xticks(x)
+            ax1.set_xlabel("Index")
+            ax1.set_ylabel("Distortion", color="g")
+            ax2 = ax1.twinx()
+            ax2.plot(x, sim.parity, "ro")
+            ax2.set_yticks(0:maximum(sim.parity)[1])
+            ax2.axhline(0,c="r", ls="--", lw=0.8)
+            ax2.set_ylabel("Unfulfilled checks", color="r")
+            ax1.set_title("Distortions and unfulfilled parity checks")
+            PyPlot.tight_layout()
 
-        PyPlot.subplot(312)
-        ax1 = PyPlot.gca()
-        x = 1:sim.navg
-        ax1.plot(x, sim.distortions, "go")
-        ax1.axhline(1/2,c="g", ls="--", lw=0.8)
-        ax1.set_ylim((0,1))
-        ax1.set_xticks(x)
-        ax1.set_xlabel("Index")
-        ax1.set_ylabel("Distortion", color="g")
-        ax2 = ax1.twinx()
-        ax2.plot(x, sim.parity, "ro")
-        ax2.set_yticks(0:maximum(sim.parity)[1])
-        ax2.axhline(0,c="r", ls="--", lw=0.8)
-        ax2.set_ylabel("Unfulfilled checks", color="r")
-        ax1.set_title("Distortions and unfulfilled parity checks")
-        PyPlot.tight_layout()
-
-        PyPlot.subplot(313)
-        ax1 = PyPlot.gca()
-        x = 1:sim.navg
-        ax1.plot(x, sim.distortions, "go")
-        ax1.axhline(1/2,c="g", ls="--", lw=0.8)
-        ax1.set_ylim((0,1))
-        ax1.set_xticks(x)
-        ax1.set_xlabel("Index")
-        ax1.set_ylabel("Distortion", color="g")
-        ax2 = ax1.twinx()
-        ax2.plot(x, sim.iterations, "bo")
-        ax2.axhline(sim.maxiter,c="b", ls="--", lw=0.8)
-        ax2.set_ylim((0,sim.maxiter+100))
-        ax2.set_ylabel("Iterations", color="b")
-        ax1.set_title("Distortions and Number of iterations")
-        PyPlot.tight_layout()
-        return fig1, fig2
+            PyPlot.subplot(313)
+            ax1 = PyPlot.gca()
+            x = 1:sim.navg
+            ax1.plot(x, sim.distortions, "go")
+            ax1.axhline(1/2,c="g", ls="--", lw=0.8)
+            ax1.set_ylim((0,1))
+            ax1.set_xticks(x)
+            ax1.set_xlabel("Index")
+            ax1.set_ylabel("Distortion", color="g")
+            ax2 = ax1.twinx()
+            ax2.plot(x, sim.iterations, "bo")
+            ax2.axhline(sim.maxiter,c="b", ls="--", lw=0.8)
+            ax2.set_ylim((0,sim.maxiter+100))
+            ax2.set_ylabel("Iterations", color="b")
+            ax1.set_title("Distortions and Number of iterations")
+            PyPlot.tight_layout()
+            return fig1, fig2
+        end
+        return fig1
+    elseif backend==:unicode
+        plt = plotdist(dist, sim.R, :unicode, linename="GF($(sim.q))")
+        title!(plt, "Mean disortion for instances that converged \n n = $(sim.n)")
+        return plt
     end
-    return fig1
 end
 
 function plot(sims::Vector{Simulation})
@@ -187,19 +201,13 @@ end
 import Base.print
 function print(io::IO, sim::Simulation; options=:short)
     println(io)
-    println(io, "Rate R =", round(sim.R,digits=2))
+    println(io, "Rate R = ", round(sim.R,digits=2))
     println(io, "Simulation with n = ", sim.n, ", average over ",
         length(sim.converged), " trials")
     println("Average distortion for instances that converged: ",
         round(meandist(sim,convergedonly=true),digits=2))
         println("Average distortion for all instances: ",
             round(meandist(sim,convergedonly=false),digits=2))
-    totaltime_min = Int(fld(sim.totaltime,60))
-    totaltime_sec = Int(round(mod(sim.totaltime,60)))
-    println(io, "Total elapsed time: ", totaltime_min, "m ",
-        totaltime_sec, "s")
-
-    # println(io, "\t    k = $(sim.n-sim.m)  /  R = ", round(R, digits=2), "\n")
 
     M = fill("",3,3)
     M[2,2] = string(sum(sim.converged.*(sim.parity.==0)))
@@ -226,6 +234,7 @@ function print(io::IO, sim::Simulation; options=:short)
         avg_min, "m ", avg_sec, "s")
     pretty_table(io, data, ["" "Total" "Parity Y" "Parity N"], alignment=:c,
         hlines = [1,2], highlighters = h)
+    println(io)
 
     if options==:full
         println("L = ", sim.L)
@@ -258,7 +267,7 @@ end
 
 # Returns mean distortion
 # If parityonly is set to false, a distortion 0.5 is added for each instance
-# that
+# that didn't converge
 function meandist(sim::Simulation; convergedonly::Bool=true)
     dist = sim.distortions[sim.converged]
     if ! convergedonly

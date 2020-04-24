@@ -1,6 +1,5 @@
 struct Simulation
     n::Int
-    m::Int
     R::Float64
     navg::Int
     converged::BitArray{1}
@@ -8,18 +7,10 @@ struct Simulation
     distortions::Vector{Float64}
     iterations::Vector{Int}
     runtimes::Vector{Float64}
-    maxiter::Int
-    L::Real
-    nedges::Int
-    lambda::Vector{Float64}
-    rho::Vector{Float64}
-    convergence::Symbol
-    nmin::Int
-    tol::Float64
-    b::Int
-    gamma::Float64
-    samegraph::Bool
-    samevector::Bool
+    maxdiff::Vector{Vector{Float64}}
+    codeword::Vector{BitArray{1}}
+    maxchange::Vector{Vector{Float64}}
+    trials::Vector{Int}
 end
 
 # Run simulation and store
@@ -38,6 +29,7 @@ function Simulation(
     tol = 1e-7,                         # If :messages is chosen
     b = 0,                              # Number of factors to be removed
     gamma = 0,                          # Reinforcement parameter
+    Tmax = 1,                           # Number of trials
     samegraph = false,                  # If true, only 1 graph is extracted and all |navg| simulations are run on it
     samevector = false,                 # If true, only 1 vector is extracted and all |navg| simulations are run on it
     randseed = 100,                     # For reproducibility
@@ -50,8 +42,13 @@ function Simulation(
     iterations = zeros(Int,navg)
     Y = [zeros(Int,n) for _ in 1:navg]
     H = [Array{Int,2}(undef,m,n) for _ in 1:navg]
+    maxdiff = [zeros(maxiter) for i in 1:navg]
+    codeword = [falses(maxiter) for i in 1:navg]
+    maxchange = [fill(-Inf, maxiter) for i in 1:navg]
+    trials = zeros(Int, navg)
 
-    FG = ldpc_graph(q, n, m, nedges, lambda, rho, verbose=verbose, randseed=randseed)
+    println("Graph and vector seed: ", randseed)
+    FG = ldpc_graph(q, n, m+b, nedges, lambda, rho, verbose=verbose, randseed=randseed)
     breduction!(FG, b, randseed=randseed)
     y = rand(MersenneTwister(randseed), 0:q-1, n)
 
@@ -61,35 +58,32 @@ function Simulation(
                 y .= rand(MersenneTwister(randseed+it), 0:q-1, n)
             end
             if !samegraph
-                FG = ldpc_graph(q, n, m, nedges, lambda, rho, verbose=verbose,
+                FG = ldpc_graph(q, n, m+b, nedges, lambda, rho, verbose=verbose,
                     randseed=randseed+it)
                 breduction!(FG, b, randseed=randseed+it)
             end
-            FG.fields .= extfields(q,y,algo,L, randseed=randseed+it)
-            if convergence == :decvars
-                ((res,iters), runtimes[it]) = @timed bp!(FG, algo, maxiter=maxiter,
-                    gamma=gamma, nmin=nmin, randseed=randseed+it)
-            elseif convergence == :messages
-                ((res,iters), runtimes[it]) = @timed bp_msg!(FG, algo, maxiter=maxiter,
-                    gamma=gamma, tol=tol, randseed=randseed+it)
-            else
-                error("Field 'convergence' must be either :decvars or :messages")
-            end
-            res != :unconverged && (converged[it] = true)
+            FG.fields .= extfields(q,y,algo,L, randseed=randseed+it*Tmax)
+            # println("sum fields ", sum(sum(FG.fields)))
+            (res,iterations[it],trials[it]), runtimes[it] = @timed bp!(FG, algo, y,
+                maxiter, convergence, nmin, tol, gamma, Tmax, randseed+it*Tmax,
+                maxdiff[it], codeword[it], maxchange[it], verbose=false)
+
+            res == :converged && (converged[it] = true)
             parity[it] = sum(paritycheck(FG))
             rawdistortion[it] = hd(guesses(FG),y)/(n*log2(q))
-            iterations[it] = iters
-                        if verbose && isinteger(10*it/navg)
-                println("Finished ",Int(it/navg*100), "%")
-            end
+
+            verbose && println("Run ", it, " of ",navg,": ",res,
+                " after ", iterations[it], " iterations. ",
+                "Parity ", parity[it],
+                ". Max change ", round.(maxchange[it][iterations[it]], sigdigits=3),
+                ". Trials ", trials[it])
             samegraph && refresh!(FG)   # Reset messages
         end
     end
     totaltime = t[2]
-    R = 1-(m-b)/n
-    return Simulation(n, m, R, navg, converged, parity, rawdistortion, iterations,
-        runtimes, maxiter, L, nedges, lambda, rho, convergence, nmin,
-        tol, b, gamma, samegraph, samevector)
+    R = 1-m/n
+    return Simulation(n, R, navg, converged, parity, rawdistortion, iterations,
+        runtimes, maxdiff, codeword, maxchange, trials)
 end
 
 import Base.show
@@ -125,10 +119,11 @@ end
 
 import PyPlot.plot
 function plot(sim::Simulation; options=:short, backend=:pyplot)
-    dist = meandist(sim, convergedonly=true)
+    dist = meandist(sim, convergedonly=false)
     if backend==:pyplot
-        fig1 = plotdist(dist, sim.R)
-        plt.:title("Mean disortion for instances that converged \n n = $(sim.n)")
+        fig1 = plotdist([dist], [sim.R])
+        ax = fig1.axes[1]
+        ax.set_title("Mean disortion for instances that converged \n n = $(sim.n)")
         if options==:full
             fig2 = PyPlot.figure("Detailed plots")
             PyPlot.subplot(311)
@@ -191,16 +186,9 @@ function plot(sim::Simulation; options=:short, backend=:pyplot)
     end
 end
 
-function plot(sims::Vector{Simulation})
-    for sim in sims
-        plot(sim)
-    end
-end
-
 # Print results
 import Base.print
 function print(io::IO, sim::Simulation; options=:short)
-    println(io)
     println(io, "Rate R = ", round(sim.R,digits=2))
     println(io, "Simulation with n = ", sim.n, ", average over ",
         length(sim.converged), " trials")

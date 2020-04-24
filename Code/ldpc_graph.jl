@@ -27,7 +27,7 @@ function ldpc_graph(q::Int, n::Int, m::Int,
     v = 1
     r = 1
     for i in 1:length(lambda)
-        deg = Int(lambda[i]/i*nedges)   # number of edges incident on variable v
+        deg = Int(round(lambda[i]/i*nedges,digits=10))   # number of edges incident on variable v
         for _ in 1:deg
             edgesleft[r:r+i-1] = v*ones(Int,i)
             r += i
@@ -41,7 +41,7 @@ function ldpc_graph(q::Int, n::Int, m::Int,
     f = 1
     s = 1
     for j in 1:length(rho)
-        deg = Int(rho[j]/j*nedges)
+        deg = Int(round(rho[j]/j*nedges,digits=10))
         for _ in 1:deg
             for v in  perm[s:s+j-1]
                 ########
@@ -93,6 +93,7 @@ end
 function extfields(q::Int, y::Vector{Int}, algo::Union{BP,MS}, L::Real=1.0,
     sigma::Real=1e-4; randseed::Int=0)
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
+    println("Fields seed: ", randseed)
     fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in eachindex(y)]
     for v in eachindex(fields)
         for a in 0:q-1
@@ -130,6 +131,56 @@ end
 function paritycheck(FG::FactorGraph)
     return paritycheck(adjmat(FG), guesses(FG), FG.mult)
 end
+
+# Groups bits together to transform GF(2)->GF(2^k)
+function gf2toq(H::Array{Int,2}, k::Int=1)
+    m,n = size(H)
+    nnew = div(n,k)
+    Hnew = zeros(Int, m, nnew)
+    for f in 1:m
+        Hnew[f,:] = gf2toq(H[f,:], k)
+    end
+    return Hnew
+end
+
+function gf2toq(x::Vector{Int}, k::Int=1)
+    mod(length(x),k) != 0 && error("Length of vector x must be a multiple of k")
+    newlen = div(length(x),k)
+    return [bits2int(x[k*(v-1)+1:k*(v-1)+k]) for v in 1:newlen]
+end
+
+function bits2int(x::Vector{Int})
+    bitcheck = prod(in.(x, Ref([0,1])))
+    !bitcheck && error("Input vector x must be made of bits")
+    return sum(y*2^(i-1) for (i,y) in enumerate(reverse(x)))
+end
+
+function int2bits(x::Int, len::Int)
+    x > 2^len-1 && error("x is too large to fit in a bit vector of length len")
+    b = bitstring(x)
+    y = split(b,"")
+    return parse.(Int,y[end-len+1:end])
+end
+
+function gfqto2(y::Vector{Int}, k::Int)
+    z = zeros(Int, length(y)*k)
+    for (i,s) in enumerate(y)
+        z[k*(i-1)+1:k*(i-1)+k] = int2bits(s,k)
+    end
+    return z
+end
+
+function gfqto2(H::Array{Int,2}, k::Int=1)
+    m,n = size(H)
+    nnew = n*k
+    Hnew = zeros(Int, m, nnew)
+    for f in 1:m
+        Hnew[f,:] = gfqto2(H[f,:], k)
+    end
+    return Hnew
+end
+
+
 
 #### Not used
 function ldpc_adjmat(q::Int, n::Int, m::Int,

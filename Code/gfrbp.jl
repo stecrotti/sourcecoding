@@ -28,13 +28,21 @@ end
 
 function onebpiter!(FG::FactorGraph, algo::MS,
     neutral=neutralel(algo,FG.q);
-    wrong = Fun(q, -Inf))
+    wrong = Fun(q, -Inf), alpha = 0)
 
     maxdiff = diff = 0.0
     for f in randperm(length(FG.Fneigs))
         for (v_idx, v) in enumerate(FG.Fneigs[f])
-            # Subtract message from belief
-            FG.fields[v] .-= FG.mfv[f][v_idx]
+            # If field has -Inf, don't to anything, that variable is already decided
+            # sum(isinf.(FG.fields[v]))!=0  && break
+
+            # If a leaf, uniform message!
+            if sum(isinf.(FG.mfv[f][v_idx]))!=0
+                FG.fields[v] = OffsetArray(1/FG.q*ones(FG.q), 0:FG.q-1)
+            else
+                # Subtract message from belief
+                FG.fields[v] .-= FG.mfv[f][v_idx]
+            end
             # Define functions for weighted convolution
             funclist = Fun[]
             for (vprime_idx, vprime) in enumerate(FG.Fneigs[f])
@@ -45,7 +53,8 @@ function onebpiter!(FG::FactorGraph, algo::MS,
                     push!(funclist, func)
                 end
             end
-            FG.mfv[f][v_idx] .= reduce(gfmsc, funclist, init=neutral)
+            # Update with damping
+            FG.mfv[f][v_idx] .= alpha*FG.mfv[f][v_idx] + (1-alpha)*reduce(gfmsc, funclist, init=neutral)
             FG.mfv[f][v_idx] .-= maximum(FG.mfv[f][v_idx])
             # Send warning if messages are all NaN
             sum(isnan.(FG.mfv[f][v_idx]))==FG.q && error("Message ($f,$v) is all NaN")
@@ -69,12 +78,11 @@ function guesses(FG::FactorGraph)
 end
 
 function bp!(FG::FactorGraph, algo::Union{BP,MS}, y::Vector{Int}, maxiter=Int(1e3),
-    convergence=:messages, nmin=300, tol=1e-7, gamma=0, Tmax=1,
+    convergence=:messages, nmin=300, tol=1e-7, gamma=0, alpha=0 , Tmax=1,
     randseed=0, maxdiff=zeros(maxiter), codeword=falses(maxiter),
     maxchange=zeros(maxiter); verbose=false)
 
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
-    println("bp seed :", randseed)
     newguesses = zeros(Int,FG.n)
     oldguesses = guesses(FG)
     oldmessages = deepcopy(FG.mfv)
@@ -82,7 +90,7 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}, y::Vector{Int}, maxiter=Int(1e
     n = 0
     for trial in 1:Tmax
         for t in 1:maxiter
-            newguesses,maxdiff[t] = onebpiter!(FG, algo)
+            newguesses,maxdiff[t] = onebpiter!(FG, algo, alpha=alpha)
             newmessages .= FG.mfv
             codeword[t] = (sum(paritycheck(FG))==0)
             if convergence == :messages
@@ -110,20 +118,26 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}, y::Vector{Int}, maxiter=Int(1e
             softdecimation!(FG, gamma*t, algo)
             (verbose && isinteger(10*t/maxiter)) && println("BP/MS Finished ",Int(t/maxiter*100), "%")
         end
-        refresh!(FG)
-        FG.fields .= extfields(FG.q,y,algo, randseed=randseed+trial)
-        oldguesses = guesses(FG)
-        oldmessages = deepcopy(FG.mfv)
+        if trial != Tmax
+            refresh!(FG)
+            FG.fields .= extfields(FG.q,y,algo, randseed=randseed+trial)
+            oldguesses .= guesses(FG)
+            oldmessages .= deepcopy(FG.mfv)
+            maxchange .= fill(-Inf, maxiter)
+            n = 0
+        end
     end
     return :unconverged, maxiter, Tmax
 end
 
 function softdecimation!(FG::FactorGraph, gamma::Real, algo::Union{BP,MS})
     for (v,gv) in enumerate(FG.fields)
-        if typeof(algo)==BP
-            FG.fields[v] .*= gv^gamma
-        else
-            FG.fields[v] .+= gv*gamma
+        if gamma > 0
+            if typeof(algo)==BP
+                FG.fields[v] .*= gv^gamma
+            else
+                FG.fields[v] .+= gv*gamma
+            end
         end
     end
     return nothing

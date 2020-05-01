@@ -1,5 +1,6 @@
 function ldpc_graph(q::Int, n::Int, m::Int,
-    nedges::Int, lambda::Vector{T}=[0.0, 1.0], rho::Vector{T}=[0.0, 0.5, 0.5],
+    nedges::Int=generate_polyn(n,m)[1], lambda::Vector{T}=generate_polyn(n,m)[2],
+    rho::Vector{T}=generate_polyn(n,m)[3],
     fields = [Fun(1e-3*randn(q)) for v in 1:n]; verbose=false,
     randseed::Int=0) where {T<:AbstractFloat}
 
@@ -44,11 +45,8 @@ function ldpc_graph(q::Int, n::Int, m::Int,
         deg = Int(round(rho[j]/j*nedges,digits=10))
         for _ in 1:deg
             for v in  perm[s:s+j-1]
-                ########
-                # If we want to avoid multi-edges, this is probably the right place to do something about it
-                ########
                 if findall(isequal(v), Fneigs[f])!=[]
-                    # verbose && println("Multi-edge discarded")
+                    verbose && println("Multi-edge discarded")
                     continue
                 end
                 # Initialize neighbors
@@ -68,6 +66,20 @@ function ldpc_graph(q::Int, n::Int, m::Int,
     mult, gfinv = gftables(q)
 
     return FactorGraph(q, mult, gfinv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
+end
+
+function generate_polyn(n::Int, m::Int)
+    nedges = 2*n
+    # Find best k
+    lower = nedges/m - 1
+    k = Int(ceil(lower))
+
+    rho = zeros(k+1)
+    rho[k] = k*((k+1)*m - nedges)
+    rho[k+1] = (k+1)*(nedges - k*m)
+    rho ./= nedges
+    lambda = [0.0, 1.0]
+    return nedges, lambda, rho
 end
 
 function gftables(q)
@@ -93,7 +105,6 @@ end
 function extfields(q::Int, y::Vector{Int}, algo::Union{BP,MS}, L::Real=1.0,
     sigma::Real=1e-4; randseed::Int=0)
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
-    println("Fields seed: ", randseed)
     fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in eachindex(y)]
     for v in eachindex(fields)
         for a in 0:q-1

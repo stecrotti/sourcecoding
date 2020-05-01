@@ -169,3 +169,21 @@ function breduction!(FG::FactorGraph, b::Int; randseed::Int=0)
         deletefactor!(FG)
     end
 end
+
+function polyn(FG::FactorGraph)
+    fd = countmap(factdegrees(FG))    # degree => number of factors with that degree
+    rho = zeros(maximum(keys(fd)))
+    for j in keys(fd)
+        rho[j] = j*fd[j]
+    end
+    rho ./= sum(rho)
+
+    vd = countmap(vardegrees(FG))
+    lambda = zeros(maximum(keys(vd)))
+    for i in keys(vd)
+        lambda[i] = i*vd[i]
+    end
+    lambda ./= sum(lambda)
+
+    return lambda, rho
+end

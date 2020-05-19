@@ -1,6 +1,7 @@
 struct Simulation
     n::Int
     R::Float64
+    b::Int
     navg::Int
     converged::BitArray{1}
     parity::Vector{Int}
@@ -75,29 +76,38 @@ function Simulation(
             if parity[it] == 0
                 distortions[it] = hd(guesses(FG),y)/(n*log2(q))
             end
+            res_string = res==:converged ? "C" : "U"
 
-
-            verbose && println("Run ", it, " of ",navg,": ",res,
-                " after ", iterations[it], " iterations. ",
-                "Parity ", parity[it],
-                ". Max change ", round.(maxchange[it][iterations[it]], sigdigits=3),
-                ". Trials ", trials[it])
+            if convergence==:messages
+                verbose && println("Run ", it, " of ",navg,": ",res_string,
+                    " after ", iterations[it], " iters. ",
+                    "Parity ", parity[it],
+                    ". Max change ", round.(maxchange[it][iterations[it]], sigdigits=3),
+                    ". Trials ", trials[it]#=,
+                    ". Seed ", randseed=#)
+            else
+                verbose && println("Run ", it, " of ",navg,": ",res_string,
+                    " after ", iterations[it], " iters. ",
+                    "Parity ", parity[it],
+                    ". Trials ", trials[it]#=,
+                    ". Seed ", randseed=#)
+            end
             samegraph && refresh!(FG)   # Reset messages
         end
     end
     totaltime = t[2]
     R = 1-m/n
-    return Simulation(n, R, navg, converged, parity, distortions, iterations,
+    return Simulation(n, R, b, navg, converged, parity, distortions, iterations,
         runtimes, maxdiff, codeword, maxchange, trials)
 end
 
 import Base.show
 function show(io::IO, sim::Simulation)
     println(io, "Simulation with n=", sim.n, ", R=", round(sim.R,digits=2),
-     " average over ", sim.navg, " instances.")
+     ", b=", sim.b," average over ", sim.navg, " instances.")
 end
 
-function plotdist(D::Vector{Float64}, R::Vector{Float64}, backend=:pyplot;
+function plotdist(R::Vector{Float64}, D::Vector{Float64}, backend=:pyplot;
     linename="Simulation results")
 
     d = LinRange(0.001,0.5-0.001,100)
@@ -123,11 +133,11 @@ function plotdist(D::Vector{Float64}, R::Vector{Float64}, backend=:pyplot;
 end
 
 import PyPlot.plot
-function plot(sim::Simulation; options=:short, backend=:pyplot)
+function plot(sim::Simulation; options=:short, backend=:unicode)
     dist = mean(sim.distortions[sim.parity .== 0])
     dist_tot = mean(sim.distortions)
     if backend==:pyplot
-        fig1 = plotdist([dist], [sim.R])
+        fig1 = plotdist([sim.R], [dist])
         ax = fig1.axes[1]
         ax.set_title("Mean disortion for instances that fulfilled parity \n n = $(sim.n)")
         if options==:full
@@ -184,11 +194,23 @@ function plot(sim::Simulation; options=:short, backend=:pyplot)
             PyPlot.tight_layout()
             return fig1, fig2
         end
-        return fig1
+        return fig14
     elseif backend==:unicode
-        myplt = plotdist([dist], [sim.R], :unicode, linename="Parity fulfilled")
+        myplt = plotdist([sim.R], [dist], :unicode, linename="Parity fulfilled")
         lineplot!(myplt, [sim.R, sim.R], [dist_tot, dist_tot], name="Total")
-        title!(myplt, "Mean disortion \n n = $(sim.n)")
+        title!(myplt, "Mean distortion \n n = $(sim.n)")
+        return myplt
+    end
+end
+
+function plot(sims::Vector{Simulation}; options=:short, backend=:unicode)
+    R = [sim.R for sim in sims]
+    dist = [mean(sim.distortions[sim.parity .== 0]) for sim in sims]
+    dist_tot = [mean(sim.distortions) for sim in sims]
+    if backend==:unicode
+        myplt = plotdist(R, dist, :unicode, linename="Parity fulfilled")
+        scatterplot!(myplt, R, dist_tot, name="Total distortion")
+        title!(myplt, "Mean distortion")
         return myplt
     end
 end
@@ -197,11 +219,12 @@ end
 import Base.print
 function print(io::IO, sim::Simulation; options=:short)
     println(io, "Simulation with n = ", sim.n, ", R = ", round(sim.R,digits=2),
-    ", average over ", length(sim.converged), " trials")
+    ", b = ", sim.b)
     println("Average distortion for instances that fulfilled parity: ",
         round(mean(sim.distortions[sim.parity .== 0]),digits=2))
-        println("Average distortion for all instances: ",
+    println("Average distortion for all instances: ",
             round(mean(sim.distortions),digits=2))
+    println("Iterations for converged instances: ", mean_sd_string(sim.iterations[sim.converged .== true]))
 
     M = fill("",3,3)
     M[2,2] = string(sum(sim.converged.*(sim.parity.==0)))
@@ -256,6 +279,12 @@ function print(io::IO, sim::Simulation; options=:short)
         end
     elseif options != :short
         println("Option $option not available")
+    end
+end
+
+function print(io::IO, sims::Vector{Simulation}; options=:short)
+    for sim in sims
+        print(io, sim, options=options)
     end
 end
 

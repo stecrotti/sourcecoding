@@ -63,13 +63,6 @@ function Base.show(io::IO, FG::FactorGraph)
     println(io, "Factor Graph with $(FG.n) variables and $(FG.m) factors defined on GF($(FG.q))")
 end
 
-# Re-initialize messages
-function refresh!(FG::FactorGraph)
-    for f in eachindex(FG.mfv)
-        FG.mfv[f] .= [OffsetArray(1/FG.q*ones(FG.q), 0:FG.q-1) for v in eachindex(FG.mfv[f])]
-    end
-    return nothing
-end
 
 # Degree of variable node
 function vardegree(FG::FactorGraph, v::Int)::Int

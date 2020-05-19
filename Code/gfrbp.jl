@@ -30,19 +30,22 @@ function onebpiter!(FG::FactorGraph, algo::MS,
     neutral=neutralel(algo,FG.q);
     wrong = Fun(q, -Inf), alpha = 0)
 
+    # println("DEBUG: fields[590] = ", FG.fields[590])
+    # println("DEBUG: Mfv[185] = ", FG.mfv[185])
+
     maxdiff = diff = 0.0
     for f in randperm(length(FG.Fneigs))
         for (v_idx, v) in enumerate(FG.Fneigs[f])
             # If field has -Inf, don't to anything, that variable is already decided
-            # sum(isinf.(FG.fields[v]))!=0  && break
+            sum(isinf.(FG.fields[v]))!=0  && continue
 
             # If a leaf, uniform message!
-            if sum(isinf.(FG.mfv[f][v_idx]))!=0
-                FG.fields[v] = OffsetArray(1/FG.q*ones(FG.q), 0:FG.q-1)
-            else
+            # if vardegree(FG,v) == 1
+                # FG.fields[v] = OffsetArray(1/FG.q*ones(FG.q), 0:FG.q-1)
+            # else
                 # Subtract message from belief
                 FG.fields[v] .-= FG.mfv[f][v_idx]
-            end
+            # end
             # Define functions for weighted convolution
             funclist = Fun[]
             for (vprime_idx, vprime) in enumerate(FG.Fneigs[f])
@@ -54,14 +57,16 @@ function onebpiter!(FG::FactorGraph, algo::MS,
                 end
             end
             # Update with damping
-            FG.mfv[f][v_idx] .= alpha*FG.mfv[f][v_idx] + (1-alpha)*reduce(gfmsc, funclist, init=neutral)
+            oldmessage = alpha > 0 ? alpha*FG.mfv[f][v_idx] : Fun(q)
+            FG.mfv[f][v_idx] .= oldmessage + (1-alpha)*reduce(gfmsc, funclist, init=neutral)
             FG.mfv[f][v_idx] .-= maximum(FG.mfv[f][v_idx])
             # Send warning if messages are all NaN
-            sum(isnan.(FG.mfv[f][v_idx]))==FG.q && error("Message ($f,$v) is all NaN")
+            sum(isnan.(FG.mfv[f][v_idx]))>0 && error("Message ($f,$v) has a NaN")
             # Update belief after updating the message
             FG.fields[v] .+= FG.mfv[f][v_idx]
             # Normalize belief
             FG.fields[v] .-= maximum(FG.fields[v])
+            sum(isnan.(FG.fields[v])) > 0 && error("Belief $v has a NaN")
             # Look for maximum message (difference)
             diff = abs(FG.mfv[f][v_idx][0]-FG.mfv[f][v_idx][1])
             diff > maxdiff && (maxdiff = diff)
@@ -112,8 +117,12 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}, y::Vector{Int}, maxiter=Int(1e
                     n=0
                 end
                 oldguesses .= newguesses
+            elseif convergence == :parity
+                if sum(paritycheck(FG)) == 0
+                    return :converged, t, trial
+                end
             else
-                error("Field convergence must be one of :messages, :decvars")
+                error("Field convergence must be one of :messages, :decvars, :parity")
             end
             softdecimation!(FG, gamma*t, algo)
             (verbose && isinteger(10*t/maxiter)) && println("BP/MS Finished ",Int(t/maxiter*100), "%")
@@ -145,3 +154,20 @@ end
 
 neutralel(algo::BP, q::Int) = Fun(x == 0 ? 1.0 : 0.0 for x=0:q-1)
 neutralel(algo::MS, q::Int) = Fun(x == 0 ? 0.0 : -Inf for x=0:q-1)
+
+
+# Re-initialize messages
+function refresh!(FG::FactorGraph)
+    for f in eachindex(FG.mfv)
+        FG.mfv[f] .= [OffsetArray(1/FG.q*ones(FG.q), 0:FG.q-1) for v in eachindex(FG.mfv[f])]
+    end
+    return nothing
+end
+
+function refresh!(FG::FactorGraph, y::Vector{Int}, q::Int=2, algo::Union{BP,MS}=MS(),
+    L::Real=1.0, sigma::Real=1e-4; randseed::Int=0)
+
+    refresh!(FG);
+    FG.fields .= extfields(q, y, algo, L, randseed=randseed);
+    return nothing
+end

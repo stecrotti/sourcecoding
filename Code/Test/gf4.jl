@@ -1,40 +1,34 @@
 include("../headers.jl")
 
-nsim = 3    # Number of simulations to be run = number of pairs graph,vector
-gamma = 1e-6
-navg = 10
-b = 5
-nmin = 300
-maxiter = Int(1e4)
-algo = MS()
-
-info = ("\n############################ Info ############################
-Some simulations with GF(4).
-b = $b, gamma=$gamma
-##############################################################\n")
 const q = 4
-n = 480
+gamma = 0
+b = Int.(round.(500*[0.2, 0.4, 0.6, 0.8]))
+n = 420*4
+m = Int.(round.(n*[0.2, 0.4, 0.6, 0.8]))
+R = 1 .- m/n
 L = 1
-nedges = n*2
-lambda = [0.0, 1.0]
-rho = [0.0, 0.0, 0.5, 0.5]
-m = Int(round(nedges*(sum(rho[j]/j for j in eachindex(rho)))))
+navg = 20
+randseed = 10000
+Tmax = 3
+D_parity = 0.5*ones(length(m))
+D_total = 0.5*ones(length(m))
 
-sims = Simulation[]
-println(info)
+sims = Vector{Simulation}(undef, length(m))
 
-for s in 1:nsim
-    println("---------------------------------------------")
-    println("               Simulation $s     ")
-    println("---------------------------------------------")
-    sim = Simulation(MS(), q, n, m, L, nedges, lambda, rho,
-        navg=navg, convergence=:decvars, maxiter=Int(1e4), gamma=gamma, nmin=500, b=b,
-        samegraph=false, samevector=false, verbose = true)
-    push!(sims, sim)
-    print(stdout, sim, options=:short)
-    println()
+for j in 1:length(m)
+    println("---------- Starting simulation $j of ", length(m)," -----------")
+    sim = Simulation(MS(), q, n, m[j],
+        navg=navg, convergence=:messages, maxiter=Int(3e2), gamma=gamma, Tmax=Tmax,
+        tol=1e-20, b=b[j], samegraph=false, samevector=false, randseed=randseed+navg*Tmax*j,
+        verbose=true)
+    print(sim)
+    D_parity[j] = mean(sim.distortions[sim.parity .== 0])
+    D_total[j] = mean(sim.distortions)
+    sims[j] = sim
 end
-jldopen("gf4.jld", "w") do file
-    write(file, "sims", sims)
-end
-print("\a") # beep
+
+plt1 = plotdist(D_parity, R, :unicode, linename="Parity fulfilled")
+show(plt1)
+println("\n")
+plt2 = plotdist(D_total, R, :unicode, linename="Total distortion")
+show(plt2)

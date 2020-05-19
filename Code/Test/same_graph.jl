@@ -27,7 +27,7 @@ for s in 1:nsim
     println("---------------------------------------------")
     println("               Simulation $s     ")
     println("---------------------------------------------")
-    sim = Simulation(MS(), q, n, m, L, nedges, lambda, rho,
+    sim = Simulation(MS(), q, n, m, L,
         navg=navg, convergence=:decvars, maxiter=Int(1e4), gamma=gamma, nmin=300,
         b=b, samegraph=true, samevector=true, verbose = false)
     push!(sims, sim)

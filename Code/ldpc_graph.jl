@@ -46,7 +46,7 @@ function ldpc_graph(q::Int, n::Int, m::Int,
         for _ in 1:deg
             for v in  perm[s:s+j-1]
                 if findall(isequal(v), Fneigs[f])!=[]
-                    verbose && println("Multi-edge discarded")
+                    # verbose && println("Multi-edge discarded")
                     continue
                 end
                 # Initialize neighbors

@@ -9,11 +9,11 @@ randseed = 100
 gamma = 0
 navg = 20
 maxiter = Int(1e3)
-b = 5
-n = 480
-m = 280
-L = 0.1
-Tmax = 5
+b = 20
+n = 480*8
+m = 280*8
+L = 1
+Tmax = 4
 nsims = 10
 
 println("#### $nsims simulations with n=$n, b=$b, Tmax=$Tmax, maxiter=$maxiter,",
@@ -22,12 +22,12 @@ println("#### $nsims simulations with n=$n, b=$b, Tmax=$Tmax, maxiter=$maxiter,"
 
 sims = Vector{Simulation}(undef, nsims)
 for s in 1:nsims
-    println("---- Simulation $s of $nsims ----")
+    # println("---- Simulation $s of $nsims ----")
     sims[s] = Simulation(algo, q, n, m,
         navg=navg, convergence=:messages, maxiter=maxiter, gamma=gamma, Tmax=Tmax,
         tol=1e-7, b=b, samegraph=true, samevector=false, randseed=randseed+navg*Tmax*s,
         verbose=false)
-    print(sims[s])
+    # print(sims[s])
 end
 
 seeds = string.([randseed+navg*Tmax*s for s in eachindex(sims)])

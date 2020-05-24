@@ -114,12 +114,13 @@ function plotdist(R::Vector{Float64}, D::Vector{Float64}, backend=:pyplot;
     r = LinRange(0, 1, 100)
     if backend==:pyplot
         fig1 = PyPlot.figure("Rate-distortion bound")
-        PyPlot.plot(rdb.(d),d);
-        PyPlot.plot(r, (1 .- r)/2)
-        PyPlot.plot(R, D, "o", ms=5)
+        PyPlot.plot(rdb.(d),d, label="Lower bound");
+        PyPlot.plot(r, (1 .- r)/2, label="Naive compression")
+        PyPlot.plot(R, D, "o", ms=4, label=linename)
         plt.:xlabel("Rate")
         plt.:ylabel("Distortion")
-        plt.:legend(["Lower bound", "Naive compression", linename])
+        # plt.:legend(["Lower bound", "Naive compression", linename])
+        plt.:legend()
         return fig1
     elseif backend==:unicode
         myplt = lineplot(rdb.(d),d, name="RDB", xlabel = "R", ylabel="D",
@@ -194,7 +195,7 @@ function plot(sim::Simulation; options=:short, backend=:unicode)
             PyPlot.tight_layout()
             return fig1, fig2
         end
-        return fig14
+        return fig1
     elseif backend==:unicode
         myplt = plotdist([sim.R], [dist], :unicode, linename="Parity fulfilled")
         lineplot!(myplt, [sim.R, sim.R], [dist_tot, dist_tot], name="Total")
@@ -203,16 +204,80 @@ function plot(sim::Simulation; options=:short, backend=:unicode)
     end
 end
 
-function plot(sims::Vector{Simulation}; options=:short, backend=:unicode)
+function plot(sims::Vector{Simulation}; backend=:unicode, title="Mean distortion")
     R = [sim.R for sim in sims]
     dist = [mean(sim.distortions[sim.parity .== 0]) for sim in sims]
     dist_tot = [mean(sim.distortions) for sim in sims]
-    if backend==:unicode
+    println()
+    if backend == :pyplot
+        PyPlot.close("all")
+        fig1 = plotdist(R, dist, :pyplot, linename="Parity fulfilled")
+        ax = fig1.axes[1]
+        ax.set_title(title)
+        ax.plot(R, dist_tot, "o", ms=4, label="Total distortion")
+        plt.:legend()
+        return fig1
+    elseif backend == :unicode
         myplt = plotdist(R, dist, :unicode, linename="Parity fulfilled")
         scatterplot!(myplt, R, dist_tot, name="Total distortion")
-        title!(myplt, "Mean distortion")
+        title!(myplt, title)
         return myplt
     end
+end
+
+function trials_hist(sims::Vector{Simulation}; backend=:unicode,
+    title="Trials for convergence")
+
+    T = [sim.trials[sim.converged] for sim in sims]
+    tmax = maximum(maximum(T))
+
+    if backend == :unicode
+        for j in eachindex(T)
+            println()
+            display(UnicodePlots.barplot(string.(1:maximum(T[j])), StatsBase.counts(T[j]),
+                symb="\u2588", title=title * ". R = $(round(sims[j].R, digits=2))"))
+        end
+   elseif backend == :pyplot
+       PyPlot.close("all")
+       for j in eachindex(T)
+           PyPlot.subplot(2, length(sims)÷2, j)
+           PyPlot.hist(T[j], bins=tmax)
+           ax = PyPlot.gca()
+           ax.set_title("R = $(round(sims[j].R, digits=2))")
+           fig = gcf()
+           fig.suptitle(title)
+       end
+       PyPlot.tight_layout()
+   end
+end
+
+function iters_hist(sims::Vector{Simulation}; backend=:unicode,
+    title="Iterations for convergence")
+
+    T = [sim.iterations[sim.converged] for sim in sims]
+    tmax = maximum.(T)
+    tmin = minimum.(T)
+
+    if backend == :unicode
+        for j in eachindex(T)
+            println()
+            # display(UnicodePlots.barplot(string.(tmin[j]:tmax[j]), StatsBase.counts(T[j]),
+            #     symb="\u2588", title=title * ". R = $(round(sims[j].R, digits=2))"))
+            display(UnicodePlots.histogram(T[j], nbins=10,
+                symb="\u2588", title=title * ". R = $(round(sims[j].R, digits=2))"))
+        end
+   elseif backend == :pyplot
+       PyPlot.close("all")
+       for j in eachindex(T)
+           PyPlot.subplot(2, length(sims)÷2, j)
+           PyPlot.hist(T[j], bins=tmax)
+           ax = PyPlot.gca()
+           ax.set_title("R = $(round(sims[j].R, digits=2))")
+           fig = gcf()
+           fig.suptitle(title)
+       end
+       PyPlot.tight_layout()
+   end
 end
 
 # Print results
@@ -243,25 +308,26 @@ function print(io::IO, sim::Simulation; options=:short)
     )
 
     data = hcat(["Total"; "Convergence Y"; "Convergence N"], M)
+    time_hour = Int(fld(sum(sim.runtimes),60*60))
     time_min = Int(fld(sum(sim.runtimes),60))
     time_sec = Int(round(mod(sum(sim.runtimes),60)))
     avg_min = Int(fld(mean(sim.runtimes),60))
     avg_sec = Int(round(mod(mean(sim.runtimes),60)))
-    println(io, "Runtime: ", time_min, "m ", time_sec, "s. Average runtime per instance: ",
-        avg_min, "m ", avg_sec, "s")
+    println(io, "Runtime: ", time_hour, "h ", time_min, "m ", time_sec,
+        "s. Average runtime per instance: ", avg_min, "m ", avg_sec, "s")
     pretty_table(io, data, ["" "Total" "Parity Y" "Parity N"], alignment=:c,
         hlines = [1,2], highlighters = h)
     println(io)
 
     if options==:full
         println("L = ", sim.L)
-        println("Number of edges = ", sim.nedges)
-        println("Lambda = ", sim.lambda)
-        println("Rho = ", sim.rho)
+        # println("Number of edges = ", sim.nedges)
+        # println("Lambda = ", sim.lambda)
+        # println("Rho = ", sim.rho)
         if sim.convergence==:decvars
             println("Convergence criterion: decisional variables")
             println("Minimum number of consecutive iterations with no changes: ", sim.nmin)
-        else
+        elseif sim.convergence==:messages
             println("Convergence criterion: messages")
             println("Tolerance for messages to be considered equal: ", sim.tol)
         end

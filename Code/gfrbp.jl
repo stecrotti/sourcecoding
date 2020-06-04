@@ -30,9 +30,6 @@ function onebpiter!(FG::FactorGraph, algo::MS,
     neutral=neutralel(algo,FG.q);
     wrong = Fun(q, -Inf), alpha = 0)
 
-    # println("DEBUG: fields[590] = ", FG.fields[590])
-    # println("DEBUG: Mfv[185] = ", FG.mfv[185])
-
     maxdiff = diff = 0.0
     for f in randperm(length(FG.Fneigs))
         for (v_idx, v) in enumerate(FG.Fneigs[f])

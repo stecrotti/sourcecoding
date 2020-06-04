@@ -121,7 +121,8 @@ function hd(x::Int,y::Int)
 end
 
 function hd(x::Vector{Int}, y::Vector{Int})
-    sum(x.!=y)
+    # sum(x.!=y)
+    sum(hd.(x,y))
 end
 
 # Works only for GF(2^k)
@@ -132,7 +133,7 @@ function paritycheck(H::Array{Int,2}, y::Vector{Int}, mult::OffsetArray{Int,2,Ar
     for i in eachindex(z)
         s = 0
         for j in eachindex(y)
-            s = xor(s, mult[H[i,j], y[j]])
+            s = hd(s, mult[H[i,j], y[j]])
         end
         z[i] = s
     end

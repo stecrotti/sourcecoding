@@ -3,6 +3,7 @@ struct Simulation
     R::Float64
     b::Int
     navg::Int
+    maxiter::Int
     converged::BitArray{1}
     parity::Vector{Int}
     distortions::Vector{Float64}
@@ -21,9 +22,6 @@ function Simulation(
     n::Int,                             # Number of nodes, fixed
     m::Int;                             # m=n-k, the number of rows in the system
     L::Real = 1,                            # Factor in the fields expression
-    # nedges::Int,                        #
-    # lambda::Vector{Float64},            # Parameters for graph construction
-    # rho::Vector{Float64};               #
     navg = 10,                          # Number of runs for each value of m
     maxiter = Int(1e3),                 # Max number of iteration for each run of BP
     convergence = :decvars,             # Convergence criterion: can be either :decvars or :messages
@@ -55,6 +53,7 @@ function Simulation(
     y = rand(MersenneTwister(randseed), 0:q-1, n)
 
     t = @timed begin
+        verbose && println()
         for it in 1:navg
             if !samevector
                 y .= rand(MersenneTwister(randseed+it), 0:q-1, n)
@@ -86,9 +85,10 @@ function Simulation(
                     ". Trials ", trials[it]#=,
                     ". Seed ", randseed=#)
             else
-                verbose && println("Run ", it, " of ",navg,": ",res_string,
-                    " after ", iterations[it], " iters. ",
-                    "Parity ", parity[it],
+                verbose && println("Run ", @sprintf("%3d", it),
+                    " of ",navg,": ",
+                    res_string, " after ", @sprintf("%3d", iterations[it]),
+                    " iters. ", "Parity ", @sprintf("%2d", parity[it]),
                     ". Trials ", trials[it]#=,
                     ". Seed ", randseed=#)
             end
@@ -97,7 +97,7 @@ function Simulation(
     end
     totaltime = t[2]
     R = 1-m/n
-    return Simulation(n, R, b, navg, converged, parity, distortions, iterations,
+    return Simulation(n, R, b, navg, maxiter, converged, parity, distortions, iterations,
         runtimes, maxdiff, codeword, maxchange, trials)
 end
 
@@ -284,7 +284,7 @@ end
 import Base.print
 function print(io::IO, sim::Simulation; options=:short)
     println(io, "Simulation with n = ", sim.n, ", R = ", round(sim.R,digits=2),
-    ", b = ", sim.b)
+    ", b = ", sim.b, ", maxiter = ", sim.maxiter)
     println("Average distortion for instances that fulfilled parity: ",
         round(mean(sim.distortions[sim.parity .== 0]),digits=2))
     println("Average distortion for all instances: ",
@@ -308,9 +308,11 @@ function print(io::IO, sim::Simulation; options=:short)
     )
 
     data = hcat(["Total"; "Convergence Y"; "Convergence N"], M)
-    time_hour = Int(fld(sum(sim.runtimes),60*60))
-    time_min = Int(fld(sum(sim.runtimes),60))
-    time_sec = Int(round(mod(sum(sim.runtimes),60)))
+    time_tot = Int(round(sum(sim.runtimes)))
+    time_hour = div(time_tot,60*60)
+    mm = mod(time_tot, 60*60)
+    time_min = div(mm, 60)
+    time_sec = mod(mm, 60)
     avg_min = Int(fld(mean(sim.runtimes),60))
     avg_sec = Int(round(mod(mean(sim.runtimes),60)))
     println(io, "Runtime: ", time_hour, "h ", time_min, "m ", time_sec,

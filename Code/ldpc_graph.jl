@@ -128,14 +128,17 @@ end
 # Works only for GF(2^k)
 function paritycheck(H::Array{Int,2}, y::Vector{Int}, mult::OffsetArray{Int,2,Array{Int,2}})
     m,n = size(H)
+    q,p = size(mult)
     @assert length(y) == n
+    @assert q == p
     z = zeros(Int, m)
     for i in eachindex(z)
-        s = 0
-        for j in eachindex(y)
-            s = hd(s, mult[H[i,j], y[j]])
-        end
-        z[i] = s
+        # s = 0
+        # for j in eachindex(y)
+        #     s = hd(s, mult[H[i,j], y[j]])
+        # end
+        # z[i] = s
+        z[i] = reduce(xor, [mult[H[i,j], y[j]] for j in eachindex(y)], init=0)
     end
     return z
 end

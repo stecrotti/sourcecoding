@@ -28,7 +28,7 @@ end
 
 function onebpiter!(FG::FactorGraph, algo::MS,
     neutral=neutralel(algo,FG.q);
-    wrong = Fun(q, -Inf), alpha = 0)
+    wrong = Fun(FG.q, -Inf), alpha = 0)
 
     maxdiff = diff = 0.0
     for f in randperm(length(FG.Fneigs))
@@ -54,7 +54,7 @@ function onebpiter!(FG::FactorGraph, algo::MS,
                 end
             end
             # Update with damping
-            oldmessage = alpha > 0 ? alpha*FG.mfv[f][v_idx] : Fun(q)
+            oldmessage = alpha > 0 ? alpha*FG.mfv[f][v_idx] : Fun(FG.q)
             FG.mfv[f][v_idx] .= oldmessage + (1-alpha)*reduce(gfmsc, funclist, init=neutral)
             FG.mfv[f][v_idx] .-= maximum(FG.mfv[f][v_idx])
             # Send warning if messages are all NaN

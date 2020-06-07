@@ -4,7 +4,8 @@ const q = 2
 # b = Int.(round.(400*sqrt.([0.2, 0.4, 0.6, 0.8])))
 # b = Int.(round.(350*([0.2, 0.4, 0.6, 0.8]).^0.2))
 
-const n = 420*6
+# const n = 420*8
+const n = 420
 const R = collect(0.1:0.1:0.9)
 const m = Int.(round.(n*(1 .- R)))
 # b = Int.(round.(n/6))*ones(Int, length(m))
@@ -43,7 +44,7 @@ Tmax = 8
 # gamma = 1e-3
 gamma = 1e-2
 # maxiter = Int(round(1/gamma))
-maxiter = 500*ones(Int, length(R))
+maxiter = 300*ones(Int, length(R))
 nmin = Int.(round.(0.7*maxiter))
 
 println("#######################################")
@@ -53,7 +54,7 @@ println("#######################################")
 sims = Vector{Simulation}(undef, length(m))
 
 for j in 1:length(m)
-    println("---------- Starting simulation $j of ", length(m)," -----------")
+    println("---------- Starting simulation $j of ", length(m)," | R = ",R[j], " -----------")
     sim = Simulation(MS(), q, n, m[j],
         navg=navg, convergence=:parity, maxiter=maxiter[j], gamma=gamma, Tmax=Tmax,
         nmin=nmin[j], b=b[j], samegraph=false, samevector=false,
@@ -69,7 +70,8 @@ plot(sims, title="Mean distortion\nq=$q, n=$n, gamma=$gamma, navg=$navg,
 ax = gca()
 ax.annotate("b=$(b)", (0,0), fontsize="small")
 ax.annotate("maxiter=$(maxiter)", (0,0.04), fontsize="small")
-savefig("../images/parity1e2", bbox_inches="tight")
+date = string(Dates.today())
+savefig("../images/gf2-"*date, bbox_inches="tight")
 
 plot(sims)
 

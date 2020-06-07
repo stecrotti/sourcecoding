@@ -9,14 +9,14 @@ const R = collect(0.1:0.1:0.9)
 const m = Int.(round.(n*(1 .- R)))
 const b = Int.(round.(n/2*(-R.^2/14 .+ R/7 .+ 1/10)))
 maxiter = Int(3e2)
-navg = 100
+navg = 200
 randseed = 10000
-Tmax = 4
+Tmax = 6
 
 sims = Vector{Simulation}(undef, length(m))
 
 for j in 1:length(m)
-    println("---------- Starting simulation $j of ", length(m)," | R = ",R[j]," -----------")
+    println("---------- Simulation $j of ", length(m)," | R = ",R[j]," -----------")
     sim = Simulation(MS(), q, n, m[j],
         navg=navg, convergence=:parity, maxiter=maxiter, gamma=gamma, Tmax=Tmax,
         tol=1e-20, b=b[j], samegraph=false, samevector=false, randseed=randseed+navg*Tmax*j,
@@ -33,7 +33,8 @@ plot(sims, title="Mean distortion\nq=$q, n=$n, gamma=$gamma, navg=$navg,
 ax = gca()
 ax.annotate("b=$(b)", (0,0))
 ax.annotate("maxiter=$(maxiter)", (0,0.05))
-savefig("../images/gf16_new", bbox_inches="tight")
+date = string(Dates.today())
+savefig("../images/gf16-"*date, bbox_inches="tight")
 # UnicodePlots.scatterplot(R, b, canvas = DotCanvas, xlabel="R", ylabel="b",
     # name="Factors removed")
 #

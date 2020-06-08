@@ -22,7 +22,7 @@ function Simulation(
     q::Int,
     n::Int,                             # Number of nodes, fixed
     m::Int;                             # m=n-k, the number of rows in the system
-    L::Real = 1,                            # Factor in the fields expression
+    L::Real = 1,                        # Factor in the fields expression
     navg = 10,                          # Number of runs for each value of m
     maxiter = Int(1e3),                 # Max number of iteration for each run of BP
     convergence = :decvars,             # Convergence criterion: can be either :decvars or :messages
@@ -105,23 +105,22 @@ end
 import Base.show
 function show(io::IO, sim::Simulation)
     println(io, "Simulation with n=", sim.n, ", R=", round(sim.R,digits=2),
-     ", b=", sim.b,", average over ", sim.navg, " instances.")
+     ", b=", sim.b,", navg=", sim.navg)
 end
 
-function plotdist(R::Vector{Float64}, D::Vector{Float64};
-                    backend=:unicode, errorbars=false, linename="Simulation results")
+function plotdist(R=Float64[], D=Float64[];
+                    backend=:unicode, errorbars=false, sigma=zeros(length(R)),
+                    linename="Simulation results")
 
     d = LinRange(0,0.5,100)
     r = LinRange(0, 1, 100)
-    println("Prima dell'if")
     if backend==:pyplot
         fig1 = PyPlot.figure("Rate-distortion bound")
         PyPlot.plot(rdb.(d),d, label="Lower bound")
         PyPlot.plot(r, (1 .- r)/2, label="Naive compression")
         if errorbars
-            sigma = std(sim.distortions)
-            PyPlot.errorbar(R, D, sigma./(sqrt.(D)), ls="o",
-                ms=4, label=linename, capsize=5)
+            length(R) != 0 && PyPlot.errorbar(R, D, sigma, fmt="o",
+                                    label=linename, ms=4, capsize=4)
         else
             length(R) != 0 && PyPlot.plot(R, D, "o", ms=4, label=linename)
         end
@@ -130,7 +129,6 @@ function plotdist(R::Vector{Float64}, D::Vector{Float64};
         plt.:legend()
         return fig1
     elseif backend==:unicode
-        println("Dentro l'elseif")
         myplt = UnicodePlots.lineplot(rdb.(d),d, name="RDB", xlabel = "R", ylabel="D",
             canvas = DotCanvas, width=60, height = 20)
         UnicodePlots.lineplot!(myplt, r, (1 .- r)/2, name="Naive compression")
@@ -141,92 +139,30 @@ function plotdist(R::Vector{Float64}, D::Vector{Float64};
     end
 end
 
-import PyPlot.plot
-function plot(sim::Simulation; options=:short, backend=:unicode, errorbars=false)
-    dist = mean(sim.distortions[sim.parity .== 0])
-    dist_tot = mean(sim.distortions)
-    if backend==:pyplot
-        fig1 = plotdist([sim.R], [dist], backend=:pyplot, errorbars=errorbars)
-        ax = fig1.axes[1]
-        ax.set_title("Mean disortion for instances that fulfilled parity \n n = $(sim.n)")
-        if options==:full
-            fig2 = PyPlot.figure("Detailed plots")
-            PyPlot.subplot(311)
-            ax1 = PyPlot.gca()
-            x = 1:sim.navg
-            ax1.plot(x, sim.iterations, "bo")
-            ax1.axhline(sim.maxiter, c="b", ls="--", lw=0.8)
-            ax1.set_ylim((0,sim.maxiter+100))
-            ax1.set_xticks(x)
-            ax1.set_xlabel("Index")
-            ax1.set_ylabel("Iterations", color="b")
-            ax2 = ax1.twinx()
-            ax2.plot(x, sim.parity, "ro")
-            ax2.set_yticks(0:maximum(sim.parity)[1])
-            ax2.axhline(0,c="r", ls="--", lw=0.8)
-            ax2.set_ylabel("Unfulfilled checks", color="r")
-            ax1.set_title("Number of iterations and unfulfilled parity checks")
-            PyPlot.tight_layout()
-
-            PyPlot.subplot(312)
-            ax1 = PyPlot.gca()
-            x = 1:sim.navg
-            ax1.plot(x, sim.distortions, "go")
-            ax1.axhline(1/2,c="g", ls="--", lw=0.8)
-            ax1.set_ylim((0,1))
-            ax1.set_xticks(x)
-            ax1.set_xlabel("Index")
-            ax1.set_ylabel("Distortion", color="g")
-            ax2 = ax1.twinx()
-            ax2.plot(x, sim.parity, "ro")
-            ax2.set_yticks(0:maximum(sim.parity)[1])
-            ax2.axhline(0,c="r", ls="--", lw=0.8)
-            ax2.set_ylabel("Unfulfilled checks", color="r")
-            ax1.set_title("Distortions and unfulfilled parity checks")
-            PyPlot.tight_layout()
-
-            PyPlot.subplot(313)
-            ax1 = PyPlot.gca()
-            x = 1:sim.navg
-            ax1.plot(x, sim.distortions, "go")
-            ax1.axhline(1/2,c="g", ls="--", lw=0.8)
-            ax1.set_ylim((0,1))
-            ax1.set_xticks(x)
-            ax1.set_xlabel("Index")
-            ax1.set_ylabel("Distortion", color="g")
-            ax2 = ax1.twinx()
-            ax2.plot(x, sim.iterations, "bo")
-            ax2.axhline(sim.maxiter,c="b", ls="--", lw=0.8)
-            ax2.set_ylim((0,sim.maxiter+100))
-            ax2.set_ylabel("Iterations", color="b")
-            ax1.set_title("Distortions and Number of iterations")
-            PyPlot.tight_layout()
-            return fig1, fig2
-        end
-        return fig1
-    elseif backend==:unicode
-        myplt = plotdist([sim.R], [dist], backend=:unicode, linename="Parity fulfilled")
-        lineplot!(myplt, [sim.R, sim.R], [dist_tot, dist_tot], name="Total")
-        title!(myplt, "Mean distortion \n n = $(sim.n)")
-        return myplt
-    end
-end
-
 function plot(sims::Vector{Simulation}; backend=:unicode, plotparity=true,
         errorbars=false, title="Mean distortion")
     R = [sim.R for sim in sims]
     dist = [mean(sim.distortions[sim.parity .== 0]) for sim in sims]
+    sigma = [std(sim.distortions[sim.parity .== 0])/sqrt(length(sim.distortions[sim.parity .== 0])) for sim in sims]
     dist_tot = [mean(sim.distortions) for sim in sims]
-    println()
+    sigma_tot = [std(sim.distortions)/sqrt(length(sim.distortions)) for sim in sims]
+
     if backend == :pyplot
         fig1 = plotdist(R, dist_tot, backend=:pyplot, linename="Total distortion",
-                        errorbars=errorbars)
+                        errorbars=errorbars, sigma=sigma)
         ax = fig1.axes[1]
         ax.set_title(title)
-        plotparity && ax.plot(R, dist, "o", ms=4, label="Parity fulfilled")
+        if plotparity
+            if errorbars
+                ax.errorbar(R, dist, sigma, fmt="o", ms=4, capsize=4, label="Parity fulfilled")
+            else
+                ax.plot(R, dist, "o", ms=4, label="Parity fulfilled")
+            end
+        end
         plt.:legend()
         return fig1
     elseif backend == :unicode
+        println()
         myplt = plotdist(R, dist_tot, backend=:unicode, linename="Total distortion")
         plotparity && scatterplot!(myplt, R, dist, name="Parity fulfilled")
         title!(myplt, title)
@@ -234,7 +170,13 @@ function plot(sims::Vector{Simulation}; backend=:unicode, plotparity=true,
     end
 end
 
-function plot(simsvec::Vector{Vector{Simulation}}, backend=:unicode,
+function plot(sim::Simulation; backend=:unicode, plotparity=true,
+        errorbars=false, title="Mean distortion")
+    return plot([sim], backend=backend, plotparity=plotparity,
+                errorbars=errorbars, title=title)
+end
+
+function plot(simsvec::Vector{Vector{Simulation}}; backend=:pyplot,
         errorbars = false, title="Mean distortion")
     if backend == :pyplot
         PyPlot.close("all")
@@ -245,9 +187,9 @@ function plot(simsvec::Vector{Vector{Simulation}}, backend=:unicode,
             R = [sim.R for sim in sims]
             dist_tot = [mean(sim.distortions) for sim in sims]
             if errorbars
-                sigma = std(sim.distortions)
-                ax.errorbar(R, dist_tot, sigma./(sqrt.(dist_tot)), ls="o",
-                    ms=4, label="GF($(sims[1].q))", capsize=5)
+                sigma = [std(sim.distortions)/sqrt(length(sim.distortions)) for sim in sims]
+                ax.errorbar(R, dist_tot, sigma, fmt="o",
+                    ms=4, capsize=4, label="GF($(sims[1].q))")
             else
                 ax.plot(R, dist_tot, "o", ms=4, label="GF($(sims[1].q))")
             end
@@ -255,7 +197,7 @@ function plot(simsvec::Vector{Vector{Simulation}}, backend=:unicode,
         plt.:legend()
         return fig1
     elseif backend == :unicode
-        myplt = plotdist(backend=:pyplot)
+        myplt = plotdist(backend=:unicode)
         for sims in simsvec
             R = [sim.R for sim in sims]
             dist_tot = [mean(sim.distortions) for sim in sims]
@@ -428,3 +370,75 @@ function mean_sd_string(v::AbstractVector, digits::Int=2)
     output = string(round(m,digits=digits), " ± ", round(s,digits=digits))
     return output
 end
+
+# function plot(sim::Simulation; options=:short, backend=:unicode, errorbars=false)
+#     dist = mean(sim.distortions[sim.parity .== 0])
+#     dist_tot = mean(sim.distortions)
+#     if backend==:pyplot
+#         sigma = std(sim.distortions[sim.parity .== 0])
+#         fig1 = plotdist([sim.R], [dist], backend=:pyplot, errorbars=errorbars,
+#             error = sigma./sqrt.(length(sigma)))
+#         ax = fig1.axes[1]
+#         ax.set_title("Mean disortionsim = Simulation(MS(), 2, 10, 5)\n n = $(sim.n)")
+#         if options==:full
+#             fig2 = PyPlot.figure("Detailed plots")
+#             PyPlot.subplot(311)
+#             ax1 = PyPlot.gca()
+#             x = 1:sim.navg
+#             ax1.plot(x, sim.iterations, "bo")
+#             ax1.axhline(sim.maxiter, c="b", ls="--", lw=0.8)
+#             ax1.set_ylim((0,sim.maxiter+100))
+#             ax1.set_xticks(x)
+#             ax1.set_xlabel("Index")
+#             ax1.set_ylabel("Iterations", color="b")
+#             ax2 = ax1.twinx()
+#             ax2.plot(x, sim.parity, "ro")
+#             ax2.set_yticks(0:maximum(sim.parity)[1])
+#             ax2.axhline(0,c="r", ls="--", lw=0.8)
+#             ax2.set_ylabel("Unfulfilled checks", color="r")
+#             ax1.set_title("Number of iterations and unfulfilled parity checks")
+#             PyPlot.tight_layout()
+#
+#             PyPlot.subplot(312)
+#             ax1 = PyPlot.gca()
+#             x = 1:sim.navg
+#             ax1.plot(x, sim.distortions, "go")
+#             ax1.axhline(1/2,c="g", ls="--", lw=0.8)
+#             ax1.set_ylim((0,1))
+#             ax1.set_xticks(x)
+#             ax1.set_xlabel("Index")
+#             ax1.set_ylabel("Distortion", color="g")
+#             ax2 = ax1.twinx()
+#             ax2.plot(x, sim.parity, "ro")
+#             ax2.set_yticks(0:maximum(sim.parity)[1])
+#             ax2.axhline(0,c="r", ls="--", lw=0.8)
+#             ax2.set_ylabel("Unfulfilled checks", color="r")
+#             ax1.set_title("Distortions and unfulfilled parity checks")
+#             PyPlot.tight_layout()
+#
+#             PyPlot.subplot(313)
+#             ax1 = PyPlot.gca()
+#             x = 1:sim.navg
+#             ax1.plot(x, sim.distortions, "go")
+#             ax1.axhline(1/2,c="g", ls="--", lw=0.8)
+#             ax1.set_ylim((0,1))
+#             ax1.set_xticks(x)
+#             ax1.set_xlabel("Index")
+#             ax1.set_ylabel("Distortion", color="g")
+#             ax2 = ax1.twinx()
+#             ax2.plot(x, sim.iterations, "bo")
+#             ax2.axhline(sim.maxiter,c="b", ls="--", lw=0.8)
+#             ax2.set_ylim((0,sim.maxiter+100))
+#             ax2.set_ylabel("Iterations", color="b")
+#             ax1.set_title("Distortions and Number of iterations")
+#             PyPlot.tight_layout()
+#             return fig1, fig2
+#         end
+#         return fig1
+#     elseif backend==:unicode
+#         myplt = plotdist([sim.R], [dist], backend=:unicode, linename="Parity fulfilled")
+#         lineplot!(myplt, [sim.R, sim.R], [dist_tot, dist_tot], name="Total")
+#         title!(myplt, "Mean distortion \n n = $(sim.n)")
+#         return myplt
+#     end
+# end

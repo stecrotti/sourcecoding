@@ -142,11 +142,11 @@ function plotdist(R::Vector{Float64}, D::Vector{Float64};
 end
 
 import PyPlot.plot
-function plot(sim::Simulation; options=:short, backend=:unicode)
+function plot(sim::Simulation; options=:short, backend=:unicode, errorbars=false)
     dist = mean(sim.distortions[sim.parity .== 0])
     dist_tot = mean(sim.distortions)
     if backend==:pyplot
-        fig1 = plotdist([sim.R], [dist], backend=:pyplot)
+        fig1 = plotdist([sim.R], [dist], backend=:pyplot, errorbars=errorbars)
         ax = fig1.axes[1]
         ax.set_title("Mean disortion for instances that fulfilled parity \n n = $(sim.n)")
         if options==:full

@@ -108,9 +108,8 @@ function show(io::IO, sim::Simulation)
      ", b=", sim.b,", navg=", sim.navg)
 end
 
-function plotdist(R=Float64[], D=Float64[];
-                    backend=:unicode, errorbars=false, sigma=zeros(length(R)),
-                    linename="Simulation results")
+function plotdist(R=Float64[], D=Float64[]; backend=:unicode, errorbars=false,
+     sigma=0, linename="Simulation results")
 
     d = LinRange(0,0.5,100)
     r = LinRange(0, 1, 100)
@@ -119,10 +118,12 @@ function plotdist(R=Float64[], D=Float64[];
         PyPlot.plot(rdb.(d),d, label="Lower bound")
         PyPlot.plot(r, (1 .- r)/2, label="Naive compression")
         if errorbars
-            length(R) != 0 && PyPlot.errorbar(R, D, sigma, fmt="o",
+            if length(R) != 0
+                PyPlot.errorbar(R, D, sigma, fmt="o",
                                     label=linename, ms=4, capsize=4)
-        else
-            length(R) != 0 && PyPlot.plot(R, D, "o", ms=4, label=linename)
+            end
+        elseif length(R) != 0
+            PyPlot.plot(R, D, "o", ms=4, label=linename)
         end
         plt.:xlabel("Rate")
         plt.:ylabel("Distortion")
@@ -170,7 +171,7 @@ function plot(sims::Vector{Simulation}; backend=:unicode, plotparity=true,
     end
 end
 
-function plot(sim::Simulation; backend=:unicode, plotparity=true,
+function plott(sim::Simulation; backend=:unicode, plotparity=true,
         errorbars=false, title="Mean distortion")
     return plot([sim], backend=backend, plotparity=plotparity,
                 errorbars=errorbars, title=title)
@@ -211,7 +212,7 @@ end
 function trials_hist(sims::Vector{Simulation}; backend=:unicode,
     title="Trials for convergence")
 
-    T = [sim.trials[sim.converged] for sim in sims]
+    T = [sim.iterations[sim.converged] for sim in sims]
     tmax = maximum(maximum(T))
 
     if backend == :unicode
@@ -224,12 +225,12 @@ function trials_hist(sims::Vector{Simulation}; backend=:unicode,
        PyPlot.close("all")
        for j in eachindex(T)
            PyPlot.subplot(2, length(sims)÷2, j)
-           PyPlot.hist(T[j], bins=tmax)
+           PyPlot.hist(T[j])
            ax = PyPlot.gca()
            ax.set_title("R = $(round(sims[j].R, digits=2))")
-           fig = gcf()
-           fig.suptitle(title)
        end
+       fig = gcf()
+       fig.suptitle(title)
        PyPlot.tight_layout()
    end
 end

@@ -105,29 +105,36 @@ end
 import Base.show
 function show(io::IO, sim::Simulation)
     println(io, "Simulation with n=", sim.n, ", R=", round(sim.R,digits=2),
-     ", b=", sim.b," average over ", sim.navg, " instances.")
+     ", b=", sim.b,", average over ", sim.navg, " instances.")
 end
 
-function plotdist(R::Vector{Float64}=Float64[], D::Vector{Float64}=Float64[];
-                    backend=:unicode, linename="Simulation results")
+function plotdist(R::Vector{Float64}, D::Vector{Float64};
+                    backend=:unicode, errorbars=false, linename="Simulation results")
 
-                    @show R
     d = LinRange(0,0.5,100)
     r = LinRange(0, 1, 100)
+    println("Prima dell'if")
     if backend==:pyplot
         fig1 = PyPlot.figure("Rate-distortion bound")
-        PyPlot.plot(rdb.(d),d, label="Lower bound");
+        PyPlot.plot(rdb.(d),d, label="Lower bound")
         PyPlot.plot(r, (1 .- r)/2, label="Naive compression")
-        R != Float64[] && PyPlot.plot(R, D, "o", ms=4, label=linename)
+        if errorbars
+            sigma = std(sim.distortions)
+            PyPlot.errorbar(R, D, sigma./(sqrt.(D)), ls="o",
+                ms=4, label=linename, capsize=5)
+        else
+            length(R) != 0 && PyPlot.plot(R, D, "o", ms=4, label=linename)
+        end
         plt.:xlabel("Rate")
         plt.:ylabel("Distortion")
         plt.:legend()
         return fig1
     elseif backend==:unicode
-        myplt = lineplot(rdb.(d),d, name="RDB", xlabel = "R", ylabel="D",
+        println("Dentro l'elseif")
+        myplt = UnicodePlots.lineplot(rdb.(d),d, name="RDB", xlabel = "R", ylabel="D",
             canvas = DotCanvas, width=60, height = 20)
-        lineplot!(myplt, r, (1 .- r)/2, name="Naive compression")
-        R != Float64[] && scatterplot!(myplt, R, D, name=linename)
+        UnicodePlots.lineplot!(myplt, r, (1 .- r)/2, name="Naive compression")
+        length(R) != 0 && UnicodePlots.scatterplot!(myplt, R, D, name=linename)
         return myplt
     else
         error("Backend $backend not supported")
@@ -206,13 +213,14 @@ function plot(sim::Simulation; options=:short, backend=:unicode)
 end
 
 function plot(sims::Vector{Simulation}; backend=:unicode, plotparity=true,
-        title="Mean distortion")
+        errorbars=false, title="Mean distortion")
     R = [sim.R for sim in sims]
     dist = [mean(sim.distortions[sim.parity .== 0]) for sim in sims]
     dist_tot = [mean(sim.distortions) for sim in sims]
     println()
     if backend == :pyplot
-        fig1 = plotdist(R, dist_tot, backend=:pyplot, linename="Total distortion")
+        fig1 = plotdist(R, dist_tot, backend=:pyplot, linename="Total distortion",
+                        errorbars=errorbars)
         ax = fig1.axes[1]
         ax.set_title(title)
         plotparity && ax.plot(R, dist, "o", ms=4, label="Parity fulfilled")
@@ -227,17 +235,22 @@ function plot(sims::Vector{Simulation}; backend=:unicode, plotparity=true,
 end
 
 function plot(simsvec::Vector{Vector{Simulation}}, backend=:unicode,
-        title="Mean distortion")
+        errorbars = false, title="Mean distortion")
     if backend == :pyplot
         PyPlot.close("all")
-
         fig1 = plotdist(backend=:pyplot)
         ax = fig1.axes[1]
         ax.set_title(title)
         for sims in simsvec
             R = [sim.R for sim in sims]
             dist_tot = [mean(sim.distortions) for sim in sims]
-            ax.plot(R, dist_tot, "o", ms=4, label="GF($(sims[1].q))")
+            if errorbars
+                sigma = std(sim.distortions)
+                ax.errorbar(R, dist_tot, sigma./(sqrt.(dist_tot)), ls="o",
+                    ms=4, label="GF($(sims[1].q))", capsize=5)
+            else
+                ax.plot(R, dist_tot, "o", ms=4, label="GF($(sims[1].q))")
+            end
         end
         plt.:legend()
         return fig1
@@ -316,7 +329,7 @@ function print(io::IO, sim::Simulation; options=:short)
     println("Average distortion for instances that fulfilled parity: ",
         round(mean(sim.distortions[sim.parity .== 0]),digits=2))
     println("Average distortion for all instances: ",
-            round(mean(sim.distortions),digits=2), ". ", 10*log10(rdb()))
+            round(mean(sim.distortions),digits=2))
     println("Iterations for converged instances: ", mean_sd_string(sim.iterations[sim.converged .== true]))
 
     M = fill("",3,3)
@@ -396,7 +409,8 @@ function meandist(sim::Simulation; convergedonly::Bool=true)
     return mean(sim.distortions[idx])
 end
 
-function H2(x)
+# Binary entropy function
+function H2(x::Real)
     if 0<x<1
         return -x*log2(x)-(1-x)*log2(1-x)
     elseif x==0 || x==1
@@ -405,7 +419,8 @@ function H2(x)
         error("$x is outside the domain [0,1]")
     end
 end
-rdb(D) = 1-H2(D)
+
+rdb(D::Real) = 1-H2(D)
 
 function mean_sd_string(v::AbstractVector, digits::Int=2)
     m = mean(v)

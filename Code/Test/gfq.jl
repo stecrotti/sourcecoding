@@ -3,8 +3,8 @@ include("../headers.jl")
 const R = collect(0.1:0.1:0.9)
 const Rvals = length(R)
 const gamma = 1e-2
-const maxiter = Int(2e2)
-const navg = 100
+const maxiter = Int(3e2)
+const navg = 200
 randseed = 109
 const Tmax = 6
 
@@ -33,8 +33,8 @@ for (i,q) in enumerate(qrange)
     plot(simsvec[i])
 end
 
-plot(simsvec, title="Mean distortion\n n=$(simsvec[1].n), gamma=$gamma, navg=$navg,
-    Tmax=$Tmax", backend=:pyplot)
+plot(simsvec, title="Mean distortion\n n=$(simsvec[1][1].n), gamma=$gamma, navg=$navg,
+    Tmax=$Tmax", backend=:pyplot, errorbars=true)
 ax = gca()
 ax.annotate("b=$(Int.(round.(420*Int(7-log2(2))/2*(-R.^2/14 .+ R/7 .+ 1/10))))", (0,0))
 ax.annotate("maxiter=$(maxiter)", (0,0.05))

@@ -108,8 +108,8 @@ function show(io::IO, sim::Simulation)
      ", b=", sim.b,", navg=", sim.navg)
 end
 
-function plotdist(R=Float64[], D=Float64[]; backend=:unicode, errorbars=false,
-     sigma=0, linename="Simulation results")
+function plotdist(R::Vector{<:Real}=Float64[], D::Vector{<:Real}=Float64[];
+    backend::Symbol=:unicode, errorbars::Bool=false, sigma=0, linename="Simulation results")
 
     d = LinRange(0,0.5,100)
     r = LinRange(0, 1, 100)
@@ -117,11 +117,8 @@ function plotdist(R=Float64[], D=Float64[]; backend=:unicode, errorbars=false,
         fig1 = PyPlot.figure("Rate-distortion bound")
         PyPlot.plot(rdb.(d),d, label="Lower bound")
         PyPlot.plot(r, (1 .- r)/2, label="Naive compression")
-        if errorbars
-            if length(R) != 0
-                PyPlot.errorbar(R, D, sigma, fmt="o",
-                                    label=linename, ms=4, capsize=4)
-            end
+        if errorbars && length(R) != 0
+                PyPlot.errorbar(R, D, sigma, fmt="o",label=linename, ms=4, capsize=4)
         elseif length(R) != 0
             PyPlot.plot(R, D, "o", ms=4, label=linename)
         end
@@ -167,11 +164,12 @@ function plot(sims::Vector{Simulation}; backend=:unicode, plotparity=true,
         myplt = plotdist(R, dist_tot, backend=:unicode, linename="Total distortion")
         plotparity && scatterplot!(myplt, R, dist, name="Parity fulfilled")
         title!(myplt, title)
+        display(myplt)
         return myplt
     end
 end
 
-function plott(sim::Simulation; backend=:unicode, plotparity=true,
+function plot(sim::Simulation; backend=:unicode, plotparity=true,
         errorbars=false, title="Mean distortion")
     return plot([sim], backend=backend, plotparity=plotparity,
                 errorbars=errorbars, title=title)
@@ -205,6 +203,7 @@ function plot(simsvec::Vector{Vector{Simulation}}; backend=:pyplot,
             scatterplot!(myplt, R, dist_tot, name="GF($(sims[1].q))")
         end
         title!(myplt, title)
+        display(myplt)
         return myplt
     end
 end
@@ -212,7 +211,7 @@ end
 function trials_hist(sims::Vector{Simulation}; backend=:unicode,
     title="Trials for convergence")
 
-    T = [sim.iterations[sim.converged] for sim in sims]
+    T = [sim.trials[sim.converged] for sim in sims]
     tmax = maximum(maximum(T))
 
     if backend == :unicode

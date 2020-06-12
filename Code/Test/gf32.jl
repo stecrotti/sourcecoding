@@ -28,7 +28,7 @@ print(sims)
 plot(sims)
 
 plot(sims, title="Mean distortion\nq=$q, n=$n, gamma=$gamma, navg=$navg,
-    Tmax=$Tmax", backend=:pyplot)
+    Tmax=$Tmax", backend=:pyplot, errorbars=true)
 ax = gca()
 ax.annotate("b=$(b)", (0,0))
 ax.annotate("maxiter=$(maxiter)", (0,0.05))

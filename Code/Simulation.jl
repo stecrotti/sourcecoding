@@ -263,6 +263,23 @@ function iters_hist(sims::Vector{Simulation}; backend=:unicode,
    end
 end
 
+function plot_convergence(sims::Vector{Simulation}; backend=:unicode,
+    title="Ratio of converged instances")
+
+    c, sigma = convergence_ratio(sims)
+    R = [sim.R for sim in sims]
+    if backend == :unicode
+        myplt = UnicodePlots.scatterplot(R, c, title=title, canvas=DotCanvas)
+        return myplt
+   elseif backend == :pyplot
+       PyPlot.close("all")
+       fig1 = PyPlot.figure()
+       PyPlot.errorbar(R, c, sigma, fmt="o", ms=4, capsize=4)
+       PyPlot.tight_layout()
+       return fig1
+   end
+end
+
 # Print results
 import Base.print
 function print(io::IO, sim::Simulation; options=:short)
@@ -371,74 +388,17 @@ function mean_sd_string(v::AbstractVector, digits::Int=2)
     return output
 end
 
-# function plot(sim::Simulation; options=:short, backend=:unicode, errorbars=false)
-#     dist = mean(sim.distortions[sim.parity .== 0])
-#     dist_tot = mean(sim.distortions)
-#     if backend==:pyplot
-#         sigma = std(sim.distortions[sim.parity .== 0])
-#         fig1 = plotdist([sim.R], [dist], backend=:pyplot, errorbars=errorbars,
-#             error = sigma./sqrt.(length(sigma)))
-#         ax = fig1.axes[1]
-#         ax.set_title("Mean disortionsim = Simulation(MS(), 2, 10, 5)\n n = $(sim.n)")
-#         if options==:full
-#             fig2 = PyPlot.figure("Detailed plots")
-#             PyPlot.subplot(311)
-#             ax1 = PyPlot.gca()
-#             x = 1:sim.navg
-#             ax1.plot(x, sim.iterations, "bo")
-#             ax1.axhline(sim.maxiter, c="b", ls="--", lw=0.8)
-#             ax1.set_ylim((0,sim.maxiter+100))
-#             ax1.set_xticks(x)
-#             ax1.set_xlabel("Index")
-#             ax1.set_ylabel("Iterations", color="b")
-#             ax2 = ax1.twinx()
-#             ax2.plot(x, sim.parity, "ro")
-#             ax2.set_yticks(0:maximum(sim.parity)[1])
-#             ax2.axhline(0,c="r", ls="--", lw=0.8)
-#             ax2.set_ylabel("Unfulfilled checks", color="r")
-#             ax1.set_title("Number of iterations and unfulfilled parity checks")
-#             PyPlot.tight_layout()
-#
-#             PyPlot.subplot(312)
-#             ax1 = PyPlot.gca()
-#             x = 1:sim.navg
-#             ax1.plot(x, sim.distortions, "go")
-#             ax1.axhline(1/2,c="g", ls="--", lw=0.8)
-#             ax1.set_ylim((0,1))
-#             ax1.set_xticks(x)
-#             ax1.set_xlabel("Index")
-#             ax1.set_ylabel("Distortion", color="g")
-#             ax2 = ax1.twinx()
-#             ax2.plot(x, sim.parity, "ro")
-#             ax2.set_yticks(0:maximum(sim.parity)[1])
-#             ax2.axhline(0,c="r", ls="--", lw=0.8)
-#             ax2.set_ylabel("Unfulfilled checks", color="r")
-#             ax1.set_title("Distortions and unfulfilled parity checks")
-#             PyPlot.tight_layout()
-#
-#             PyPlot.subplot(313)
-#             ax1 = PyPlot.gca()
-#             x = 1:sim.navg
-#             ax1.plot(x, sim.distortions, "go")
-#             ax1.axhline(1/2,c="g", ls="--", lw=0.8)
-#             ax1.set_ylim((0,1))
-#             ax1.set_xticks(x)
-#             ax1.set_xlabel("Index")
-#             ax1.set_ylabel("Distortion", color="g")
-#             ax2 = ax1.twinx()
-#             ax2.plot(x, sim.iterations, "bo")
-#             ax2.axhline(sim.maxiter,c="b", ls="--", lw=0.8)
-#             ax2.set_ylim((0,sim.maxiter+100))
-#             ax2.set_ylabel("Iterations", color="b")
-#             ax1.set_title("Distortions and Number of iterations")
-#             PyPlot.tight_layout()
-#             return fig1, fig2
-#         end
-#         return fig1
-#     elseif backend==:unicode
-#         myplt = plotdist([sim.R], [dist], backend=:unicode, linename="Parity fulfilled")
-#         lineplot!(myplt, [sim.R, sim.R], [dist_tot, dist_tot], name="Total")
-#         title!(myplt, "Mean distortion \n n = $(sim.n)")
-#         return myplt
-#     end
-# end
+function convergence_ratio(sim::Simulation)
+    mu = mean(sim.converged)
+    sigma = std(sim.converged)/sqrt(sim.navg)
+    return mu, sigma
+end
+
+function convergence_ratio(sims::Vector{Simulation})
+    mu = zeros(length(sims))
+    sigma = zeros(length(sims))
+    for i in eachindex(sims)
+        mu[i], sigma[i] = convergence_ratio(sims[i])
+    end
+    return mu, sigma
+end

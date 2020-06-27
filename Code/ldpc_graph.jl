@@ -44,7 +44,7 @@ function ldpc_graph(q::Int, n::Int, m::Int,
     for j in 1:length(rho)
         deg = Int(round(rho[j]/j*nedges,digits=10))
         for _ in 1:deg
-            for v in  perm[s:s+j-1]
+            for v in perm[s:s+j-1]
                 if findall(isequal(v), Fneigs[f])!=[]
                     # verbose && println("Multi-edge discarded")
                     continue
@@ -69,16 +69,18 @@ function ldpc_graph(q::Int, n::Int, m::Int,
 end
 
 function generate_polyn(n::Int, m::Int)
-    nedges = 2*n
-    # Find best k
-    lower = nedges/m - 1
-    k = Int(ceil(lower))
-
-    rho = zeros(k+1)
-    rho[k] = k*((k+1)*m - nedges)
-    rho[k+1] = (k+1)*(nedges - k*m)
-    rho ./= nedges
+    # This part is fixed
     lambda = [0.0, 1.0]
+    nedges = 2*n
+    # Find the right r
+    r = Int(ceil(nedges/m - 1))
+    # Initialize and fill rho
+    rho = zeros(r+1)
+    rho[r] = r*((r+1)*m - nedges)
+    rho[r+1] = (r+1)*(nedges - r*m)
+    # Normalize
+    rho ./= nedges
+    
     return nedges, lambda, rho
 end
 

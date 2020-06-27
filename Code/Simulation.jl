@@ -104,7 +104,7 @@ end
 
 import Base.show
 function show(io::IO, sim::Simulation)
-    println(io, "Simulation with n=", sim.n, ", R=", round(sim.R,digits=2),
+    println(io, "\nSimulation with n=", sim.n, ", R=", round(sim.R,digits=2),
      ", b=", sim.b,", navg=", sim.navg)
 end
 
@@ -264,9 +264,9 @@ function iters_hist(sims::Vector{Simulation}; backend=:unicode,
 end
 
 function plot_convergence(sims::Vector{Simulation}; backend=:unicode,
-    title="Ratio of converged instances")
+    title="Estimated convergence probability")
 
-    c, sigma = convergence_ratio(sims)
+    c, sigma = convergence_prob(sims)
     R = [sim.R for sim in sims]
     if backend == :unicode
         myplt = UnicodePlots.scatterplot(R, c, title=title, canvas=DotCanvas)
@@ -274,6 +274,9 @@ function plot_convergence(sims::Vector{Simulation}; backend=:unicode,
    elseif backend == :pyplot
        PyPlot.close("all")
        fig1 = PyPlot.figure()
+       plt.:title(title)
+       plt.:xlabel("R")
+       plt.:ylabel("Convergence ratio")
        PyPlot.errorbar(R, c, sigma, fmt="o", ms=4, capsize=4)
        PyPlot.tight_layout()
        return fig1
@@ -388,17 +391,24 @@ function mean_sd_string(v::AbstractVector, digits::Int=2)
     return output
 end
 
-function convergence_ratio(sim::Simulation)
-    mu = mean(sim.converged)
-    sigma = std(sim.converged)/sqrt(sim.navg)
+# Non-rigorous inference on the convergence probability given the data
+# The convergence probability is distributed as Beta(α,β), where α is the number
+#  of converged instances + 1, β is the total number - α +1
+function convergence_prob(sim::Simulation)
+    alpha = sum(sim.converged) + 1
+    beta = length(sim.converged) - sum(sim.converged) + 1
+
+    mu = alpha / (alpha+beta)
+    sigma = sqrt(mu * beta / ((alpha*beta)*(alpha+beta+1)))
+
     return mu, sigma
 end
 
-function convergence_ratio(sims::Vector{Simulation})
+function convergence_prob(sims::Vector{Simulation})
     mu = zeros(length(sims))
     sigma = zeros(length(sims))
     for i in eachindex(sims)
-        mu[i], sigma[i] = convergence_ratio(sims[i])
+        mu[i], sigma[i] = convergence_prob(sims[i])
     end
     return mu, sigma
 end

@@ -1,12 +1,12 @@
 include("../../headers.jl")
 
 const q = 128
-const gamma = 1e-2
+const gamma = 5e-3
 const n = Int(420*6/log2(q))
 const R = collect(0.1:0.1:0.9)
 const m = Int.(round.(n*(1 .- R)))
-const b = Int(round(n/30))*ones(Int, length(m))
-const maxiter = Int(5e2)
+const b = Int(round(n/50))*ones(Int, length(m))
+const maxiter = Int(1e3)
 const navg = 50
 const randseed = 100
 const Tmax = 6
@@ -24,6 +24,7 @@ for j in 1:length(m)
 end
 
 date = string(Dates.today())
+PyPlot.close("all")
 plot(sims, title="Mean distortion\nq=$q, n=$n, gamma=$gamma, navg=$navg,
     Tmax=$Tmax", backend=:pyplot, errorbars=true)
 ax = gca()

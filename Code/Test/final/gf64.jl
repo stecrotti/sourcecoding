@@ -7,8 +7,8 @@ const R = collect(0.1:0.1:0.9)
 const m = Int.(round.(n*(1 .- R)))
 const b = Int(round(n/30))*ones(Int, length(m))
 const maxiter = Int(5e2)
-const navg = 50
-const randseed = 100
+const navg = 100
+const randseed = 1000
 const Tmax = 6
 
 sims = Vector{Simulation}(undef, length(m))
@@ -24,12 +24,10 @@ for j in 1:length(m)
 end
 
 date = string(Dates.today())
-# plot(sims, title="Mean distortion\nq=$q, n=$n, gamma=$gamma, navg=$navg,
-#     Tmax=$Tmax", backend=:pyplot, errorbars=true)
-# ax = gca()
-# ax.annotate("b=$(b)", (0,0))
-# ax.annotate("maxiter=$(maxiter)", (0,0.05))
-# savefig("../images/gf$q-"*date, bbox_inches="tight")
+plot(sims, title="Mean distortion\nq=$q, n=$n, gamma=$gamma, navg=$navg,
+    Tmax=$Tmax", backend=:pyplot, errorbars=true)
+ax = gca()
+savefig("../../images/gf$q-"*date, bbox_inches="tight")
 save("gf$q.jld", "sims", sims, "date", date)
 
 print(sims)

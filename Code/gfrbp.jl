@@ -2,7 +2,6 @@ struct MS; end
 struct BP; end
 
 function onebpiter!(FG::FactorGraph, algo::BP, neutral=neutralel(algo,FG.q))
-
     for f in randperm(length(FG.Fneigs))
         for (v_idx, v) in enumerate(FG.Fneigs[f])
             # Divide message from belief

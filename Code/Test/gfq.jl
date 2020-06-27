@@ -37,8 +37,8 @@ end
 plot(simsvec, title="Mean distortion\n n=$(simsvec[1][1].n), gamma=$gamma, navg=$navg,
     Tmax=$Tmax", backend=:pyplot, errorbars=false)
 ax = gca()
-ax.annotate("b=$( Int(round(n/30))*ones(Int, length(m))
-)", (0,0))
+ax.annotate("b=$( Int(round(simsvec[1][1].n/30))*ones(Int, length(R)))", (0,0))
 ax.annotate("maxiter=$(maxiter)", (0,0.05))
 date = string(Dates.today())
 savefig("../images/gfq-"*date, bbox_inches="tight")
+save("./final/gfq.jld", "sims", sims, "date", date)

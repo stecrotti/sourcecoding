@@ -1,13 +1,13 @@
 include("../../headers.jl")
 
-const q = 64
-const gamma = 1e-2
-const n = Int(420*6/log2(q))
+const q = 2
+const gamma = 1e-3
+const n = Int(420/log2(q))
 const R = collect(0.1:0.1:0.9)
 const m = Int.(round.(n*(1 .- R)))
 const b = Int(round(n/30))*ones(Int, length(m))
 const maxiter = Int(5e2)
-const navg = 100
+const navg = 5
 const randseed = 1000
 const Tmax = 6
 

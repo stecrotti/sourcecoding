@@ -14,6 +14,7 @@ struct Simulation
     codeword::Vector{BitArray{1}}
     maxchange::Vector{Vector{Float64}}
     trials::Vector{Int}
+    arbitrary_mult::Bool
 end
 
 # Run simulation and store
@@ -23,11 +24,12 @@ function Simulation(
     n::Int,                             # Number of nodes, fixed
     m::Int;                             # m=n-k, the number of rows in the system
     L::Real = 1,                        # Factor in the fields expression
+    arbitrary_mult::Bool = false,       # Shuffles multiplication table
     navg = 10,                          # Number of runs for each value of m
     maxiter = Int(1e3),                 # Max number of iteration for each run of BP
     convergence = :decvars,             # Convergence criterion: can be either :decvars or :messages
     nmin = 100,                         # If :decvars is chosen
-    tol = 1e-7,                         # If :messages is chosen
+    tol = 1e-12,                         # If :messages is chosen
     b = 0,                              # Number of factors to be removed
     gamma = 0,                          # Reinforcement parameter
     alpha = 0,                          # Damping parameter
@@ -49,7 +51,8 @@ function Simulation(
     maxchange = [fill(-Inf, maxiter) for i in 1:navg]
     trials = zeros(Int, navg)
 
-    FG = ldpc_graph(q, n, m+b, verbose=verbose, randseed=randseed)
+    FG = ldpc_graph(q, n, m+b, verbose=verbose, randseed=randseed,
+        arbitrary_mult = arbitrary_mult)
     breduction!(FG, b, randseed=randseed)
     y = rand(MersenneTwister(randseed), 0:q-1, n)
 
@@ -61,13 +64,14 @@ function Simulation(
             end
             if !samegraph
                 FG = ldpc_graph(q, n, m+b, verbose=verbose,
-                    randseed=randseed+it)
+                    randseed=randseed+it, arbitrary_mult=arbitrary_mult)
                 breduction!(FG, b, randseed=randseed+it)
             end
             FG.fields .= extfields(q,y,algo,L, randseed=randseed+it*Tmax)
             (res,iterations[it],trials[it]), runtimes[it] = @timed bp!(FG, algo, y,
-                maxiter, convergence, nmin, tol, gamma, alpha, Tmax, randseed+it*Tmax,
-                maxdiff[it], codeword[it], maxchange[it], verbose=false)
+                maxiter, convergence, nmin, tol, gamma, alpha, Tmax, L,
+                randseed+it*Tmax, maxdiff[it], codeword[it], maxchange[it],
+                verbose=false)
 
             if res == :converged
                 converged[it] = true
@@ -94,12 +98,13 @@ function Simulation(
                     ". Seed ", randseed=#)
             end
             samegraph && refresh!(FG)   # Reset messages
+
         end
     end
     totaltime = t[2]
     R = 1-m/n
     return Simulation(q, n, R, b, navg, maxiter, converged, parity, distortions, iterations,
-        runtimes, maxdiff, codeword, maxchange, trials)
+        runtimes, maxdiff, codeword, maxchange, trials, arbitrary_mult)
 end
 
 import Base.show
@@ -293,6 +298,7 @@ function print(io::IO, sim::Simulation; options=:short)
     println("Average distortion for all instances: ",
             round(mean(sim.distortions),digits=2))
     println("Iterations for converged instances: ", mean_sd_string(sim.iterations[sim.converged .== true]))
+    sim.arbitrary_mult && println("Shuffled multiplication table")
 
     M = fill("",3,3)
     M[2,2] = string(sum(sim.converged.*(sim.parity.==0)))

@@ -2,6 +2,7 @@ function ldpc_graph(q::Int, n::Int, m::Int,
     nedges::Int=generate_polyn(n,m)[1], lambda::Vector{T}=generate_polyn(n,m)[2],
     rho::Vector{T}=generate_polyn(n,m)[3],
     fields = [Fun(1e-3*randn(q)) for v in 1:n]; verbose=false,
+    arbitrary_mult = false,
     randseed::Int=0) where {T<:AbstractFloat}
 
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
@@ -63,7 +64,7 @@ function ldpc_graph(q::Int, n::Int, m::Int,
     end
 
     # Get multiplication and iverse table for GF(q)
-    mult, gfinv = gftables(q)
+    mult, gfinv = gftables(q, arbitrary_mult)
 
     return FactorGraph(q, mult, gfinv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
 end
@@ -80,11 +81,11 @@ function generate_polyn(n::Int, m::Int)
     rho[r+1] = (r+1)*(nedges - r*m)
     # Normalize
     rho ./= nedges
-    
+
     return nedges, lambda, rho
 end
 
-function gftables(q)
+function gftables(q::Int, arbitrary_mult::Bool=false)
     if q==2
         elems = [0,1]
     else
@@ -96,10 +97,14 @@ function gftables(q)
     #########
     M = [findfirst(isequal(x*y),elems)-1 for x in elems, y in elems]
     mult = OffsetArray(M, 0:q-1, 0:q-1)
-    gfinv = [findfirst(isequal(inv(x)), elems)-1 for x in elems[2:end]]
+    if arbitrary_mult
+        mult[1:end,1:end] .= [mod1(i+j-1,q-1) for i=1:q-1, j=1:q-1]
+    end
+    gfinv = [findfirst(isequal(1), mult[r,1:end]) for r in 1:q-1]
 
     return mult, gfinv
 end
+
 
 # Creates fields for the priors: the closest to y, the stronger the field
 # The prior distr is given by exp(field)
@@ -111,7 +116,7 @@ function extfields(q::Int, y::Vector{Int}, algo::Union{BP,MS}, L::Real=1.0,
     for v in eachindex(fields)
         for a in 0:q-1
             fields[v][a] = -L*hd(a,y[v]) + sigma*randn()
-            typeof(algo)==BP && (fields[v][a] .= exp.(fields[v][a]))
+            typeof(algo)==BP && (fields[v][a] = exp.(fields[v][a]))
         end
     end
     return fields

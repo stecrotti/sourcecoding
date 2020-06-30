@@ -60,7 +60,7 @@ function adjmat(FG::FactorGraph)
 end
 
 function Base.show(io::IO, FG::FactorGraph)
-    println(io, "Factor Graph with $(FG.n) variables and $(FG.m) factors defined on GF($(FG.q))")
+    println(io, "\nFactor Graph with $(FG.n) variables and $(FG.m) factors defined on GF($(FG.q))")
 end
 
 

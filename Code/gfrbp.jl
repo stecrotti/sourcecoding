@@ -23,13 +23,13 @@ function onebpiter!(FG::FactorGraph, algo::BP, neutral=neutralel(algo,FG.q);
                     func = FG.fields[vprime] ./ FG.mfv[f][vprime_idx]
                     func[isnan.(func)] .= 1.0
                     # adjust for weights
-                    func .= func[FG.mult[FG.mult[FG.hfv[f][v_idx],FG.gfinv[FG.hfv[f][vprime_idx]]],:]]
+                    func .= func[FG.mult[FG.gfinv[FG.hfv[f][vprime_idx]], FG.mult[FG.hfv[f][v_idx],:]]]
                     push!(funclist, func)
                 end
             end
             FG.mfv[f][v_idx] = reduce(gfconv, funclist, init=neutral)
             FG.mfv[f][v_idx][isnan.(FG.mfv[f][v_idx])] .= 0.0
-            if sum(isnan.(FG.mfv[f][v_idx])) > 0 
+            if sum(isnan.(FG.mfv[f][v_idx])) > 0
                 println()
                 @show funclist
                 @show FG.mfv[f][v_idx]
@@ -76,7 +76,7 @@ function onebpiter!(FG::FactorGraph, algo::MS,
             # else
                 # Subtract message from belief
                 FG.fields[v] .-= FG.mfv[f][v_idx]
-                ####### EXPERIMENT ######
+                # if "Inf-Inf=NaN" happened, restore 0.0
                 FG.fields[v][isnan.(FG.fields[v])] .= 0.0
             # end
             # Define functions for weighted convolution
@@ -85,7 +85,7 @@ function onebpiter!(FG::FactorGraph, algo::MS,
                 if vprime != v
                     func = FG.fields[vprime] - FG.mfv[f][vprime_idx]
                     # adjust for weights
-                    func .= func[FG.mult[FG.mult[FG.hfv[f][v_idx],FG.gfinv[FG.hfv[f][vprime_idx]]],:]]
+                    func .= func[FG.mult[FG.gfinv[FG.hfv[f][vprime_idx]], FG.mult[FG.hfv[f][v_idx],:]]]
                     push!(funclist, func)
                 end
             end
@@ -94,7 +94,10 @@ function onebpiter!(FG::FactorGraph, algo::MS,
             FG.mfv[f][v_idx] .= oldmessage + (1-alpha)*reduce(gfmsc, funclist, init=neutral)
             FG.mfv[f][v_idx] .-= maximum(FG.mfv[f][v_idx])
             # Send warning if messages are all NaN
-            sum(isnan.(FG.mfv[f][v_idx])) > 0 && error("Message ($f,$v) has a NaN")
+            if sum(isnan.(FG.mfv[f][v_idx])) > 0
+                @show reduce(gfmsc, funclist, init=neutral)
+                error("Message ($f,$v) has a NaN")
+            end
             # Update belief after updating the message
             FG.fields[v] .+= FG.mfv[f][v_idx]
             # Normalize belief

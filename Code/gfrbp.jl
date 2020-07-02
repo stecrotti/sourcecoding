@@ -92,7 +92,14 @@ function onebpiter!(FG::FactorGraph, algo::MS,
             # Update with damping
             oldmessage = alpha > 0 ? alpha*FG.mfv[f][v_idx] : Fun(FG.q)
             FG.mfv[f][v_idx] .= oldmessage + (1-alpha)*reduce(gfmsc, funclist, init=neutral)
+
+            # if sum(isinf.(FG.mfv[f][v_idx])) > 0
+            #     FG.mfv[f][v_idx][.!isinf.(FG.mfv[f][v_idx])] = 0.0
+            # else
+            # Normalize message
             FG.mfv[f][v_idx] .-= maximum(FG.mfv[f][v_idx])
+            FG.mfv[f][v_idx][isnan.(FG.mfv[f][v_idx])] .= 0.0
+            # end
             # Send warning if messages are all NaN
             if sum(isnan.(FG.mfv[f][v_idx])) > 0
                 @show reduce(gfmsc, funclist, init=neutral)
@@ -102,6 +109,7 @@ function onebpiter!(FG::FactorGraph, algo::MS,
             FG.fields[v] .+= FG.mfv[f][v_idx]
             # Normalize belief
             FG.fields[v] .-= maximum(FG.fields[v])
+            FG.fields[v][isnan.(FG.fields[v])] .= 0.0
             sum(isnan.(FG.fields[v])) > 0 && error("Belief $v has a NaN")
             # Look for maximum message (difference)
             diff = abs(FG.mfv[f][v_idx][0]-FG.mfv[f][v_idx][1])

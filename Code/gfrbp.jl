@@ -28,16 +28,17 @@ function onebpiter!(FG::FactorGraph, algo::BP, neutral=neutralel(algo,FG.q);
                 end
             end
             FG.mfv[f][v_idx] = reduce(gfconv, funclist, init=neutral)
-            if sum(isnan.(FG.mfv[f][v_idx])) > 0 || sum(isinf.(FG.mfv[f][v_idx])) > 0
+            FG.mfv[f][v_idx][isnan.(FG.mfv[f][v_idx])] .= 0.0
+            if sum(isnan.(FG.mfv[f][v_idx])) > 0 
                 println()
                 @show funclist
                 @show FG.mfv[f][v_idx]
-                error("NaN or inf in message ($f,$v)")
+                error("NaN in message ($f,$v)")
             end
             # Normalize message
-            # if sum(FG.mfv[f][v_idx])!= 0
+            if !isinf(sum(FG.mfv[f][v_idx]))
                 FG.mfv[f][v_idx] ./= sum(FG.mfv[f][v_idx])
-            # end
+            end
             # Update belief after updating the message
             FG.fields[v] .*=  FG.mfv[f][v_idx]
             # Normalize belief

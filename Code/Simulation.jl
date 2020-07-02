@@ -390,6 +390,7 @@ function H2(x::Real)
 end
 
 rdb(D::Real) = 1-H2(D)
+H2prime(D::Real) = log2((1-D)/D)
 
 function mean_sd_string(v::AbstractVector, digits::Int=2)
     m = mean(v)

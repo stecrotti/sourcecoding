@@ -83,17 +83,18 @@ function Simulation(
             res_string = res==:converged ? "C" : "U"
 
             if convergence==:messages
-                verbose && println("Run ", it, " of ",navg,": ",res_string,
-                    " after ", iterations[it], " iters. ",
-                    "Parity ", parity[it],
-                    ". Max change ", round.(maxchange[it][iterations[it]], sigdigits=3),
+                verbose && println("Run ", @sprintf("%3d", it),
+                    " of ",navg,": ",
+                    res_string, " after ", @sprintf("%4d", iterations[it]),
+                    " iters. ", "Parity ", @sprintf("%3d", parity[it]),
+                    ". Max change ", @sprintf("%.2e",maxchange[it][iterations[it]]),
                     ". Trials ", trials[it]#=,
                     ". Seed ", randseed=#)
             else
                 verbose && println("Run ", @sprintf("%3d", it),
                     " of ",navg,": ",
-                    res_string, " after ", @sprintf("%3d", iterations[it]),
-                    " iters. ", "Parity ", @sprintf("%2d", parity[it]),
+                    res_string, " after ", @sprintf("%4d", iterations[it]),
+                    " iters. ", "Parity ", @sprintf("%3d", parity[it]),
                     ". Trials ", trials[it]#=,
                     ". Seed ", randseed=#)
             end
@@ -420,3 +421,36 @@ function convergence_prob(sims::Vector{Simulation})
     end
     return mu, sigma
 end
+
+function plotdB(sims::Vector{Simulation}; backend=:unicode, plotconverged=false)
+
+    d = meandist.(sims, convergedonly=false)
+    d_conv = meandist.(sims, convergedonly=true)
+    r = [sim.R for sim in sims]
+
+    d_db = 10*log10.(d ./ H2inv.(1 .- r))
+    d_conv_db = 10*log10.(d_conv ./ H2inv.(1 .- r))
+
+    if backend == :unicode
+        myplt = UnicodePlots.scatterplot(r, d_db, title="Distance from RDB",
+            canvas = DotCanvas,  xlabel="R", ylabel="Distance / dB",
+            name = "Total distortion")
+        if plotconverged
+            UnicodePlots.scatterplot!(myplt, r, d_conv_db, name="Converged only")
+        end
+        return myplt
+    elseif backend == :pyplot
+        PyPlot.scatter(r, d_db, label="Total distortion")
+        ax = gca()
+        plt.:xlabel("R")
+        plt.:ylabel("Distance / dB")
+        plt.:title("DIstance from RDB")
+        if plotconverged
+            ax.plot(r, d_conv_db, "o-", label="Converged only")
+        end
+        PyPlot.legend()
+        return ax
+    end
+end
+
+plotdB(sim::Simulation, varargs...) = plotdB([sim], varargs...)

@@ -23,12 +23,4 @@ for j in 1:length(m)
     sims[j] = sim
 end
 
-date = Dates.format(now(), "yyyymmdd_HHMM")
-PyPlot.close("all")
-plot(sims, title="Mean distortion\nq=$q, n=$n, gamma=$gamma, navg=$navg,
-    Tmax=$Tmax, arbitrary multiplication", backend=:pyplot, errorbars=true)
-ax = gca()
-savefig("../../images/gf$q-arbitrary-"*date, bbox_inches="tight")
-# save("gf$q-arbitrary.jld", "sims", sims, "date", date)
-
-print(sims)
+plotdB(sims)

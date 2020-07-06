@@ -1,13 +1,16 @@
 # using PyPlot
+function pgfsettings()
+    plt.rcdefaults()
+    rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+    rcParams["pgf.rcfonts"] = false
+    rcParams["backend"] = "pgf"
+    rcParams["text.usetex"] = true
+    rcParams["pgf.texsystem"] = "xelatex"
+    rcParams["font.family"] = "serif"
+    rcParams["font.serif"] = ""
 
-plt.rcdefaults()
-rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
-rcParams["pgf.rcfonts"] = false
-rcParams["backend"] = "pgf"
-rcParams["text.usetex"] = true
-rcParams["pgf.texsystem"] = "xelatex"
-rcParams["font.family"] = "serif"
-rcParams["font.serif"] = ""
+    return nothing
+end
 
 # PyPlot.close("all")
 # plt.ioff()

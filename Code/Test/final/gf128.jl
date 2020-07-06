@@ -1,15 +1,15 @@
 include("../../headers.jl")
 
 const q = 128
-const gamma = 5e-3
-const n = Int(420*6/log2(q))
+const gamma = 1e-2
+const n = Int(420*2/log2(q))
 const R = collect(0.1:0.1:0.9)
 const m = Int.(round.(n*(1 .- R)))
 const b = Int(round(n/50))*ones(Int, length(m))
-const maxiter = Int(1e3)
-const navg = 50
+const maxiter = Int(3e2)
+const navg = 10
 const randseed = 100
-const Tmax = 6
+const Tmax = 5
 
 sims = Vector{Simulation}(undef, length(m))
 

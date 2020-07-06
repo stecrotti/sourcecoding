@@ -26,7 +26,7 @@ end
 avgdist = [mean(sim.distortions) for sim in sims]
 sddist = [std(sim.distortions)/sqrt(sim.navg) for sim in sims]
 date = Dates.format(now(), "yyyymmdd_HHMM")
-# save("leaves-"*date*".jld", "sims", sims)
+save("leaves-"*date*".jld", "sims", sims)
 
 print(sims)
 myplt = UnicodePlots.scatterplot(bvals, avgdist, canvas=DotCanvas)

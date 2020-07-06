@@ -1,7 +1,8 @@
 include("headers.jl")
 
 rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
-plt.rcParams["font.size"] = 12
+fs = 13;
+plt.rcParams["font.size"] = fs
 PyPlot.close("all")
 
 d = LinRange(0,0.5,100)
@@ -13,7 +14,6 @@ PyPlot.plot(R2, d, label="Naive compression")
 PyPlot.plot(R1, d, label="Lower bound")
 plt.:legend(fontsize=fs)
 
-fs = 13;
 
 PyPlot.text(.7,.3,"Trivial", fontsize=fs)
 PyPlot.text(.28,.23, "Feasible", fontsize=fs)

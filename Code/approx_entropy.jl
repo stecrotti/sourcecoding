@@ -3,14 +3,14 @@ function newton(f::Function, fprime::Function, x::Real;
 
         it = 0
         y = x
-        while abs(f(a)) > tol
+        while abs(f(y)) > tol
           it ≥ maxiter && return (:uncoverged, y, f(y),it)
           it += 1
-          y = x - f(x)/f_prime(x)
-          verbose && println("it: $it sol: $b val: $f(b)")
+          y = x - f(x)/fprime(x)
+          verbose && println("it: $it sol: $y val: $f(y)")
           x = y
         end
-        return (:converged, b, f(b), it)
+        return (:converged, y, f(y), it)
 end
 
 # Approximate the inverse of binary entropy function
@@ -18,7 +18,7 @@ end
 function H2inv(y::Real;
     tol::Float64=1e-12, maxiter::Integer=100, verbose::Bool=false)
 
-    (res, h2inv, err, it) = Newton(x->H2(x)-y, H2prime, 0.5*y^2,
+    (res, h2inv, err, it) = newton(x->H2(x)-y, H2prime, 0.5*y^2,
                             tol=tol, maxiter=maxiter, verbose=verbose)
     if res == :converged
       return h2inv

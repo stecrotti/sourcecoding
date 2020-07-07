@@ -25,8 +25,38 @@ end
 
 avgdist = [mean(sim.distortions) for sim in sims]
 sddist = [std(sim.distortions)/sqrt(sim.navg) for sim in sims]
+avgdist_c = [mean(sim.distortions[sim.parity .== 0]) for sim in sims]
+sddist_c = [std(sim.distortions[sim.parity .== 0])/sqrt(sim.navg) for sim in sims]
 date = Dates.format(now(), "yyyymmdd_HHMM")
 save("leaves-"*date*".jld", "sims", sims)
 
 print(sims)
 myplt = UnicodePlots.scatterplot(bvals, avgdist, canvas=DotCanvas)
+
+PyPlot.close("all")
+PyPlot.figure()
+# col1 = "#1f77b4"
+col1 = "blue"
+PyPlot.errorbar(b, avgdist, sddist, fmt="s", ms=6, capsize=4, color=col1)
+ax1 = gca()
+ax1.set_xlabel("b")
+ax1.set_ylabel("Total distortion", color=col1)
+ax1.tick_params(axis="y", labelcolor=col1)
+
+# col2 = "#ff7f0e"
+col2 = "red"
+ax2 = ax1.twinx()
+ax2.errorbar(b, avgdist_c, sddist_c, fmt="v", ms=6, capsize=4, color=col2)
+ax2.set_ylabel("Distortion - converged only", color=col2)
+ax2.tick_params(axis="y", labelcolor=col2)
+
+plt.tight_layout()
+plt.savefig("../images/leaves.pgf")
+
+ratio = [mean(sim.converged) for sim in sims]
+PyPlot.close("all")
+PyPlot.bar(b,ratio)
+plt.:xlabel("b")
+plt.:ylabel("Fraction of converged instances")
+plt.tight_layout()
+plt.savefig("../images/leavesbars.pgf")

@@ -55,7 +55,7 @@ plt.savefig("../images/leaves.pgf")
 
 ratio = [mean(sim.converged) for sim in sims]
 PyPlot.close("all")
-PyPlot.bar(b,ratio)
+PyPlot.plot(b,ratio, "o-")
 plt.:xlabel("b")
 plt.:ylabel("Fraction of converged instances")
 plt.tight_layout()

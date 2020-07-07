@@ -422,7 +422,8 @@ function convergence_prob(sims::Vector{Simulation})
     return mu, sigma
 end
 
-function plotdB(sims::Vector{Simulation}; backend=:unicode, plotconverged=false)
+function plotdB(sims::Vector{Simulation}; backend=:unicode, plotconverged=false,
+    fig_ax=plt.subplots(), label="Total distortion")
 
     d = meandist.(sims, convergedonly=false)
     d_conv = meandist.(sims, convergedonly=true)
@@ -433,18 +434,18 @@ function plotdB(sims::Vector{Simulation}; backend=:unicode, plotconverged=false)
 
     if backend == :unicode
         myplt = UnicodePlots.scatterplot(r, d_db, title="Distance from RDB",
-            canvas = DotCanvas,  xlabel="R", ylabel="Distance / dB",
+            canvas = DotCanvas, xlabel="R", ylabel="Distance / dB",
             name = "Total distortion")
         if plotconverged
             UnicodePlots.scatterplot!(myplt, r, d_conv_db, name="Converged only")
         end
         return myplt
     elseif backend == :pyplot
-        PyPlot.scatter(r, d_db, label="Total distortion")
-        ax = gca()
-        plt.:xlabel("R")
-        plt.:ylabel("Distance / dB")
-        plt.:title("DIstance from RDB")
+        ax = fig_ax[2]
+        ax.plot(r, d_db, "o-", label=label)
+        ax.set_xlabel("R")
+        ax.set_ylabel("Distance / dB")
+        ax.set_title("DIstance from RDB")
         if plotconverged
             ax.plot(r, d_conv_db, "o-", label="Converged only")
         end
@@ -454,3 +455,12 @@ function plotdB(sims::Vector{Simulation}; backend=:unicode, plotconverged=false)
 end
 
 plotdB(sim::Simulation, varargs...) = plotdB([sim], varargs...)
+
+function plotdB(simsvec::Vector{Vector{Simulation}})
+    fig, ax = plt.subplots()
+    for sims in simsvec
+        ax = plotdB(sims, backend=:pyplot, plotconverged=false, fig_ax=(fig,ax),
+            label="GF($(sims[1].q))")
+    end
+    return ax
+end

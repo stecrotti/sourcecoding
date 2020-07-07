@@ -4,7 +4,7 @@ const q = 64
 const n = Int(420*6/log2(q))
 const R = 0.6
 const m = Int(round(n*(1 - R)))
-const b = Int(round(n/50))
+const b = Int(round(n/30))
 const maxiter = Int(5e2)
 const navg = 200
 const randseed = 100
@@ -24,24 +24,24 @@ for (j,gamma) in enumerate(gamma_vals)
     print(sims[j])
 end
 
-date = Dates.format(now(), "yyyymmdd_HHMM")
+# date = Dates.format(now(), "yyyymmdd_HHMM")
+#
+# avgiters = [mean(sim.iterations[sim.converged]) for sim in sims]
+# avgtrials = [mean(sim.trials[sim.converged]) for sim in sims]
+# avgdist = [meandist(sim, convergedonly=false) for sim in sims]
+# avgdistconverged = [meandist(sim, convergedonly=true) for sim in sims]
+# avgconvergence, sdconvergence = convergence_prob(sims)
 
-avgiters = [mean(sim.iterations[sim.converged]) for sim in sims]
-avgtrials = [mean(sim.trials[sim.converged]) for sim in sims]
-avgdist = [meandist(sim, convergedonly=false) for sim in sims]
-avgdistconverged = [meandist(sim, convergedonly=true) for sim in sims]
-avgconvergence, sdconvergence = convergence_prob(sims)
-
-convplot = UnicodePlots.lineplot(gamma_vals, avgconvergence, canvas=DotCanvas,
-    title="Average convergence", xlabel="gamma")
-itersplot = UnicodePlots.lineplot(gamma_vals, avgiters, canvas=DotCanvas,
-    title="Average iterations for converged instances", xlabel="gamma")
-trialsplot = UnicodePlots.lineplot(gamma_vals, avgtrials, canvas=DotCanvas,
-    title="Average trials for converged instances", xlabel="gamma")
-avgdistplot = UnicodePlots.lineplot(gamma_vals, avgdist, canvas=DotCanvas,
-    title="Average distortion", xlabel="gamma")
-avgdistconvergedplot = UnicodePlots.lineplot(gamma_vals, avgdistconverged, canvas=DotCanvas,
-    title="Average distortion for converged instances", xlabel="gamma")
+# convplot = UnicodePlots.lineplot(gamma_vals, avgconvergence, canvas=DotCanvas,
+#     title="Average convergence", xlabel="gamma")
+# itersplot = UnicodePlots.lineplot(gamma_vals, avgiters, canvas=DotCanvas,
+#     title="Average iterations for converged instances", xlabel="gamma")
+# trialsplot = UnicodePlots.lineplot(gamma_vals, avgtrials, canvas=DotCanvas,
+#     title="Average trials for converged instances", xlabel="gamma")
+# avgdistplot = UnicodePlots.lineplot(gamma_vals, avgdist, canvas=DotCanvas,
+#     title="Average distortion", xlabel="gamma")
+# avgdistconvergedplot = UnicodePlots.lineplot(gamma_vals, avgdistconverged, canvas=DotCanvas,
+#     title="Average distortion for converged instances", xlabel="gamma")
 # plot(sims, title="Mean distortion\nq=$q, n=$n, gamma=$gamma, navg=$navg,
 #     Tmax=$Tmax", backend=:pyplot, errorbars=true)
 # ax = gca()
@@ -51,8 +51,8 @@ avgdistconvergedplot = UnicodePlots.lineplot(gamma_vals, avgdistconverged, canva
 save("gamma"*date*".jld", "sims", sims, "date", date, "gamma_vals", gamma_vals)
 
 print(sims)
-display(convplot)
-display(itersplot)
-display(trialsplot)
-display(avgdistplot)
-display(avgdistconvergedplot)
+# display(convplot)
+# display(itersplot)
+# display(trialsplot)
+# display(avgdistplot)
+# display(avgdistconvergedplot)

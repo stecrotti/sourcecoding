@@ -12,6 +12,7 @@ convergratio = [mean(sim.converged) for sim in sims]
 
 plt.close("all")
 pgfsettings()
+doublefontsize()
 
 plt.figure("avgiters")
 plt.semilogx(gamma_vals, avgiters, "o-")

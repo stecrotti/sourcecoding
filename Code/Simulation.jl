@@ -184,7 +184,7 @@ end
 function plot(simsvec::Vector{Vector{Simulation}}; backend=:pyplot,
         errorbars = false, title="Mean distortion")
     if backend == :pyplot
-        markers = ["o", "s", "P", "X", ">", "d", "3", "*"]
+        markers = ["o", "s", "X", ">", "d", "3", "*", "P"]
         PyPlot.close("all")
         fig1 = plotdist(backend=:pyplot)
         ax = fig1.axes[1]
@@ -194,8 +194,8 @@ function plot(simsvec::Vector{Vector{Simulation}}; backend=:pyplot,
             dist_tot = [mean(sim.distortions) for sim in sims]
             if errorbars
                 sigma = [std(sim.distortions)/sqrt(length(sim.distortions)) for sim in sims]
-                ax.errorbar(R, dist_tot, sigma, fmt="o",
-                    ms=4, capsize=4, label="GF($(sims[1].q))")
+                ax.errorbar(R, dist_tot, sigma, fmt=markers[s]*"-",
+                    ms=5, capsize=3, label="GF($(sims[1].q))", lw=1)
             else
                 ax.plot(R, dist_tot, markers[s], ms=4, label="GF($(sims[1].q))")
             end

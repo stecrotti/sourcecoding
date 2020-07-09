@@ -11,10 +11,10 @@ function pgfsettings()
     return nothing
 end
 
-function doublefontsize()
+function increasefontsize(k=2)
     pgfsettings()
     rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
-    rcParams["font.size"] = 20.0
+    rcParams["font.size"] = 10.0*k
     return nothing
 end
 

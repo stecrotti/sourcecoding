@@ -6,10 +6,10 @@ const n = Int(round(420*2/log2(q)))
 const R = collect(0.1:0.1:0.9)
 const m = Int.(round.(n*(1 .- R)))
 const b = Int(round(n/30))*ones(Int, length(m))
-const maxiter = Int(3e2)
-const navg = 100
+const maxiter = Int(5e2)
+const navg = 200
 const randseed = 43
-const Tmax = 3
+const Tmax = 4
 
 sims_gfq = Vector{Simulation}(undef, length(m))
 sims_arb = Vector{Simulation}(undef, length(m))

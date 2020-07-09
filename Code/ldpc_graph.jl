@@ -99,7 +99,7 @@ function gftables(q::Int, arbitrary_mult::Bool=false)
     mult = OffsetArray(M, 0:q-1, 0:q-1)
     if arbitrary_mult
         for r in 2:q-1
-            shuffle!(mult[r,2:end])
+            mult[r,2:end] = shuffle(mult[r,2:end])
         end
     end
     gfinv = [findfirst(isequal(1), mult[r,1:end]) for r in 1:q-1]

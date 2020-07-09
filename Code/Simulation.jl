@@ -456,11 +456,12 @@ end
 
 plotdB(sim::Simulation, varargs...) = plotdB([sim], varargs...)
 
-function plotdB(simsvec::Vector{Vector{Simulation}})
+function plotdB(simsvec::Vector{Vector{Simulation}};
+        labels=["GF($(sims[1].q))" for sims in simsvec])
     fig, ax = plt.subplots()
-    for sims in simsvec
+    for (i,sims) in enumerate(simsvec)
         ax = plotdB(sims, backend=:pyplot, plotconverged=false, fig_ax=(fig,ax),
-            label="GF($(sims[1].q))")
+            label=labels[i])
     end
     return ax
 end

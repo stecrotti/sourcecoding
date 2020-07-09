@@ -5,7 +5,7 @@ const n = Int(420*6/log2(q))
 const R = 0.6
 const m = Int(round(n*(1 - R)))
 const b = Int(round(n/30))
-const maxiter = Int(5e2)
+# const maxiter = Int(5e2)
 const navg = 200
 const randseed = 100
 const Tmax = 5
@@ -18,7 +18,7 @@ for (j,gamma) in enumerate(gamma_vals)
     println("\n---------- Simulation $j of ", length(gamma_vals),
                 " | γ = ",gamma," -----------")
     sims[j] = Simulation(MS(), q, n, m,
-        navg=navg, convergence=:parity, maxiter=maxiter, gamma=gamma, Tmax=Tmax,
+        navg=navg, convergence=:parity, maxiter=Int(round(1/gamma)), gamma=gamma, Tmax=Tmax,
         b=b, samegraph=false, samevector=false, randseed=randseed+navg*Tmax*j,
         verbose=true)
     print(sims[j])

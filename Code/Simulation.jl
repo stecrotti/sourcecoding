@@ -194,7 +194,7 @@ function plot(simsvec::Vector{Vector{Simulation}}; backend=:pyplot,
             dist_tot = [mean(sim.distortions) for sim in sims]
             if errorbars
                 sigma = [std(sim.distortions)/sqrt(length(sim.distortions)) for sim in sims]
-                ax.errorbar(R, dist_tot, sigma, fmt=markers[s]*"-",
+                ax.errorbar(R, dist_tot, sigma, fmt=markers[s],
                     ms=5, capsize=3, label="GF($(sims[1].q))", lw=1)
             else
                 ax.plot(R, dist_tot, markers[s], ms=4, label="GF($(sims[1].q))")

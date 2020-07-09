@@ -17,7 +17,7 @@ for j in 1:length(m)
     println("---------- Simulation $j of ", length(m)," | R = ",R[j]," -----------")
     sim = Simulation(MS(), q, n, m[j],
         navg=navg, convergence=:parity, maxiter=maxiter, gamma=gamma, Tmax=Tmax,
-        b=b[j], samegraph=false, samevector=false, randseed=randseed+navg*Tmax*j,
+        b=b[j], samegraph=false, samevector=false, randseed=(randseed+navg*Tmax*j)*q,
         verbose=true)
     print(sim)
     sims[j] = sim

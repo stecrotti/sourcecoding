@@ -6,11 +6,11 @@ const R = 0.6
 const m = Int(round(n*(1 - R)))
 const b = Int(round(n/30))
 # const maxiter = Int(5e2)
-const navg = 200
+const navg = 100
 const randseed = 100
-const Tmax = 5
+const Tmax = 4
 
-gamma_vals = 10 .^ LinRange(-2.5,-1.5,7)
+gamma_vals = 10 .^ LinRange(-3.5,-1.0,9)
 
 sims = Vector{Simulation}(undef, length(gamma_vals))
 
@@ -24,13 +24,13 @@ for (j,gamma) in enumerate(gamma_vals)
     print(sims[j])
 end
 
-# date = Dates.format(now(), "yyyymmdd_HHMM")
-#
-# avgiters = [mean(sim.iterations[sim.converged]) for sim in sims]
-# avgtrials = [mean(sim.trials[sim.converged]) for sim in sims]
-# avgdist = [meandist(sim, convergedonly=false) for sim in sims]
-# avgdistconverged = [meandist(sim, convergedonly=true) for sim in sims]
-# avgconvergence, sdconvergence = convergence_prob(sims)
+date = Dates.format(now(), "yyyymmdd_HHMM")
+
+avgiters = [mean(sim.iterations[sim.converged]) for sim in sims]
+avgtrials = [mean(sim.trials[sim.converged]) for sim in sims]
+avgdist = [meandist(sim, convergedonly=false) for sim in sims]
+avgdistconverged = [meandist(sim, convergedonly=true) for sim in sims]
+avgconvergence, sdconvergence = convergence_prob(sims)
 
 # convplot = UnicodePlots.lineplot(gamma_vals, avgconvergence, canvas=DotCanvas,
 #     title="Average convergence", xlabel="gamma")

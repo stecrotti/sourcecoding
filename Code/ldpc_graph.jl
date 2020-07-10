@@ -98,23 +98,22 @@ function gftables(q::Int, arbitrary_mult::Bool=false)
     M = [findfirst(isequal(x*y),elems)-1 for x in elems, y in elems]
     mult = OffsetArray(M, 0:q-1, 0:q-1)
     if arbitrary_mult
-        # for r in 2:q-1
-        #     mult[r,2:end] = shuffle(mult[r,2:end])
-        # end
-        # gfinv = vcat(1, shuffle(2:q-1))
         gfinv = zeros(Int, q-1)
-        gfinv[1] = 1
-        for r in 2:q-1
-            if gfinv[r] == 0
-                gfinv[r] = rand(findall(gfinv .== 0))
-                gfinv[gfinv[r]] = r
-            end
-        end
-
-        for r in 2:q-1
-            mult[r, gfinv[r]] = 1
-            others = [i for i in 2:q-1 if i!=r]
-            mult[r, [2:gfinv[r]-1; gfinv[r]+1:q-1] ] = shuffle(others)
+        # gfinv[1] = 1
+        # for r in 2:q-1
+        #     if gfinv[r] == 0
+        #         gfinv[r] = rand(findall(gfinv .== 0))
+        #         gfinv[gfinv[r]] = r
+        #     end
+        # end
+        #
+        # for r in 2:q-1
+        #     mult[r, gfinv[r]] = 1
+        #     others = [i for i in 2:q-1 if i!=r]
+        #     mult[r, [2:gfinv[r]-1; gfinv[r]+1:q-1] ] = shuffle(others)
+        # end
+        for r in 1:q-1
+            mult[r, 1:q-1] .= shuffle(mult[r, 1:q-1])
         end
 
     else

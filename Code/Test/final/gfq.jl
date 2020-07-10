@@ -1,6 +1,6 @@
 include("../../headers.jl")
 
-const q = 2
+const q = 128
 const gamma = 5e-3
 const n = Int(420*10/log2(q))
 const R = collect(0.1:0.1:0.9)

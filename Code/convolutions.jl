@@ -75,16 +75,47 @@ function gfmsc!(f3::Fun, f1::Fun, f2::Fun)
     return f3
 end
 
+# function gfconvw(f1::Fun, f2::Fun, mult, div,
+#     w1::Int=1, w2::Int=1)
+#     (w1==0 || w2==0) && error("Weights w1,w2 must be positive")
+#
+#     f1 .= f1[ div[:,w1] ]
+#     f2 .= f2[ div[:,w2] ]
+#
+#     f3 = gfconv(f1,f2)
+#     return f3
+# end
+
+function gfconvw(F, gfdiv, w::Vector{Int}=ones(Int, length(F)),
+        neutral=Fun(x == 0 ? 1.0 : 0.0 for x=0:length(F[1])-1))
+
+    (sum(w.<=0)>0) && error("Weights must be positive")
+
+    Fweighted = [ F[i][ gfdiv[:,w[i]] ] for i in eachindex(w)]
+    f = reduce(gfconv, Fweighted, init=neutral)
+    return f
+end
+
+function gfmscw(F, gfdiv, w::Vector{Int}=ones(Int, length(F)),
+        neutral=Fun(x == 0 ? 0.0 : -Inf for x=0:length(F[1])-1))
+
+    (sum(w.<=0)>0) && error("Weights must be positive")
+
+    Fweighted = [ F[i][ gfdiv[:,w[i]] ] for i in eachindex(w)]
+    f = reduce(gfmsc, Fweighted, init=neutral)
+    return f
+end
+
 
 ### Not used
-function gfconvweighted(f1::Fun, f2::Fun, w1::Int=1, w2::Int=1;
-    mult::OffsetArray{Int,2}=gftables(length(f1))[1],
-    gfinv::Vector{Int}=gftables(length(f1))[2])
-
-    g1 = f1[mult[gfinv[w1],:]]
-    g2 = f2[mult[gfinv[w2],:]]
-    return gfconv(g1,g2)
-end
+# function gfconvweighted(f1::Fun, f2::Fun, w1::Int=1, w2::Int=1;
+#     mult::OffsetArray{Int,2}=gftables(length(f1))[1],
+#     gfinv::Vector{Int}=gftables(length(f1))[2])
+#
+#     g1 = f1[mult[gfinv[w1],:]]
+#     g2 = f2[mult[gfinv[w2],:]]
+#     return gfconv(g1,g2)
+# end
 
 function gfmscweighted(f1::Fun, f2::Fun, w1::Int=1, w2::Int=1;
     mult::OffsetArray{Int,2}=gftables(length(f1))[1],

@@ -2,6 +2,7 @@ struct FactorGraph
     q::Int                              # field order
     mult::OffsetArray{Int,2}            # multiplication matrix in GF(q)
     gfinv::Vector{Int}                  # inverses in GF(q). It has q-1 indices, since 0 has no inverse
+    gfdiv::OffsetArray{Int,2}
     n::Int                              # number of variable nodes
     m::Int                              # number of factor nodes
     Vneigs::Vector{Vector{Int}}         # neighbors of variable nodes.
@@ -15,6 +16,7 @@ end
 function FactorGraph(q::Int, n::Int, m::Int)
     mult = OffsetArray(zeros(Int,q,q), 0:q-1, 0:q-1)
     gfinv = zeros(Int, q-1)
+    gfdiv = OffsetArray(zeros(Int, q,q-1), 0:q-1,1:q-1)
     Vneigs = [Int[] for v in 1:n]
     Fneigs = [Int[] for f in 1:m]
     fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in 1:n]
@@ -45,8 +47,8 @@ function FactorGraph(q::Int, A::Array{Int,2},
             end
         end
     end
-    mult, gfinv = gftables(q)
-    return FactorGraph(q, mult, gfinv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
+    mult, gfinv, gfdiv = gftables(q)
+    return FactorGraph(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
 end
 
 function adjmat(FG::FactorGraph)

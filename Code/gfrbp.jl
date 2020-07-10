@@ -18,16 +18,25 @@ function onebpiter!(FG::FactorGraph, algo::BP, neutral=neutralel(algo,FG.q);
 
             # Define functions for weighted convolution
             funclist = Fun[]
+            weightlist = Int[]
             for (vprime_idx,vprime) in enumerate(FG.Fneigs[f])
                 if vprime != v
                     func = FG.fields[vprime] ./ FG.mfv[f][vprime_idx]
                     func[isnan.(func)] .= 1.0
                     # adjust for weights
-                    func .= func[FG.mult[FG.gfinv[FG.hfv[f][vprime_idx]], FG.mult[FG.hfv[f][v_idx],:]]]
+                    # func .= func[FG.mult[FG.gfinv[FG.hfv[f][vprime_idx]], FG.mult[FG.hfv[f][v_idx],:]]]
                     push!(funclist, func)
+                    push!(weightlist, FG.hfv[f][vprime_idx])
                 end
             end
-            FG.mfv[f][v_idx] = reduce(gfconv, funclist, init=neutral)
+            # FG.mfv[f][v_idx] = reduce(gfconv, funclist, init=neutral)
+
+            # Try new way
+            FG.mfv[f][v_idx] = gfconvw(funclist, FG.gfdiv, weightlist,
+                neutral)
+            # Adjust final weight
+            FG.mfv[f][v_idx] .= FG.mfv[f][v_idx][ FG.mult[FG.hfv[f][v_idx],:] ]
+
             FG.mfv[f][v_idx][isnan.(FG.mfv[f][v_idx])] .= 0.0
             if sum(isnan.(FG.mfv[f][v_idx])) > 0
                 println()
@@ -81,17 +90,25 @@ function onebpiter!(FG::FactorGraph, algo::MS,
             # end
             # Define functions for weighted convolution
             funclist = Fun[]
+            weightlist = Int[]
             for (vprime_idx, vprime) in enumerate(FG.Fneigs[f])
                 if vprime != v
                     func = FG.fields[vprime] - FG.mfv[f][vprime_idx]
                     # adjust for weights
-                    func .= func[FG.mult[FG.gfinv[FG.hfv[f][vprime_idx]], FG.mult[FG.hfv[f][v_idx],:]]]
+                    # func .= func[FG.mult[FG.gfinv[FG.hfv[f][vprime_idx]], FG.mult[FG.hfv[f][v_idx],:]]]
                     push!(funclist, func)
+                    push!(weightlist, FG.hfv[f][vprime_idx])
                 end
             end
             # Update with damping
-            oldmessage = alpha > 0 ? alpha*FG.mfv[f][v_idx] : Fun(FG.q)
-            FG.mfv[f][v_idx] .= oldmessage + (1-alpha)*reduce(gfmsc, funclist, init=neutral)
+            # oldmessage = alpha > 0 ? alpha*FG.mfv[f][v_idx] : Fun(FG.q)
+            # FG.mfv[f][v_idx] .= oldmessage + (1-alpha)*reduce(gfmsc, funclist, init=neutral)
+
+            # Try new way
+            FG.mfv[f][v_idx] = gfmscw(funclist, FG.gfdiv, weightlist,
+                neutral)
+            # Adjust final weight
+            FG.mfv[f][v_idx] .= FG.mfv[f][v_idx][ FG.mult[FG.hfv[f][v_idx],:] ]
 
             # if sum(isinf.(FG.mfv[f][v_idx])) > 0
             #     FG.mfv[f][v_idx][.!isinf.(FG.mfv[f][v_idx])] = 0.0

@@ -64,9 +64,9 @@ function ldpc_graph(q::Int, n::Int, m::Int,
     end
 
     # Get multiplication and iverse table for GF(q)
-    mult, gfinv = gftables(q, arbitrary_mult)
+    mult, gfinv, gfdiv = gftables(q, arbitrary_mult)
 
-    return FactorGraph(q, mult, gfinv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
+    return FactorGraph(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
 end
 
 function generate_polyn(n::Int, m::Int)
@@ -98,13 +98,37 @@ function gftables(q::Int, arbitrary_mult::Bool=false)
     M = [findfirst(isequal(x*y),elems)-1 for x in elems, y in elems]
     mult = OffsetArray(M, 0:q-1, 0:q-1)
     if arbitrary_mult
+        # for r in 2:q-1
+        #     mult[r,2:end] = shuffle(mult[r,2:end])
+        # end
+        # gfinv = vcat(1, shuffle(2:q-1))
+        gfinv = zeros(Int, q-1)
+        gfinv[1] = 1
         for r in 2:q-1
-            mult[r,2:end] = shuffle(mult[r,2:end])
+            if gfinv[r] == 0
+                gfinv[r] = rand(findall(gfinv .== 0))
+                gfinv[gfinv[r]] = r
+            end
+        end
+
+        for r in 2:q-1
+            mult[r, gfinv[r]] = 1
+            others = [i for i in 2:q-1 if i!=r]
+            mult[r, [2:gfinv[r]-1; gfinv[r]+1:q-1] ] = shuffle(others)
+        end
+
+    else
+        gfinv = [findfirst(isequal(1), mult[r,1:end]) for r in 1:q-1]
+    end
+
+    div = OffsetArray(zeros(Int, q,q-1), 0:q-1,1:q-1)
+    for r in 1:q-1
+        for c in 1:q-1
+            div[r,c] = findfirst(isequal(r), [mult[c,k] for k in 1:q-1])
         end
     end
-    gfinv = [findfirst(isequal(1), mult[r,1:end]) for r in 1:q-1]
 
-    return mult, gfinv
+    return mult, gfinv, div
 end
 
 

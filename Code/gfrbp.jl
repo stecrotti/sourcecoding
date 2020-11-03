@@ -168,25 +168,44 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}, y::Vector{Int}, maxiter=Int(1e
                         end
                     end
                 end
-                maxchange[t] < tol && return :converged, t, trial
+                if maxchange[t] < tol
+                    return :converged, t, trial
+                end
                 oldmessages .= deepcopy(newmessages)
+                performance_name = "max change"
+                performance_value = maxchange[t]
             elseif convergence == :decvars
                 if newguesses == oldguesses
                     n += 1
-                    n >= nmin && return :converged, t, trial
+                    if n >= nmin
+                        return :converged, t, trial
+                    end
                 else
                     n=0
                 end
                 oldguesses .= newguesses
+                performance_name = "iters with same decision vars"
+                performance_value = n
             elseif convergence == :parity
-                if sum(paritycheck(FG)) == 0
+                parity = sum(paritycheck(FG))
+                if parity == 0
                     return :converged, t, trial
                 end
+                performance_name = "parity"
+                performance_value = parity
             else
                 error("Field convergence must be one of :messages, :decvars, :parity")
             end
             softdecimation!(FG, gamma*t, algo)
-            (verbose && isinteger(10*t/maxiter)) && println("BP/MS Finished ",Int(t/maxiter*100), "%")
+            if verbose
+                steps_tot = 20
+                progress = div(t*steps_tot, maxiter)
+                print("\u1b[2K")    # clear line
+                println("  [", "-"^progress," "^(steps_tot-progress), "] ",
+                    "$t/$maxiter, trial $trial/$Tmax, ",
+                    performance_name, ": ", performance_value)
+                print("\u1b[1F")    # move cursor to beginning of line
+            end
         end
         if trial != Tmax
             refresh!(FG)
@@ -197,6 +216,10 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}, y::Vector{Int}, maxiter=Int(1e
             n = 0
         end
     end
+    # if verbose
+    #     print("\u1b[2K")    # clear line
+    #     print("\u1b[1F")    # move cursor to beginning of line
+    # end
     return :unconverged, maxiter, Tmax
 end
 

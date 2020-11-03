@@ -182,9 +182,11 @@ function plot(sim::Simulation; backend=:unicode, plotparity=true,
 end
 
 function plot(simsvec::Vector{Vector{Simulation}}; backend=:pyplot,
-        errorbars = false, title="Mean distortion")
+        errorbars = false, title="Mean distortion",
+        labels=["GF($(sims[1].q))" for sims in simsvec])
+
     if backend == :pyplot
-        markers = ["o", "s", "X", ">", "d", "3", "*", "P"]
+        markers = ["o", "d", "*", ">", "s", "3", "*", "P"]
         PyPlot.close("all")
         fig1 = plotdist(backend=:pyplot)
         ax = fig1.axes[1]
@@ -195,9 +197,9 @@ function plot(simsvec::Vector{Vector{Simulation}}; backend=:pyplot,
             if errorbars
                 sigma = [std(sim.distortions)/sqrt(length(sim.distortions)) for sim in sims]
                 ax.errorbar(R, dist_tot, sigma, fmt=markers[s],
-                    ms=5, capsize=3, label="GF($(sims[1].q))", lw=1)
+                    ms=4, capsize=3, label=labels[s], lw=1)
             else
-                ax.plot(R, dist_tot, markers[s], ms=4, label="GF($(sims[1].q))")
+                ax.plot(R, dist_tot, markers[s], ms=4, label=labels[s])
             end
         end
         plt.:legend()
@@ -424,7 +426,7 @@ function convergence_prob(sims::Vector{Simulation})
 end
 
 function plotdB(sims::Vector{Simulation}; backend=:unicode, plotconverged=false,
-    fig_ax=plt.subplots(), label="Total distortion")
+    fig_ax=plt.subplots(), label="Total distortion", title="Distance from RDB")
 
     d = meandist.(sims, convergedonly=false)
     d_conv = meandist.(sims, convergedonly=true)
@@ -446,7 +448,7 @@ function plotdB(sims::Vector{Simulation}; backend=:unicode, plotconverged=false,
         ax.plot(r, d_db, "o-", label=label)
         ax.set_xlabel("R")
         ax.set_ylabel("Distance / dB")
-        ax.set_title("DIstance from RDB")
+        ax.set_title(title)
         if plotconverged
             ax.plot(r, d_conv_db, "o-", label="Converged only")
         end
@@ -458,11 +460,11 @@ end
 plotdB(sim::Simulation, varargs...) = plotdB([sim], varargs...)
 
 function plotdB(simsvec::Vector{Vector{Simulation}};
-        labels=["GF($(sims[1].q))" for sims in simsvec])
+        labels=["GF($(sims[1].q))" for sims in simsvec], title="Distance from RDB")
     fig, ax = plt.subplots()
     for (i,sims) in enumerate(simsvec)
         ax = plotdB(sims, backend=:pyplot, plotconverged=false, fig_ax=(fig,ax),
-            label=labels[i])
+            label=labels[i], title=title)
     end
     return ax
 end

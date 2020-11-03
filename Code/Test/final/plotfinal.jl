@@ -16,13 +16,21 @@ sort!(simsvec, by = sims -> sims[1].q)
 
 println("Plotting image. This might take a while...")
 
-pgfsettings()
+pgfsettings("sans-serif")
+increasefontsize(1.5)
 
 plt.close("all")
 plot(simsvec, title="",
         backend=:pyplot, errorbars=true)
+d = load("gf128final.jld")
+sd128 = d["sd128"]
+avg128 = d["avg128"]
 ax = gca()
+R = [sim.R for sim in simsvec[1]]
+ax.errorbar(R, avg128, sd128, fmt=">", ms=4, capsize=4, label="GF(128)")
+plt.legend()
+plt.tight_layout()                       
 # ax.annotate("b=$( Int(round(n/30))*ones(Int, length(m)))", (0,0))
 # ax.annotate("maxiter=$(maxiter)", (0,0.05))
 date = Dates.format(now(), "yyyymmdd_HHMM")
-# savefig("../../images/gfq.pgf", bbox_inches="tight")
+plt.savefig("../../../../Latex/images/gfq2.pgf", bbox_inches="tight")

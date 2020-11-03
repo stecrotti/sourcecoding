@@ -1,18 +1,17 @@
 # using PyPlot
-function pgfsettings()
+function pgfsettings(font_family::String="serif")
     plt.rcdefaults()
     rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
     rcParams["pgf.rcfonts"] = false
     rcParams["backend"] = "pgf"
     rcParams["text.usetex"] = true
     rcParams["pgf.texsystem"] = "xelatex"
-    rcParams["font.family"] = "serif"
+    rcParams["font.family"] = font_family
     # rcParams["font.serif"] = ""
     return nothing
 end
 
-function increasefontsize(k=2)
-    pgfsettings()
+function increasefontsize(k::Real=2)
     rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
     rcParams["font.size"] = 10.0*k
     return nothing

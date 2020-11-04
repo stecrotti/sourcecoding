@@ -158,7 +158,8 @@ function hd(x::Vector{Int}, y::Vector{Int})
 end
 
 # Works only for GF(2^k)
-function paritycheck(H::Array{Int,2}, y::Vector{Int}, mult::OffsetArray{Int,2,Array{Int,2}})
+function paritycheck(H::Array{Int,2}, y::Vector{Int},
+                    mult::OffsetArray{Int,2,Array{Int,2}}=gftables(q)[1])
     m,n = size(H)
     q,p = size(mult)
     @assert length(y) == n

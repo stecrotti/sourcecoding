@@ -102,12 +102,12 @@ function mc!(lm::LossyModel, algo::Metrop; nsamples::Int=Int(1e4),
 end
 
 function anneal!(lm::LossyModel, algo::Metrop,
-                betas::Tuple{Vector{Real},Vector{Real}};
+                betas::Tuple{Vector{<:Real},Vector{<:Real}};
                 nsamples::Int=Int(1e4),
                 sample_every::Int=Int(1e2), stop_crit = (lm, ar, e)->false,
                 x0::Vector{Int}=rand(0:lm.fg.q-1,lm.fg.n), verbose::Bool=true)
     # Initialize to the requested initial state
-    x.lm = x0
+    lm.x = x0
     nbetas = length.(betas)[1]
     for b in 1:nbetas
         # Update temperature

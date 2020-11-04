@@ -22,7 +22,7 @@ function FactorGraph(q::Int, n::Int, m::Int)
     fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in 1:n]
     hfv = [Int[] for f in 1:m]
     mfv = Vector{Vector{OffsetArray{Float64,1,Array{Float64,1}}}}()
-    return FactorGraph(q, mult, gfinv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
+    return FactorGraph(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
 end
 
 # Construct graph from adjacency matrix (for checks with simple examples)
@@ -51,87 +51,92 @@ function FactorGraph(q::Int, A::Array{Int,2},
     return FactorGraph(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
 end
 
-function adjmat(FG::FactorGraph)
-    A = zeros(Int,FG.m, FG.n)
-    for f in 1:FG.m
-        for (v_idx,v) in enumerate(FG.Fneigs[f])
-            A[f,v] = FG.hfv[f][v_idx]
+function adjmat(fg::FactorGraph)
+    A = zeros(Int,fg.m, fg.n)
+    for f in 1:fg.m
+        for (v_idx,v) in enumerate(fg.Fneigs[f])
+            A[f,v] = fg.hfv[f][v_idx]
         end
     end
     A
 end
 
-function Base.show(io::IO, FG::FactorGraph)
-    println(io, "\nFactor Graph with $(FG.n) variables and $(FG.m) factors defined on GF($(FG.q))")
+dispstring(fg::FactorGraph) = "Factor Graph with n=$(fg.n) variables and m=$(fg.m) factors defined on GF($(fg.q))"
+
+function Base.show(io::IO, fg::FactorGraph)
+    println(io, dispstring(fg))
 end
 
 
 # Degree of variable node
-function vardegree(FG::FactorGraph, v::Int)::Int
-    v > FG.n && error("Variable $v is not in the graph")
-    return length(FG.Vneigs[v])
+function vardegree(fg::FactorGraph, v::Int)::Int
+    v > fg.n && error("Variable $v is not in the graph")
+    return length(fg.Vneigs[v])
 end
 
 # Degree of factor node
-function factdegree(FG::FactorGraph, f::Int)::Int
-    f > FG.m && error("Factor $f is not in the graph")
-    return length(FG.Fneigs[f])
+function factdegree(fg::FactorGraph, f::Int)::Int
+    f > fg.m && error("Factor $f is not in the graph")
+    return length(fg.Fneigs[f])
 end
 
-vardegrees(FG::FactorGraph) = [vardegree(FG,v) for v in eachindex(FG.Vneigs)]
-factdegrees(FG::FactorGraph) = [factdegree(FG,f) for f in eachindex(FG.Fneigs)]
+isvarleaf(fg::FactorGraph, v::Int)::Bool = vardegree(fg,v)==1
+isfactleaf(fg::FactorGraph, f::Int)::Bool = factdegree(fg,f)==1
+
+vardegrees(fg::FactorGraph) = [vardegree(fg,v) for v in eachindex(fg.Vneigs)]
+factdegrees(fg::FactorGraph) = [factdegree(fg,f) for f in eachindex(fg.Fneigs)]
 
 # deletes elements in vec that are equal to val
 function deleteval!(vec::Vector{T}, val::T) where T
     deleteat!(vec, findall(x->x==val, vec))
 end
 
-function deletefactor!(FG::FactorGraph, f::Int=rand(filter(ff -> factdegree(FG,ff)!=0, 1:FG.m)))
-    for v in FG.Fneigs[f]
+function deletefactor!(fg::FactorGraph, f::Int=rand(filter(ff -> factdegree(fg,ff)!=0, 1:fg.m)))
+    for v in fg.Fneigs[f]
         # delete factor from its neighbors' lists
-        deleteval!(FG.Vneigs[v],f)
+        deleteval!(fg.Vneigs[v],f)
     end
     # delete messages from f
-    FG.mfv[f] = OffsetArray{Float64,1,Array{Float64,1}}[]
+    fg.mfv[f] = OffsetArray{Float64,1,Array{Float64,1}}[]
     # delete factor f
-    FG.Fneigs[f] = []
+    fg.Fneigs[f] = []
     return f
 end
 
-function deletevar!(FG::FactorGraph, v::Int=rand(filter(vv -> vardegree(FG,vv)!=0, 1:FG.n)))
-    for f in eachindex(FG.Fneigs)
+function deletevar!(fg::FactorGraph, v::Int=rand(filter(vv -> vardegree(fg,vv)!=0, 1:fg.n)))
+    for f in eachindex(fg.Fneigs)
         # delete i from its neighbors' neighbor lists
-        v_idx = findall(isequal(v), FG.Fneigs[f])
-        deleteat!(FG.Fneigs[f],v_idx)
+        v_idx = findall(isequal(v), fg.Fneigs[f])
+        deleteat!(fg.Fneigs[f],v_idx)
         # delete messages to v
-        deleteat!(FG.mfv[f], v_idx)
+        deleteat!(fg.mfv[f], v_idx)
         # delete weight on the adjacency matrix
-        deleteat!(FG.hfv[f], v_idx)
+        deleteat!(fg.hfv[f], v_idx)
     end
     # delete node v
-    FG.Vneigs[v] = []
+    fg.Vneigs[v] = []
     return v
 end
 
 # Leaf removal
-function lr!(FG::FactorGraph)
+function lr!(fg::FactorGraph)
     flag = false    # raised if there are still leaves to remove
-    for v in eachindex(FG.Vneigs)
-        if vardegree(FG,v)==1
-            deletefactor!(FG, FG.Vneigs[v][1])
+    for v in eachindex(fg.Vneigs)
+        if vardegree(fg,v)==1
+            deletefactor!(fg, fg.Vneigs[v][1])
             flag = true
         end
     end
-    flag && lr!(FG)
+    flag && lr!(fg)
     nothing
 end
 
 # Remove only 1 leaf
-function onelr!(FG::FactorGraph, idx::Vector{Int}=randperm(FG.n))
+function onelr!(fg::FactorGraph, idx::Vector{Int}=randperm(fg.n))
     for v in idx
-        if vardegree(FG,v)==1
-            deletefactor!(FG, FG.Vneigs[v][1])
-            # deletevar!(FG, v)
+        if vardegree(fg,v)==1
+            deletefactor!(fg, fg.Vneigs[v][1])
+            # deletevar!(fg, v)
             return v
         end
     end
@@ -141,39 +146,39 @@ end
 # The following 2 are used to get the number of variables or factors left in
 # the graph, which might be different from n,m i.e. the original ones
 
-function nvars(FG::FactorGraph)   # number of variables in the core
+function nvars(fg::FactorGraph)   # number of variables in the core
     Nvars = 0
-    for v in FG.Vneigs
+    for v in fg.Vneigs
         v != [] && (Nvars += 1)
     end
     return Nvars
 end
 
-function nfacts(FG::FactorGraph)    # number of hyperedges in the core
+function nfacts(fg::FactorGraph)    # number of hyperedges in the core
      Nfact = 0
-     Fneigs = FG.Fneigs
+     Fneigs = fg.Fneigs
      for f in Fneigs
          f != [] && (Nfact += 1)
      end
      return Nfact
 end
 
-function breduction!(FG::FactorGraph, b::Int; randseed::Int=0)
+function breduction!(fg::FactorGraph, b::Int; randseed::Int=0)
     randseed != 0 && Random.seed!(randseed)     # for reproducibility
     for _ in 1:b
-        deletefactor!(FG)
+        deletefactor!(fg)
     end
 end
 
-function polyn(FG::FactorGraph)
-    fd = countmap(factdegrees(FG))    # degree => number of factors with that degree
+function polyn(fg::FactorGraph)
+    fd = countmap(factdegrees(fg))    # degree => number of factors with that degree
     rho = zeros(maximum(keys(fd)))
     for j in keys(fd)
         rho[j] = j*fd[j]
     end
     rho ./= sum(rho)
 
-    vd = countmap(vardegrees(FG))
+    vd = countmap(vardegrees(fg))
     lambda = zeros(maximum(keys(vd)))
     for i in keys(vd)
         lambda[i] = i*vd[i]

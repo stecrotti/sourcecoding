@@ -51,9 +51,9 @@ function Simulation(
     maxchange = [fill(-Inf, maxiter) for i in 1:navg]
     trials = zeros(Int, navg)
 
-    FG = ldpc_graph(q, n, m+b, verbose=verbose, randseed=randseed,
+    fg = ldpc_graph(q, n, m+b, verbose=verbose, randseed=randseed,
         arbitrary_mult = arbitrary_mult)
-    breduction!(FG, b, randseed=randseed)
+    breduction!(fg, b, randseed=randseed)
     y = rand(MersenneTwister(randseed), 0:q-1, n)
 
     t = @timed begin
@@ -63,12 +63,12 @@ function Simulation(
                 y .= rand(MersenneTwister(randseed+it), 0:q-1, n)
             end
             if !samegraph
-                FG = ldpc_graph(q, n, m+b, verbose=verbose,
+                fg = ldpc_graph(q, n, m+b, verbose=verbose,
                     randseed=randseed+it, arbitrary_mult=arbitrary_mult)
-                breduction!(FG, b, randseed=randseed+it)
+                breduction!(fg, b, randseed=randseed+it)
             end
-            FG.fields .= extfields(q,y,algo,L, randseed=randseed+it*Tmax)
-            (res,iterations[it],trials[it]), runtimes[it] = @timed bp!(FG, algo, y,
+            fg.fields .= extfields(q,y,algo,L, randseed=randseed+it*Tmax)
+            (res,iterations[it],trials[it]), runtimes[it] = @timed bp!(fg, algo, y,
                 maxiter, convergence, nmin, tol, gamma, alpha, Tmax, L,
                 randseed+it*Tmax, maxdiff[it], codeword[it], maxchange[it],
                 verbose=false)
@@ -76,9 +76,9 @@ function Simulation(
             if res == :converged
                 converged[it] = true
             end
-            parity[it] = sum(paritycheck(FG))
+            parity[it] = sum(paritycheck(fg))
             if parity[it] == 0
-                distortions[it] = hd(guesses(FG),y)/(n*log2(q))
+                distortions[it] = hd(guesses(fg),y)/(n*log2(q))
             end
             res_string = res==:converged ? "C" : "U"
 
@@ -98,7 +98,7 @@ function Simulation(
                     ". Trials ", trials[it]#=,
                     ". Seed ", randseed=#)
             end
-            samegraph && refresh!(FG)   # Reset messages
+            samegraph && refresh!(fg)   # Reset messages
 
         end
     end

@@ -148,22 +148,30 @@ function extfields(q::Int, y::Vector{Int}, algo::Union{BP,MS}, L::Real=1.0,
 end
 
 # Hamming distance, works when q is a power of 2
-function hd(x::Int,y::Int)
+function hd(x::Int,y::Int)::Int
     count(isequal('1'), bitstring(xor.(x,y)))
 end
 
-function hd(x::Vector{Int}, y::Vector{Int})
-    # sum(x.!=y)
+function hd(x::Vector{Int}, y::Vector{Int})::Int
     sum(hd.(x,y))
 end
 
+# Hamming weight
+function hw(x::Int)::Int
+    hd(x, 0)
+end
+
+function hw(v::Vector{Int})::Int
+    sum(hw.(v))
+end
+
 # Works only for GF(2^k)
-function paritycheck(H::Array{Int,2}, y::Vector{Int},
+function paritycheck(H::Array{Int,2}, x::Vector{Int}, q::Int,
                     mult::OffsetArray{Int,2,Array{Int,2}}=gftables(q)[1])
     m,n = size(H)
-    q,p = size(mult)
-    @assert length(y) == n
-    @assert q == p
+    r,p = size(mult)
+    @assert length(x) == n
+    @assert r == p
     z = zeros(Int, m)
     for i in eachindex(z)
         # s = 0
@@ -171,14 +179,22 @@ function paritycheck(H::Array{Int,2}, y::Vector{Int},
         #     s = hd(s, mult[H[i,j], y[j]])
         # end
         # z[i] = s
-        z[i] = reduce(xor, [mult[H[i,j], y[j]] for j in eachindex(y)], init=0)
+        z[i] = reduce(xor, [mult[H[i,j], x[j]] for j in eachindex(x)], init=0)
     end
     return z
 end
 
-function paritycheck(FG::FactorGraph)
-    return paritycheck(adjmat(FG), guesses(FG), FG.mult)
+# Parity-check for the adjacency matrix of a factor graph.
+# f specifies which factors to consider (default: all 1:m)
+function paritycheck(fg::FactorGraph, x::Vector{Int}=guesses(fg),
+    f::Vector{Int}=collect(1:fg.m))
+    return paritycheck(adjmat(fg)[f,:], x, fg.q, fg.mult)
 end
+# Support f as a single index, not forcefully a vector
+function paritycheck(fg::FactorGraph, x::Vector{Int}, f::Int)
+    return paritycheck(fg, x, [f])
+end
+
 
 # Groups bits together to transform GF(2)->GF(2^k)
 function gf2toq(H::Array{Int,2}, k::Int=1)

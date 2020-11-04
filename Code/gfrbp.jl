@@ -7,15 +7,10 @@ function onebpiter!(FG::FactorGraph, algo::BP, neutral=neutralel(algo,FG.q);
     maxdiff = diff = 0.0
     for f in randperm(length(FG.Fneigs))
         for (v_idx, v) in enumerate(FG.Fneigs[f])
-            # If message is a delta, don't to anything, that variable is already decided
-            # FG.mfv[f][v_idx]==neutral  && continue
-
             # Divide message from belief
             FG.fields[v] ./= FG.mfv[f][v_idx]
-
             # Restore possible n/0 or 0/0
             FG.fields[v][isnan.(FG.fields[v])] .= 1.0
-
             # Define functions for weighted convolution
             funclist = Fun[]
             weightlist = Int[]
@@ -29,9 +24,6 @@ function onebpiter!(FG::FactorGraph, algo::BP, neutral=neutralel(algo,FG.q);
                     push!(weightlist, FG.hfv[f][vprime_idx])
                 end
             end
-            # FG.mfv[f][v_idx] = reduce(gfconv, funclist, init=neutral)
-
-            # Try new way
             FG.mfv[f][v_idx] = gfconvw(funclist, FG.gfdiv, weightlist,
                 neutral)
             # Adjust final weight
@@ -75,19 +67,10 @@ function onebpiter!(FG::FactorGraph, algo::MS,
     maxdiff = diff = 0.0
     for f in randperm(length(FG.Fneigs))
         for (v_idx, v) in enumerate(FG.Fneigs[f])
-            # If field has -Inf, don't to anything, that variable is already decided
-            # sum(isinf.(FG.fields[v]))!=0  && continue
-            # FG.mfv[f][v_idx]==neutral  && continue
-
-            # If a leaf, uniform message!
-            # if vardegree(FG,v) == 1
-                # FG.fields[v] = OffsetArray(1/FG.q*ones(FG.q), 0:FG.q-1)
-            # else
                 # Subtract message from belief
                 FG.fields[v] .-= FG.mfv[f][v_idx]
                 # if "Inf-Inf=NaN" happened, restore 0.0
                 FG.fields[v][isnan.(FG.fields[v])] .= 0.0
-            # end
             # Define functions for weighted convolution
             funclist = Fun[]
             weightlist = Int[]
@@ -100,19 +83,11 @@ function onebpiter!(FG::FactorGraph, algo::MS,
                     push!(weightlist, FG.hfv[f][vprime_idx])
                 end
             end
-            # Update with damping
-            # oldmessage = alpha > 0 ? alpha*FG.mfv[f][v_idx] : Fun(FG.q)
-            # FG.mfv[f][v_idx] .= oldmessage + (1-alpha)*reduce(gfmsc, funclist, init=neutral)
-
             # Try new way
             FG.mfv[f][v_idx] = gfmscw(funclist, FG.gfdiv, weightlist,
                 neutral)
             # Adjust final weight
             FG.mfv[f][v_idx] .= FG.mfv[f][v_idx][ FG.mult[FG.hfv[f][v_idx],:] ]
-
-            # if sum(isinf.(FG.mfv[f][v_idx])) > 0
-            #     FG.mfv[f][v_idx][.!isinf.(FG.mfv[f][v_idx])] = 0.0
-            # else
             # Normalize message
             FG.mfv[f][v_idx] .-= maximum(FG.mfv[f][v_idx])
             FG.mfv[f][v_idx][isnan.(FG.mfv[f][v_idx])] .= 0.0
@@ -196,7 +171,7 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}, y::Vector{Int}, maxiter=Int(1e
             else
                 error("Field convergence must be one of :messages, :decvars, :parity")
             end
-            softdecimation!(FG, gamma*t, algo)
+            reinforce!(FG, gamma*t, algo)
             if verbose
                 steps_tot = 20
                 progress = div(t*steps_tot, maxiter)
@@ -223,7 +198,7 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}, y::Vector{Int}, maxiter=Int(1e
     return :unconverged, maxiter, Tmax
 end
 
-function softdecimation!(FG::FactorGraph, gamma::Real, algo::Union{BP,MS})
+function reinforce!(FG::FactorGraph, gamma::Real, algo::Union{BP,MS})
     for (v,gv) in enumerate(FG.fields)
         if gamma > 0
             if typeof(algo)==BP
@@ -254,7 +229,6 @@ end
 
 function refresh!(FG::FactorGraph, y::Vector{Int}, q::Int=2, algo::Union{BP,MS}=MS(),
     L::Real=1.0, sigma::Real=1e-4; randseed::Int=0)
-
     refresh!(FG)
     FG.fields .= extfields(q, y, algo, L, randseed=randseed)
     return nothing

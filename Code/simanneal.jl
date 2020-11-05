@@ -68,16 +68,16 @@ end
 # end
 # struct Metrop2 <: Metrop; end
 
-function onemcstep!(lm::LossyModel, algo::Metrop)
-    xnew, site = propose(algo, lm)
-    acc, dE = accept(algo, lm, xnew, site)
+function onemcstep!(lm::LossyModel, mc_algo::Metrop)
+    xnew, site = propose(mc_algo, lm)
+    acc, dE = accept(mc_algo, lm, xnew, site)
     if acc
         lm.x = xnew
     end
     return acc, dE
 end
 
-function mc!(lm::LossyModel, algo::Metrop; nsamples::Int=Int(1e4),
+function mc!(lm::LossyModel, mc_algo::Metrop; nsamples::Int=Int(1e4),
                 sample_every::Int=Int(1e2),
                 x0::Vector{Int}=lm.x)
     energies = zeros(nsamples)
@@ -87,40 +87,41 @@ function mc!(lm::LossyModel, algo::Metrop; nsamples::Int=Int(1e4),
     en = energy(lm)
     for n in 1:nsamples
         for it in 1:sample_every
-            acc, dE = onemcstep!(lm , algo)
+            acc, dE = onemcstep!(lm , mc_algo)
             en = en + dE*acc
             acceptance_ratio[n] += acc
         end
         acceptance_ratio[n] = acceptance_ratio[n]/sample_every
         energies[n] = en
-        # if stop_crit(lm, acceptance_ratio, energies)
-        #      verbose && println("Stopping criterion reached after $n iters. E=$en")
-        #     return :stopped, n, energies, acceptance_ratio
-        # end
     end
     return energies, acceptance_ratio
 end
 
-function anneal!(lm::LossyModel, algo::Metrop,
-                betas::Tuple{Vector{<:Real},Vector{<:Real}};
+struct SA; end      # Simulated Annealing
+
+function anneal!(lm::LossyModel, mc_algo::Metrop,
+                betas:: Array{<:Real,2};
                 nsamples::Int=Int(1e4),
-                sample_every::Int=Int(1e2), stop_crit = (lm, ar, e)->false,
+                sample_every::Int=Int(1e2), stop_crit = (args...)->false,
                 x0::Vector{Int}=rand(0:lm.fg.q-1,lm.fg.n), verbose::Bool=true)
     # Initialize to the requested initial state
     lm.x = x0
-    nbetas = length.(betas)[1]
+    nbetas = size(betas,1)
     for b in 1:nbetas
         # Update temperature
-        lm.beta1 = betas[1][b]
-        lm.beta2 = betas[2][b]
+        lm.beta1 = betas[b,1]
+        lm.beta2 = betas[b,2]
         # Run MC
         energies, acceptance_ratio =
-            mc!(lm, algo, nsamples=nsamples, sample_every=sample_every, x0=lm.x)
+            mc!(lm, mc_algo, nsamples=nsamples, sample_every=sample_every, x0=lm.x)
         if stop_crit(lm, energies, acceptance_ratio)
-            return (:stopped, b, energy(lm))
+            return (:stopped, betas[b,:], energy(lm))
         end
+    if verbose
+        println("Finished temperature $b of $nbetas: (β₁=$(betas[b,1]),β₂=$(betas[b,2])). Energy = $(energy(lm))")
     end
-    return (:finished, nbetas, energy(lm))
+    end
+    return (:finished, betas[nbetas], energy(lm))
 end
 
 

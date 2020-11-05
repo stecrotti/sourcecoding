@@ -130,17 +130,16 @@ function gftables(q::Int, arbitrary_mult::Bool=false)
     return mult, gfinv, div
 end
 
-
 # Creates fields for the priors: the closest to y, the stronger the field
 # The prior distr is given by exp(field)
 # A small noise with amplitude sigma is added to break the symmetry
-function extfields(q::Int, y::Vector{Int}, algo::Union{BP,MS}, L::Real=1.0,
+function extfields(q::Int, y::Vector{Int}, algo::Union{BP,MS}, beta2::Real=1.0,
     sigma::Real=1e-4; randseed::Int=0)
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
     fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in eachindex(y)]
     for v in eachindex(fields)
         for a in 0:q-1
-            fields[v][a] = -L*hd(a,y[v]) + sigma*randn()
+            fields[v][a] = -beta2*hd(a,y[v]) + sigma*randn()
             typeof(algo)==BP && (fields[v][a] = exp.(fields[v][a]))
         end
     end

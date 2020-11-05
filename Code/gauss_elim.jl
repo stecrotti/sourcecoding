@@ -22,16 +22,13 @@ function gfref!(H::Array{Int,2},
             # Apply row-wise xor to rows below the pivot
             for r = p+1:m
                 if H[r,c] != 0
+                    # Adjust to make pivot 1
                     f = gfdiv[H[p,c], H[r,c]]
                     H[r,:] .= xor.(gfmult[f, H[r,:]], H[p,:])
                 end
             end
-            if p == m
-                break
-            end
+            p == m && break
         end
-        # println("c = $c")
-        # display(H)
     end
 end
 
@@ -60,9 +57,11 @@ function gfcef(H::Array{Int,2},
     return tmp
 end
 
-function gfrank(H::Array{Int,2}, q::Int=2)
+function gfrank(H::Array{Int,2}, q::Int=2,
+                gfmult::OffsetArray{Int,2}=gftables(q)[1],
+                gfdiv::OffsetArray{Int,2}=gftables(q)[3])
     # Reduce to row echelon form
-    Href = gfref(H, q)
+    Href = gfref(H, q, gfmult, gfdiv)
     # Count number of all-zero rows
     nonzero = [!all(Href[r,:] .== 0) for r in 1:size(H,1)]
     # nonzero = reduce(, Href, dims=2)
@@ -70,9 +69,11 @@ function gfrank(H::Array{Int,2}, q::Int=2)
     return sum(nonzero)
 end
 
-function gfnullspace(H::Array{Int,2}, q::Int=2)
+function gfnullspace(H::Array{Int,2}, q::Int=2,
+                gfmult::OffsetArray{Int,2}=gftables(q)[1],
+                gfdiv::OffsetArray{Int,2}=gftables(q)[3])
     nrows,ncols = size(H)
-    dimker = ncols - gfrank(H, q)
+    dimker = ncols - gfrank(H, q, gfmult, gfdiv)
     # As in https://en.wikipedia.org/wiki/Kernel_(linear_algebra)#Computation_by_Gaussian_elimination
     HI = [H; I]
     HIcef = gfcef(HI, q)

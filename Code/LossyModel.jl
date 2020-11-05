@@ -7,10 +7,10 @@ mutable struct LossyModel
 end
 
 # Constructor for lossy model with LDPC matrix
-function LossyModel(q::Int, n::Int, m::Int, beta1::Real=Inf, beta2::Real=1,
+function LossyModel(q::Int, n::Int, m::Int; beta1::Real=Inf, beta2::Real=1.0,
         nedges::Int=generate_polyn(n,m)[1], lambda::Vector{T}=generate_polyn(n,m)[2],
         rho::Vector{T}=generate_polyn(n,m)[3],
-        fields = [Fun(1e-3*randn(q)) for v in 1:n]; verbose=false,
+        fields = [Fun(1e-3*randn(q)) for v in 1:n], verbose=false,
         arbitrary_mult = false,
         randseed::Int=0) where {T<:AbstractFloat}
 
@@ -49,8 +49,18 @@ function paritycheck(lm::LossyModel, x::Vector{Int}=lm.x, varargin...)
     return paritycheck(lm.fg, x, varargin...)
 end
 
-function bp!(lm::LossyModel, algo::Union{BP,MS}, varargin...)
-    output = bp!(lm.fg, algo, lm.y, varargin...)
+function bp!(lm::LossyModel, algo::Union{BP,MS}, maxiter=Int(1e3),
+    convergence=:messages, nmin=300, tol=1e-7, gamma=0, alpha=0 , Tmax=1,
+    randseed=0, maxdiff=zeros(maxiter), codeword=falses(maxiter),
+    maxchange=zeros(maxiter); verbose=false)
+
+    output = bp!(lm.fg, algo, lm.y, maxiter, convergence, nmin, tol, gamma,
+    alpha, Tmax, lm.beta2, randseed, maxdiff, codeword, maxchange, verbose=verbose)
     lm.x = guesses(lm.fg)
     return output
+end
+
+function extfields!(lm::LossyModel, algo::Union{BP,MS}, sigma::Real=1e-4; randseed::Int=0)
+    lm.fg.fields .= extfields(lm.fg.q,lm.y,algo,lm.beta2,
+        sigma, randseed=randseed)
 end

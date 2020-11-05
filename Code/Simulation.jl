@@ -23,7 +23,7 @@ function Simulation(
     q::Int,
     n::Int,                             # Number of nodes, fixed
     m::Int;                             # m=n-k, the number of rows in the system
-    L::Real = 1,                        # Factor in the fields expression
+    beta2::Real = 1,                    # Factor in the fields expression
     arbitrary_mult::Bool = false,       # Shuffles multiplication table
     navg = 10,                          # Number of runs for each value of m
     maxiter = Int(1e3),                 # Max number of iteration for each run of BP
@@ -44,62 +44,74 @@ function Simulation(
     runtimes = zeros(navg)
     distortions = 0.5*ones(navg)
     iterations = zeros(Int,navg)
-    Y = [zeros(Int,n) for _ in 1:navg]
-    H = [Array{Int,2}(undef,m,n) for _ in 1:navg]
+    # Y = [zeros(Int,n) for _ in 1:navg]
+    # H = [Array{Int,2}(undef,m,n) for _ in 1:navg]
     maxdiff = [zeros(maxiter) for i in 1:navg]
     codeword = [falses(maxiter) for i in 1:navg]
     maxchange = [fill(-Inf, maxiter) for i in 1:navg]
     trials = zeros(Int, navg)
 
-    fg = ldpc_graph(q, n, m+b, verbose=verbose, randseed=randseed,
-        arbitrary_mult = arbitrary_mult)
-    breduction!(fg, b, randseed=randseed)
-    y = rand(MersenneTwister(randseed), 0:q-1, n)
+    # fg = ldpc_graph(q, n, m+b, verbose=verbose, randseed=randseed,
+    #     arbitrary_mult = arbitrary_mult)
+    # breduction!(fg, b, randseed=randseed)
+    # y = rand(MersenneTwister(randseed), 0:q-1, n)
+    lm = LossyModel(q, n, m+b, beta2=beta2, verbose=verbose, randseed=randseed,
+        arbitrary_mult=arbitrary_mult)
+    breduction!(lm.fg, b, randseed=randseed)
 
     t = @timed begin
         verbose && println()
         for it in 1:navg
             if !samevector
-                y .= rand(MersenneTwister(randseed+it), 0:q-1, n)
+                lm.y .= rand(MersenneTwister(randseed+it), 0:q-1, n)
             end
             if !samegraph
-                fg = ldpc_graph(q, n, m+b, verbose=verbose,
+                lm.fg = ldpc_graph(q, n, m+b, verbose=verbose,
                     randseed=randseed+it, arbitrary_mult=arbitrary_mult)
-                breduction!(fg, b, randseed=randseed+it)
+                breduction!(lm.fg, b, randseed=randseed+it)
             end
-            fg.fields .= extfields(q,y,algo,L, randseed=randseed+it*Tmax)
-            (res,iterations[it],trials[it]), runtimes[it] = @timed bp!(fg, algo, y,
-                maxiter, convergence, nmin, tol, gamma, alpha, Tmax, L,
-                randseed+it*Tmax, maxdiff[it], codeword[it], maxchange[it],
-                verbose=false)
 
-            if res == :converged
-                converged[it] = true
-            end
-            parity[it] = sum(paritycheck(fg))
-            if parity[it] == 0
-                distortions[it] = hd(guesses(fg),y)/(n*log2(q))
-            end
-            res_string = res==:converged ? "C" : "U"
+            if typeof(algo) <: Union{BP,MS}
+                # lm.fg.fields .= extfields(q,lm.y,algo,beta2, randseed=randseed+it*Tmax)
+                extfields!(lm, algo, randseed=randseed+it*Tmax)
+                (res,iterations[it],trials[it]), runtimes[it] = @timed bp!(lm, algo,
+                    maxiter, convergence, nmin, tol, gamma, alpha, Tmax,
+                    randseed+it*Tmax, maxdiff[it], codeword[it], maxchange[it],
+                    verbose=false)
 
-            if convergence==:messages
-                verbose && println("Run ", @sprintf("%3d", it),
-                    " of ",navg,": ",
-                    res_string, " after ", @sprintf("%4d", iterations[it]),
-                    " iters. ", "Parity ", @sprintf("%3d", parity[it]),
-                    ". Max change ", @sprintf("%.2e",maxchange[it][iterations[it]]),
-                    ". Trials ", trials[it]#=,
-                    ". Seed ", randseed=#)
-            else
-                verbose && println("Run ", @sprintf("%3d", it),
-                    " of ",navg,": ",
-                    res_string, " after ", @sprintf("%4d", iterations[it]),
-                    " iters. ", "Parity ", @sprintf("%3d", parity[it]),
-                    ". Trials ", trials[it]#=,
-                    ". Seed ", randseed=#)
-            end
-            samegraph && refresh!(fg)   # Reset messages
+                if res == :converged
+                    converged[it] = true
+                end
+                parity[it] = sum(paritycheck(lm))
+                if parity[it] == 0
+                    distortions[it] = distortion(lm)
+                end
+                res_string = res==:converged ? "C" : "U"
 
+                if convergence==:messages
+                    verbose && println("Run ", @sprintf("%3d", it),
+                        " of ",navg,": ",
+                        res_string, " after ", @sprintf("%4d", iterations[it]),
+                        " iters. ", "Parity ", @sprintf("%3d", parity[it]),
+                        ". Max change ", @sprintf("%.2e",maxchange[it][iterations[it]]),
+                        ". Trials ", trials[it]#=,
+                        ". Seed ", randseed=#)
+                else
+                    verbose && println("Run ", @sprintf("%3d", it),
+                        " of ",navg,": ",
+                        res_string, " after ", @sprintf("%4d", iterations[it]),
+                        " iters. ", "Parity ", @sprintf("%3d", parity[it]),
+                        ". Trials ", trials[it]#=,
+                        ". Seed ", randseed=#)
+                end
+            elseif typeof(algo) == SA
+                (res, beta, ener), runtimes[it] = @timed anneal!(lm, mc_algo,
+                    betas, nsamples=nsamples, sample_every=sample_every,
+                    stop_crit = stop_crit,  x0=x0, verbose=verbose)
+
+            end
+            # Reset messages if you're gonna reuse the same graph
+            samegraph && refresh!(lm.fg)
         end
     end
     totaltime = t[2]
@@ -335,7 +347,7 @@ function print(io::IO, sim::Simulation; options=:short)
     println(io)
 
     if options==:full
-        println("L = ", sim.L)
+        println("beta2 = ", sim.beta2)
         # println("Number of edges = ", sim.nedges)
         # println("Lambda = ", sim.lambda)
         # println("Rho = ", sim.rho)

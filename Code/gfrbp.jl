@@ -119,7 +119,7 @@ function guesses(FG::FactorGraph)
 end
 
 function bp!(FG::FactorGraph, algo::Union{BP,MS}, y::Vector{Int}, maxiter=Int(1e3),
-    convergence=:messages, nmin=300, tol=1e-7, gamma=0, alpha=0 , Tmax=1, L=1,
+    convergence=:messages, nmin=300, tol=1e-7, gamma=0, alpha=0 , Tmax=1, beta2=1,
     randseed=0, maxdiff=zeros(maxiter), codeword=falses(maxiter),
     maxchange=zeros(maxiter); verbose=false)
 
@@ -183,8 +183,9 @@ function bp!(FG::FactorGraph, algo::Union{BP,MS}, y::Vector{Int}, maxiter=Int(1e
             end
         end
         if trial != Tmax
+            # If convergence not reached, re-initialize random fields and start again
             refresh!(FG)
-            FG.fields .= extfields(FG.q,y,algo,L,randseed=randseed+trial)
+            FG.fields .= extfields(FG.q,y,algo,beta2,randseed=randseed+trial)
             oldguesses .= guesses(FG)
             oldmessages .= deepcopy(FG.mfv)
             maxchange .= fill(-Inf, maxiter)
@@ -228,8 +229,8 @@ function refresh!(FG::FactorGraph)
 end
 
 function refresh!(FG::FactorGraph, y::Vector{Int}, q::Int=2, algo::Union{BP,MS}=MS(),
-    L::Real=1.0, sigma::Real=1e-4; randseed::Int=0)
+    beta2::Real=1.0, sigma::Real=1e-4; randseed::Int=0)
     refresh!(FG)
-    FG.fields .= extfields(q, y, algo, L, randseed=randseed)
+    FG.fields .= extfields(q, y, algo, beta2, randseed=randseed)
     return nothing
 end

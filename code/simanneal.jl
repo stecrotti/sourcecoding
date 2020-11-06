@@ -1,14 +1,85 @@
-abstract type Metrop end
+#### Perform simulated annealing on a LossyModel object. Flexible for new MC moves to be added ####
+
+abstract type MCmove end
+struct Metrop1 <: MCmove; end
+
+#### SIMULATED ANNEALING
+@with_kw struct SA <: LossyAlgo
+    mc_move::MCmove = Metrop1()                                             # Single MC move
+    betas:: Array{Float64,2} = [0.1 .^ (3:-1:-1) ones(Float64, 5)]          # Cooling schedule
+    nsamples::Int = Int(1e2)                                                # Number of samples
+    sample_every::Int = Int(1e3)                                            # Frequency of sampling
+    stop_crit::Function = (crit(varargs...) = false)                        # Stopping criterion callback
+    init_state::Function = (init(lm::LossyModel)=rand(0:lm.fg.q-1,lm.fg.n)) # Function to initialize internal state
+end
+
+function iterate!(lm::LossyModel, algo::SA,
+        distortions::Vector{Vector{Float64}}=[zeros(algo.nsamples) for _ in 1:size(algo.betas,1)];
+        verbose::Bool=true)
+    # Initialize to the requested initial state
+    lm.x = algo.init_state(lm)
+    nbetas = size(algo.betas,1)
+    min_dist = Inf
+    argmin_beta = nbetas+1
+    for b in 1:nbetas
+        # Update temperature
+        lm.beta1 = algo.betas[b,1]
+        lm.beta2 = algo.betas[b,2]
+        # Run MC
+        distortions[b], acceptance_ratio = mc!(lm, algo)
+        (m,i) = findmin(distortions[b])
+        if m < min_dist
+            min_dist = m
+            argmin_beta = b
+        end
+        if algo.stop_crit(lm, distortions[b], acceptance_ratio)
+            return (:stopped, algo.betas[b,:], min_dist, argmin_beta)
+        end
+        if verbose
+            println("Finished temperature $b of $nbetas:
+            (β₁=$(algo.betas[b,1]),β₂=$(algo.betas[b,2])).
+            Energy = $(energy(lm)). Distortion = $(distortion(lm))")
+        end
+    end
+    return (:finished, algo.betas[nbetas], min_dist, argmin_beta)
+end
+
+
+#### Monte Carlo subroutines
+
+function mc!(lm::LossyModel, algo::SA)
+    distortions = zeros(algo.nsamples)
+    acceptance_ratio = zeros(algo.nsamples)
+    # Initial energy
+    en = energy(lm)
+    for n in 1:algo.nsamples
+        for it in 1:algo.sample_every
+            acc, dE = onemcstep!(lm , algo.mc_move)
+            en = en + dE*acc
+            acceptance_ratio[n] += acc
+        end
+        acceptance_ratio[n] = acceptance_ratio[n]/algo.sample_every
+        distortions[n] = distortion(lm)
+    end
+    return distortions, acceptance_ratio
+end
+
+function onemcstep!(lm::LossyModel, mc_move::MCmove)
+    xnew, site = propose(mc_move, lm)
+    acc, dE = accept(mc_move, lm, xnew, site)
+    if acc
+        lm.x = xnew
+    end
+    return acc, dE
+end
 
 # In general, accept by computing the full energy
 # For particular choices of proposed new state, this method is overridden for
 #  something faster that exploits the fact that only a few terms in the energy change
-function accept(algo::Metrop, lm::LossyModel, xnew::Vector{Int})::Bool
+function accept(mc_move::MCmove, lm::LossyModel, xnew::Vector{Int})::Bool
     dE = energy(lm, xnew) - energy(lm, lm.x)
     return metrop_accept(dE), dE
 end
-
-struct Metrop1 <: Metrop; end
 
 # Changes value to 1 spin taken uniform random to a uniform random value in {0,...,q-1}
 function propose(algo::Metrop1, lm::LossyModel)
@@ -24,23 +95,24 @@ function propose(algo::Metrop1, lm::LossyModel)
     return xnew, site
 end
 
+# Accept according to the Metropolis rule for 1 spin flip
 function accept(algo::Metrop1, lm::LossyModel, xnew::Vector{Int}, site::Int)
     # Evaluate energy delta E(xnew)-E(x)
     dE_checks = sum(hw(paritycheck(lm.fg, xnew, f)) -
         hw(paritycheck(lm.fg, lm.x, f)) for f in lm.fg.Vneigs[site])
-    dE_overlap = (hd(xnew, lm.y) - hd(lm.x, lm.y))
 
-    # Safe for beta1=inf and dE_checks=0
-    if dE_checks == 0
-        dE = lm.beta2*dE_overlap
-    else
-        dE = lm.beta1*dE_checks + lm.beta2*dE_overlap
-    end
+    dE_checks = energy_checks(lm, xnew, f=lm.fg.Vneigs[site]) -
+        energy_checks(lm, lm.x, f=lm.fg.Vneigs[site])
+
+    dE_overlap = (hd(xnew, lm.y) - hd(lm.x, lm.y))
+    dE_overlap = energy_overlap(lm, xnew) - energy_overlap(lm)
+    dE = dE_checks + dE_overlap
     # Accept or not, return also delta energy
     acc = metrop_accept(dE)
     return acc, dE
 end
 
+# struct Metrop2 <: MCmove; end
 # # Changes value to 2 NEIGHBOR spins taken uniform random to a uniform random value in {0,...,q-1}
 # function propose(algo::Metrop2, lm::LossyModel)
 #     q = lm.fg.q
@@ -66,64 +138,6 @@ end
 #     # Accept or not
 #     return metrop_accept(dE)
 # end
-# struct Metrop2 <: Metrop; end
-
-function onemcstep!(lm::LossyModel, mc_algo::Metrop)
-    xnew, site = propose(mc_algo, lm)
-    acc, dE = accept(mc_algo, lm, xnew, site)
-    if acc
-        lm.x = xnew
-    end
-    return acc, dE
-end
-
-function mc!(lm::LossyModel, mc_algo::Metrop; nsamples::Int=Int(1e4),
-                sample_every::Int=Int(1e2),
-                x0::Vector{Int}=lm.x)
-    energies = zeros(nsamples)
-    acceptance_ratio = zeros(nsamples)
-    lm.x = x0
-    # Initial energy
-    en = energy(lm)
-    for n in 1:nsamples
-        for it in 1:sample_every
-            acc, dE = onemcstep!(lm , mc_algo)
-            en = en + dE*acc
-            acceptance_ratio[n] += acc
-        end
-        acceptance_ratio[n] = acceptance_ratio[n]/sample_every
-        energies[n] = en
-    end
-    return energies, acceptance_ratio
-end
-
-struct SA; end      # Simulated Annealing
-
-function anneal!(lm::LossyModel, mc_algo::Metrop,
-                betas:: Array{<:Real,2};
-                nsamples::Int=Int(1e4),
-                sample_every::Int=Int(1e2), stop_crit = (args...)->false,
-                x0::Vector{Int}=rand(0:lm.fg.q-1,lm.fg.n), verbose::Bool=true)
-    # Initialize to the requested initial state
-    lm.x = x0
-    nbetas = size(betas,1)
-    for b in 1:nbetas
-        # Update temperature
-        lm.beta1 = betas[b,1]
-        lm.beta2 = betas[b,2]
-        # Run MC
-        energies, acceptance_ratio =
-            mc!(lm, mc_algo, nsamples=nsamples, sample_every=sample_every, x0=lm.x)
-        if stop_crit(lm, energies, acceptance_ratio)
-            return (:stopped, betas[b,:], energy(lm))
-        end
-    if verbose
-        println("Finished temperature $b of $nbetas: (β₁=$(betas[b,1]),β₂=$(betas[b,2])). Energy = $(energy(lm))")
-    end
-    end
-    return (:finished, betas[nbetas], energy(lm))
-end
-
 
 function metrop_accept(dE::Real)::Bool
     if dE < 0

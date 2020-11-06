@@ -1,4 +1,5 @@
-# Borrowed from AOIL, with some changes
+#### Convolutions on 𝐑 and 𝔾𝔽(2ᵏ) ####
+
 Fun = OffsetArray
 OffsetArray(n::Integer, v = 0.0) = Fun(fill(v, n), 0:n-1)
 OffsetArray(X::AbstractVector) = Fun(Vector(X), 0:length(X)-1)
@@ -11,8 +12,6 @@ import Base.*
 *(f1::Fun, f2::Fun) = Fun(f1.parent .* f2.parent)
 import Base.exp
 exp(f::Fun) = exp.(f)
-# import Base.abs
-# abs(f::Fun) = abs.(f)
 
 # Normal convolution
 function convolution(f1::Fun, f2::Fun)
@@ -51,7 +50,7 @@ function gfmsc(f1::Fun, f2::Fun)
     return f3
 end
 
-# No allocation versions
+# No allocation versions. Don't work well with 'reduce'
 function gfconv!(f3::Fun, f1::Fun, f2::Fun)
     q = length(f1)
     for x3 in 0:q-1
@@ -75,17 +74,7 @@ function gfmsc!(f3::Fun, f1::Fun, f2::Fun)
     return f3
 end
 
-# function gfconvw(f1::Fun, f2::Fun, mult, div,
-#     w1::Int=1, w2::Int=1)
-#     (w1==0 || w2==0) && error("Weights w1,w2 must be positive")
-#
-#     f1 .= f1[ div[:,w1] ]
-#     f2 .= f2[ div[:,w2] ]
-#
-#     f3 = gfconv(f1,f2)
-#     return f3
-# end
-
+# Convolutions with weights
 function gfconvw(F, gfdiv, w::Vector{Int}=ones(Int, length(F)),
         neutral=Fun(x == 0 ? 1.0 : 0.0 for x=0:length(F[1])-1))
 

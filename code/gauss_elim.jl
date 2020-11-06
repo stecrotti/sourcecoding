@@ -1,3 +1,5 @@
+#### Ranks, kernels and gaussian elimination on 𝔾𝔽(2ᵏ) ####
+
 """Reduce matrix over GF(q) to row echelon form"""
 function gfref!(H::Array{Int,2},
                 q::Int=2,

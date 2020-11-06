@@ -1,3 +1,5 @@
+#### A factor graph type thought for GF(q) belief propagation ####
+
 struct FactorGraph
     q::Int                              # field order
     mult::OffsetArray{Int,2}            # multiplication matrix in GF(q)

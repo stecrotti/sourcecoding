@@ -1,3 +1,6 @@
+
+
+
 struct Simulation
     q::Int
     n::Int
@@ -22,14 +25,14 @@ function Simulation(
     algo::Union{BP,MS},
     q::Int,
     n::Int,                             # Number of nodes, fixed
-    m::Int;                             # m=n-k, the number of rows in the system
-    beta2::Real = 1,                    # Factor in the fields expression
-    arbitrary_mult::Bool = false,       # Shuffles multiplication table
+    m::Int;                             # m=n-k, number of checks
+    beta2::Real = 1,                    # Inverse temperature for the overlap term
+    arbitrary_mult::Bool = false,       # Shuffle multiplication table
     navg = 10,                          # Number of runs for each value of m
     maxiter = Int(1e3),                 # Max number of iteration for each run of BP
     convergence = :decvars,             # Convergence criterion: can be either :decvars or :messages
     nmin = 100,                         # If :decvars is chosen
-    tol = 1e-12,                         # If :messages is chosen
+    tol = 1e-12,                        # If :messages is chosen
     b = 0,                              # Number of factors to be removed
     gamma = 0,                          # Reinforcement parameter
     alpha = 0,                          # Damping parameter
@@ -155,6 +158,7 @@ function plotdist(R::Vector{<:Real}=Float64[], D::Vector{<:Real}=Float64[];
     end
 end
 
+# If plotparity is true, plot also the distortion computed only on instances that fulfilled parity
 function plot(sims::Vector{Simulation}; backend=:unicode, plotparity=true,
         errorbars=false, title="Mean distortion")
     R = [sim.R for sim in sims]

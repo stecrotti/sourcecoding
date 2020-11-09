@@ -134,7 +134,8 @@ end
 
 # Hamming distance, works when q is a power of 2
 function hd(x::Int,y::Int)::Int
-    count(isequal('1'), bitstring(xor.(x,y)))
+    z = xor(x,y)
+    return sum(int2bits(z))
 end
 
 function hd(x::Vector{Int}, y::Vector{Int})::Int
@@ -219,11 +220,9 @@ function bits2int(x::Vector{Int})
     return sum(y*2^(i-1) for (i,y) in enumerate(reverse(x)))
 end
 
-function int2bits(x::Int, len::Int)
-    x > 2^len-1 && error("x is too large to fit in a bit vector of length len")
-    b = bitstring(x)
-    y = split(b,"")
-    return parse.(Int,y[end-len+1:end])
+function int2bits(x::Int, pad::Int=floor(Int,log2(x+1)))
+    x > 2^pad && error("Input x is too large to fit in a bit vector of length $pad")
+    return reverse(digits(x, base=2, pad=pad))
 end
 
 function gfqto2(y::Vector{Int}, k::Int)

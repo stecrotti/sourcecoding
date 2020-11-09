@@ -13,7 +13,9 @@ struct Metrop1 <: MCmove; end
     init_state::Function = (init(lm::LossyModel)=rand(0:lm.fg.q-1,lm.fg.n)) # Function to initialize internal state
 end
 
-function iterate!(lm::LossyModel, algo::SA,
+SA(lm::LossyModel) = SA(nsamples=10*lm.fg.n)
+
+function solve!(lm::LossyModel, algo::SA,
         distortions::Vector{Vector{Float64}}=[zeros(algo.nsamples) for _ in 1:size(algo.betas,1)];
         verbose::Bool=true)
     # Initialize to the requested initial state
@@ -32,23 +34,24 @@ function iterate!(lm::LossyModel, algo::SA,
             min_dist = m
             argmin_beta = b
         end
+        # Check stopping criterion
         if algo.stop_crit(lm, distortions[b], acceptance_ratio)
-            return (:stopped, algo.betas[b,:], min_dist, argmin_beta)
+            return (:stopped, min_dist, algo.betas[b,:], argmin_beta)
         end
         if verbose
-            println("Finished temperature $b of $nbetas:
-            (β₁=$(algo.betas[b,1]),β₂=$(algo.betas[b,2])).
-            Energy = $(energy(lm)). Distortion = $(distortion(lm))")
+            println("Temperature $b of $nbetas:",
+            "(β₁=$(algo.betas[b,1]),β₂=$(algo.betas[b,2])).",
+            "Energy = $(energy(lm)). Distortion = $(min_dist)")
         end
     end
-    return (:finished, algo.betas[nbetas], min_dist, argmin_beta)
+    return (:finished, min_dist, algo.betas[nbetas], argmin_beta)
 end
 
 
 #### Monte Carlo subroutines
 
 function mc!(lm::LossyModel, algo::SA)
-    distortions = zeros(algo.nsamples)
+    distortions = fill(+Inf, algo.nsamples)
     acceptance_ratio = zeros(algo.nsamples)
     # Initial energy
     en = energy(lm)
@@ -59,7 +62,10 @@ function mc!(lm::LossyModel, algo::SA)
             acceptance_ratio[n] += acc
         end
         acceptance_ratio[n] = acceptance_ratio[n]/algo.sample_every
-        distortions[n] = distortion(lm)
+        # Store distortion only if parity is fulfilled
+        if sum(paritycheck(lm)) == 0
+            distortions[n] = distortion(lm)
+        end
     end
     return distortions, acceptance_ratio
 end

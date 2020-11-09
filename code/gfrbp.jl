@@ -143,8 +143,8 @@ end
 guesses(fg::FactorGraph) = guesses(fg.fields)
 
 function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
-    randseed=0, maxdiff=zeros(algo.maxiter), codeword=falses(algo.maxiter),
-    maxchange=zeros(algo.maxiter); verbose=false)
+    maxdiff=zeros(algo.maxiter), codeword=falses(algo.maxiter),
+    maxchange=zeros(algo.maxiter); randseed::Int=0, verbose::Bool=false)
 
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
     newguesses = zeros(Int,fg.n)
@@ -167,7 +167,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                     end
                 end
                 if maxchange[t] < algo.tol
-                    return :converged, t, trial
+                    return :converged, distortion(fg, y), t, trial
                 end
                 oldmessages .= deepcopy(newmessages)
                 performance_name = "max change"
@@ -176,7 +176,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                 if newguesses == oldguesses
                     n += 1
                     if n >= algo.nmin
-                        return :converged, t, trial
+                        return :converged, distortion(fg, y), t, trial
                     end
                 else
                     n=0
@@ -187,7 +187,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             elseif algo.convergence == :parity
                 parity = sum(paritycheck(fg))
                 if parity == 0
-                    return :converged, t, trial
+                    return :converged, distortion(fg, y), t, trial
                 end
                 performance_name = "parity"
                 performance_value = parity
@@ -219,7 +219,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     #     print("\u1b[2K")    # clear line
     #     print("\u1b[1F")    # move cursor to beginning of line
     # end
-    return :unconverged, maxiter, algo.Tmax
+    return :unconverged, distortion(fg, y), maxiter, algo.Tmax
 end
 
 function reinforce!(fg::FactorGraph, algo::Union{BP,MS})
@@ -270,4 +270,19 @@ function refresh!(fg::FactorGraph, y::Vector{Int}, q::Int=2,
     refresh!(fg)
     fg.fields .= extfields(q, y, algo, randseed=randseed)
     return nothing
+end
+
+function solve!(lm::LossyModel, algo::Union{BP,MS}, args...; kwargs...)
+    output = bp!(lm.fg, algo, lm.y, args...; kwargs...)
+    lm.x = guesses(lm.fg)
+    return output
+end
+
+function extfields!(lm::LossyModel, algo::Union{BP,MS}, sigma::Real=1e-4; randseed::Int=0)
+    lm.fg.fields .= extfields(lm.fg.q,lm.y,algo,lm.beta2,
+        sigma, randseed=randseed)
+end
+
+function distortion(fg::FactorGraph, y::Vector{Int}, x::Vector{Int}=guesses(fg))
+    return hd(x,y)/(fg.n*log2(fg.q))
 end

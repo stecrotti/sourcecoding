@@ -31,7 +31,10 @@ function Base.show(io::IO, lm::LossyModel)
 end
 
 rate(lm::LossyModel) = 1 - lm.fg.m/lm.fg.n
-distortion(lm::LossyModel) = hd(lm.x,lm.y)/(lm.fg.n*log2(lm.fg.q))
+function distortion(lm::LossyModel, x::Vector{Int}=lm.x)
+    # return hd(x,lm.y)/(lm.fg.n*log2(lm.fg.q))
+    return distortion(lm.fg, lm.y, x)
+end
 adjmat(lm::LossyModel) = adjmat(lm.fg)
 basis(lm::LossyModel) = gfnullspace(adjmat(lm), lm.fg.q)
 gfrank(lm::LossyModel) = gfrank(adjmat(lm), lm.fg.q)
@@ -66,22 +69,4 @@ function energy_overlap(lm::LossyModel, x::Union{Vector{Int},Array{Int,2}}=lm.x)
     return lm.beta2*hd(x, lm.y)
 end
 
-function bp!(lm::LossyModel, algo::Union{BP,MS}, maxiter=Int(1e3),
-    convergence=:messages, nmin=300, tol=1e-7, gamma=0, alpha=0 , Tmax=1,
-    randseed=0, maxdiff=zeros(maxiter), codeword=falses(maxiter),
-    maxchange=zeros(maxiter); verbose=false)
 
-    output = bp!(lm.fg, algo, lm.y, maxiter, convergence, nmin, tol, gamma,
-    alpha, Tmax, lm.beta2, randseed, maxdiff, codeword, maxchange, verbose=verbose)
-    lm.x = guesses(lm.fg)
-    return output
-end
-
-function extfields!(lm::LossyModel, algo::Union{BP,MS}, sigma::Real=1e-4; randseed::Int=0)
-    lm.fg.fields .= extfields(lm.fg.q,lm.y,algo,lm.beta2,
-        sigma, randseed=randseed)
-end
-
-function enumerate_solutions(lm::LossyModel)
-    return enumerate_solutions(adjmat(lm.fg))
-end

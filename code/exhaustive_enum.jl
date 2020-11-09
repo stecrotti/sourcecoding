@@ -37,22 +37,6 @@ function allgfqstrings(q::Int, k::Int)::Array{Int,2}
     return hcat([digits(j, base=q, pad=k) for j = 0:q^k-1]...)
 end
 
-
-"""
-    pairwise_distances(V::Vector{Vector{Int}}; cutoff::Int=0)
-
-Computes the matrix D of pairwise distances between 𝔾𝔽(2ᵏ) vectors
-contained in `V`. 
-Optionally set to zero all distances greater than `cutoff`
-"""
-function pairwise_distances(V::Vector{Vector{Int}}; cutoff::Int=0)
-    D = [hd(V[i],V[j])*(hd(V[i],V[j])>cutoff) for i=eachindex(V), j=eachindex(V)]
-end
-
-function pairwise_distances(lm::LossyModel; kwargs...)
-    pairwise_distances(enum_solutions(lm); kwargs...)
-end
-
 """
     Enum <: LossyAlgo
 
@@ -66,4 +50,54 @@ function solve!(lm::LossyModel, algo::Enum)
     (minval, minidx) = findmin(distortions)
     lm.x = solutions[minidx]
     return (:foundExactSol, distortion(lm))
+end
+
+
+"""
+    pairwise_distances(V::Vector{Vector{Int}}; cutoff)
+
+Computes the matrix D of pairwise distances between 𝔾𝔽(2ᵏ) vectors
+contained in `V`. 
+Optionally set to zero all distances greater or equal than `cutoff`
+"""
+function pairwise_distances(V::Vector{Vector{Int}}; cutoff::Real=Inf)
+    D = [hd(V[i],V[j])*(hd(V[i],V[j])<cutoff) for i=eachindex(V), j=eachindex(V)]
+end
+
+function pairwise_distances(lm::LossyModel; kwargs...)
+    return pairwise_distances(enum_solutions(lm); kwargs...)
+end
+
+
+import LightGraphs.connected_components
+"""
+    connected_components(lm::LossyModel; cutoff)
+
+Returns the connected components of the graph where nodes are solutions and 
+there are edges between nodes weigthed by their (Hamming) distance if is less 
+than `cutoff`.
+"""
+function connected_components(lm::LossyModel; kwargs...)
+    distances_graph = solutions_graph(lm; kwargs...)
+    return LightGraphs.connected_components(distances_graph)
+end
+
+
+import SimpleWeightedGraphs.SimpleWeightedGraph
+"""
+    solutions_graph(lm::LossyModel; cutoff)
+
+Returns a SimpleWeightedGraph object containing the graph where nodes are 
+solutions and there are edges between nodes weigthed by their (Hamming) distance
+if is less than `cutoff`.
+"""
+function solutions_graph(lm::LossyModel; kwargs...)
+    d = pairwise_distances(lm; kwargs...)
+    return SimpleWeightedGraphs.SimpleWeightedGraph(d)
+end
+
+function wef(lm::LossyModel)
+    dist = pairwise_distances(lm)
+    dist_from_zero = dist[:,1]
+    return StatsBase.counts(dist_from_zero)
 end

@@ -36,8 +36,8 @@ function distortion(lm::LossyModel, x::Vector{Int}=lm.x)
     return distortion(lm.fg, lm.y, x)
 end
 adjmat(lm::LossyModel) = adjmat(lm.fg)
-basis(lm::LossyModel) = gfnullspace(adjmat(lm), lm.fg.q)
-gfrank(lm::LossyModel) = gfrank(adjmat(lm), lm.fg.q)
+nullspace(lm::LossyModel) = gfnullspace(adjmat(lm), lm.fg.q)
+rank(lm::LossyModel) = gfrank(adjmat(lm), lm.fg.q)
 
 # Support for general input x (can also be a matrix)
 function paritycheck(lm::LossyModel, x::Array{Int,2}, varargin...)

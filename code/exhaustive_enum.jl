@@ -34,6 +34,10 @@ Returns all the possible qᵏ strings of length k with values in 𝔾𝔽(q) as
 columns of a matrix
 """
 function allgfqstrings(q::Int, k::Int)::Array{Int,2}
+    # Exponential alert!
+    if k > 10
+        warning("This operation requires $q^$k operations")
+    end
     return hcat([digits(j, base=q, pad=k) for j = 0:q^k-1]...)
 end
 

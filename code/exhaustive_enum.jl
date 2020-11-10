@@ -127,7 +127,7 @@ Computes the weight enumeration function: number of solutions at any distance
 from the zero vector
 """
 function wef(lm::LossyModel)
-    dist = pairwise_distances(lm)
+    dist = solutions_distances(lm)
     dist_from_zero = dist[:,1]
     max_dist = lm.fg.n
     return StatsBase.counts(dist_from_zero,max_dist )

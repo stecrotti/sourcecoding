@@ -1,4 +1,4 @@
-using LightGraphs, SimpleWeightedGraphs, StatsBase, Plots, GraphPlot
+using LightGraphs, SimpleWeightedGraphs, StatsBase, Plots, GraphRecipes
 
 """
     enum_solutions(H::Array{Int,2}, q::Int=2)
@@ -58,7 +58,7 @@ end
 
 
 """
-solutions_distances(V::Vector{Vector{Int}}; cutoff)
+solutions_distances(V::Vector{Vector{Int}}; cutoff::Real=Inf)
 
 Computes the matrix D of pairwise distances between 𝔾𝔽(2ᵏ) vectors
 contained in `V`.
@@ -75,7 +75,7 @@ end
 
 import LightGraphs.connected_components
 """
-    connected_components(lm::LossyModel; cutoff)
+    connected_components(lm::LossyModel; kwargs...)
 
 Returns the connected components of the graph where nodes are solutions and
 there are edges between nodes weigthed by their (Hamming) distance if is less
@@ -89,7 +89,7 @@ end
 
 import SimpleWeightedGraphs.SimpleWeightedGraph
 """
-    solutions_graph(lm::LossyModel; cutoff)
+    solutions_graph(lm::LossyModel; kwargs...)
 
 Returns a `SimpleWeightedGraph` object containing the graph where nodes are
 solutions and there are edges between nodes weigthed by their (Hamming) distance
@@ -101,19 +101,25 @@ function solutions_graph(lm::LossyModel; kwargs...)
 end
 
 
+"""
+    plot_solutions_graph(lm::LossyModel; kwargs...)
+
+Plots the graph built by solutions and their distances
+"""
 function plot_solutions_graph(lm::LossyModel; kwargs...)
     g = solutions_graph(lm; kwargs...)
     nvertices = LightGraphs.nv(g)
     nodelabel_vec = int2gfq(collect(0:nvertices-1), Int(log2(lm.fg.q)))
     nodelabel = [join(string.(v)) for v in nodelabel_vec]
     D = solutions_distances(lm; kwargs...)
-    weights = collect(D[triu(trues(size(D)),1)][:])
-    edgelabel = weights[weights.!=0]
-    return plot_solutions_graph(g, nodelabel=nodelabel, edgelabel=edgelabel,
-        EDGELABELSIZE=3, edgelabelc=colorant"white", nodelabelc=colorant"white", 
-        nodefillc=colorant"blue", EDGELINEWIDTH=0.3, edgestrokec="green")
+    edgelabel = Dict((i,j)=>D[i,j] for j=2:nvertices for i=1:j-1 if D[i,j]!=0)
+    p = graphplot(g, curves=false,
+        names=nodelabel, nodeshape=:circle,
+        method=:stress, 
+        edgelabel=edgelabel,
+        edge_label_box=true)
+    return p
 end
-
 function plot_solutions_graph(g::SimpleWeightedGraphs.SimpleWeightedGraph;
     kwargs...)
     return GraphPlot.gplot(g; kwargs...)
@@ -131,4 +137,11 @@ function wef(lm::LossyModel)
     dist_from_zero = dist[:,1]
     max_dist = lm.fg.n
     return StatsBase.counts(dist_from_zero,max_dist )
+end
+
+function plot_wef(lm::LossyModel)
+    w = wef(lm)
+    p = Plots.bar(w, label="", title="WEF")
+    println("Total number of solutions: ", sum(w)+1)
+    return p
 end

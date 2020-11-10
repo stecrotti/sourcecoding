@@ -1,6 +1,3 @@
-using OffsetArrays, GaloisFields, Random, LinearAlgebra, Statistics,
-    PrettyTables, Printf, PyPlot, UnicodePlots, StatsBase, Dates, JLD
-
 include("FactorGraph.jl")
 include("ldpc_graph.jl")
 include("convolutions.jl")

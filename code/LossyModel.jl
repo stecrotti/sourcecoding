@@ -1,4 +1,5 @@
 #### A wrapper for a FactorGraph object with temperature(s), current guess for the solution, source vector ####
+using LinearAlgebra
 
 mutable struct LossyModel
     fg::FactorGraph     # Factor graph instance
@@ -36,7 +37,9 @@ function distortion(lm::LossyModel, x::Vector{Int}=lm.x)
     return distortion(lm.fg, lm.y, x)
 end
 adjmat(lm::LossyModel) = adjmat(lm.fg)
+import LinearAlgebra.nullspace, LinearAlgebra.rank
 nullspace(lm::LossyModel) = gfnullspace(adjmat(lm), lm.fg.q)
+nsolutions(lm::LossyModel) = lm.fg.q^size(nullspace(lm), 2)
 rank(lm::LossyModel) = gfrank(adjmat(lm), lm.fg.q)
 
 # Support for general input x (can also be a matrix)
@@ -68,5 +71,3 @@ end
 function energy_overlap(lm::LossyModel, x::Union{Vector{Int},Array{Int,2}}=lm.x)
     return lm.beta2*hd(x, lm.y)
 end
-
-

@@ -1,4 +1,5 @@
 #### A factor graph type thought for GF(q) belief propagation ####
+using OffsetArrays
 
 struct FactorGraph
     q::Int                              # field order

@@ -1,4 +1,5 @@
 #### Build and handle LDPC graphs, Hamming distances and more, on 𝔾𝔽(2ᵏ) ####
+using GaloisFields, Random
 
 function ldpc_graph(q::Int, n::Int, m::Int,
     nedges::Int=generate_polyn(n,m)[1], lambda::Vector{T}=generate_polyn(n,m)[2],
@@ -241,6 +242,19 @@ function gfqto2(H::Array{Int,2}, k::Int=1)
         Hnew[f,:] = gfqto2(H[f,:], k)
     end
     return Hnew
+end
+
+# function int2gfq(x::Int, k::Int=1)
+#     bits = int2bits(x, nextprod([floor(Int,log2(x+1))],2^k))
+#     return gf2toq(bits, k)
+# end
+function int2gfq(x::Int, k::Int=1, pad::Int=ndigits(x,base=2^k))
+    # x > 2^pad && error("Input x is too large to fit in a bit vector of length $pad")
+    return reverse(digits(x, base=2^k, pad=pad))
+end
+
+function int2gfq(y::Vector{Int}, k::Int=1, pad::Int=ndigits(maximum(y),base=2^k))
+    return [int2gfq(x, k, pad) for x in y]
 end
 
 

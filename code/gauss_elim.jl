@@ -1,4 +1,5 @@
 #### Ranks, kernels and gaussian elimination on 𝔾𝔽(2ᵏ) ####
+using LinearAlgebra
 
 """Reduce matrix over GF(q) to row echelon form"""
 function gfref!(H::Array{Int,2},
@@ -17,9 +18,9 @@ function gfref!(H::Array{Int,2},
         else
             p += 1
             # sort rows of H so that all zeros in the c-th column are at the bottom
-            @show c,p
-            H[p:end,:] .= sortslices(H[p:end,:], dims=1, rev=true,
-                lt=(row1,row2)->row1[c]==0)
+            # H[p:end,:] .= sortslices(H[p:end,:], dims=1, rev=true,
+            #     lt=(row1,row2)->row1[c]==0)
+            H[p:end,:] .= sortslices(H[p:end,:], dims=1, rev=true)
             # Normalize row of the pivot to make it 1
             H[p,:] .= gfdiv[H[p,:], H[p,c]]
             # Apply row-wise xor to rows below the pivot

@@ -1,4 +1,5 @@
 #### Convolutions on 𝐑 and 𝔾𝔽(2ᵏ) ####
+using OffsetArrays
 
 Fun = OffsetArray
 OffsetArray(n::Integer, v = 0.0) = Fun(fill(v, n), 0:n-1)

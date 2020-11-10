@@ -1,4 +1,4 @@
-using LightGraphs, SimpleWeightedGraphs
+using LightGraphs, SimpleWeightedGraphs, StatsBase, Plots, GraphPlot
 
 """
     enum_solutions(H::Array{Int,2}, q::Int=2)
@@ -28,17 +28,17 @@ enum_solutions(lm::LossyModel) = enum_solutions(lm.fg)
 
 
 """
-    allgfqstrings(q::Int, k::Int)::Array{Int,2}
+    allgfqstrings(q::Int, len::Int)::Array{Int,2}
 
-Returns all the possible qᵏ strings of length k with values in 𝔾𝔽(q) as
+Returns all the possible `q^len` strings of length `len` with values in 𝔾𝔽(q) as
 columns of a matrix
 """
-function allgfqstrings(q::Int, k::Int)::Array{Int,2}
+function allgfqstrings(q::Int, len::Int)::Array{Int,2}
     # Exponential alert!
-    if k > 10
-        warning("This operation requires $q^$k operations")
+    if len > 10
+        @warn "This operation requires $q^$len operations"
     end
-    return hcat([digits(j, base=q, pad=k) for j = 0:q^k-1]...)
+    return hcat([digits(j, base=q, pad=len) for j = 0:q^len-1]...)
 end
 
 """
@@ -58,18 +58,18 @@ end
 
 
 """
-    pairwise_distances(V::Vector{Vector{Int}}; cutoff)
+solutions_distances(V::Vector{Vector{Int}}; cutoff)
 
 Computes the matrix D of pairwise distances between 𝔾𝔽(2ᵏ) vectors
-contained in `V`. 
+contained in `V`.
 Optionally set to zero all distances greater or equal than `cutoff`
 """
-function pairwise_distances(V::Vector{Vector{Int}}; cutoff::Real=Inf)
+function solutions_distances(V::Vector{Vector{Int}}; cutoff::Real=Inf)
     D = [hd(V[i],V[j])*(hd(V[i],V[j])<cutoff) for i=eachindex(V), j=eachindex(V)]
 end
 
-function pairwise_distances(lm::LossyModel; kwargs...)
-    return pairwise_distances(enum_solutions(lm); kwargs...)
+function solutions_distances(lm::LossyModel; kwargs...)
+    return solutions_distances(enum_solutions(lm); kwargs...)
 end
 
 
@@ -77,8 +77,8 @@ import LightGraphs.connected_components
 """
     connected_components(lm::LossyModel; cutoff)
 
-Returns the connected components of the graph where nodes are solutions and 
-there are edges between nodes weigthed by their (Hamming) distance if is less 
+Returns the connected components of the graph where nodes are solutions and
+there are edges between nodes weigthed by their (Hamming) distance if is less
 than `cutoff`.
 """
 function connected_components(lm::LossyModel; kwargs...)
@@ -91,17 +91,44 @@ import SimpleWeightedGraphs.SimpleWeightedGraph
 """
     solutions_graph(lm::LossyModel; cutoff)
 
-Returns a SimpleWeightedGraph object containing the graph where nodes are 
+Returns a `SimpleWeightedGraph` object containing the graph where nodes are
 solutions and there are edges between nodes weigthed by their (Hamming) distance
 if is less than `cutoff`.
 """
 function solutions_graph(lm::LossyModel; kwargs...)
-    d = pairwise_distances(lm; kwargs...)
+    d = solutions_distances(lm; kwargs...)
     return SimpleWeightedGraphs.SimpleWeightedGraph(d)
 end
 
+
+function plot_solutions_graph(lm::LossyModel; kwargs...)
+    g = solutions_graph(lm; kwargs...)
+    nvertices = LightGraphs.nv(g)
+    nodelabel_vec = int2gfq(collect(0:nvertices-1), Int(log2(lm.fg.q)))
+    nodelabel = [join(string.(v)) for v in nodelabel_vec]
+    D = solutions_distances(lm; kwargs...)
+    weights = collect(D[triu(trues(size(D)),1)][:])
+    edgelabel = weights[weights.!=0]
+    return plot_solutions_graph(g, nodelabel=nodelabel, edgelabel=edgelabel,
+        EDGELABELSIZE=3, edgelabelc=colorant"white", nodelabelc=colorant"white", 
+        nodefillc=colorant"blue", EDGELINEWIDTH=0.3, edgestrokec="green")
+end
+
+function plot_solutions_graph(g::SimpleWeightedGraphs.SimpleWeightedGraph;
+    kwargs...)
+    return GraphPlot.gplot(g; kwargs...)
+end
+
+
+"""
+    wef(lm::LossyModel)
+
+Computes the weight enumeration function: number of solutions at any distance
+from the zero vector
+"""
 function wef(lm::LossyModel)
     dist = pairwise_distances(lm)
     dist_from_zero = dist[:,1]
-    return StatsBase.counts(dist_from_zero)
+    max_dist = lm.fg.n
+    return StatsBase.counts(dist_from_zero,max_dist )
 end

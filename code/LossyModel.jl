@@ -41,6 +41,7 @@ import LinearAlgebra.nullspace, LinearAlgebra.rank
 nullspace(lm::LossyModel) = gfnullspace(adjmat(lm), lm.fg.q)
 nsolutions(lm::LossyModel) = lm.fg.q^size(nullspace(lm), 2)
 rank(lm::LossyModel) = gfrank(adjmat(lm), lm.fg.q)
+isfullrank(lm::LossyModel) = rank(lm::LossyModel)==lm.fg.m
 
 # Support for general input x (can also be a matrix)
 function paritycheck(lm::LossyModel, x::Array{Int,2}, varargin...)

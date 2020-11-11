@@ -34,9 +34,8 @@ Returns all the possible `q^len` strings of length `len` with values in 𝔾𝔽
 columns of a matrix
 """
 function allgfqstrings(q::Int, len::Int)::Array{Int,2}
-    # Exponential alert!
     if len > 10
-        @warn "This operation requires $q^$len operations"
+        @warn "Exponential alert! This operation requires $q^$len operations"
     end
     return hcat([digits(j, base=q, pad=len) for j = 0:q^len-1]...)
 end
@@ -106,23 +105,21 @@ end
 
 Plots the graph built by solutions and their distances
 """
-function plot_solutions_graph(lm::LossyModel; kwargs...)
+function plot_solutions_graph(lm::LossyModel; layout::Symbol=:stress,
+    kwargs...)
     g = solutions_graph(lm; kwargs...)
     nvertices = LightGraphs.nv(g)
-    nodelabel_vec = int2gfq(collect(0:nvertices-1), Int(log2(lm.fg.q)))
-    nodelabel = [join(string.(v)) for v in nodelabel_vec]
+    # nodelabel_vec = int2gfq(collect(0:nvertices-1), Int(log2(lm.fg.q)))
+    # nodelabel = [join(string.(v)) for v in nodelabel_vec]
+    nodelabel = 1:nvertices
     D = solutions_distances(lm; kwargs...)
     edgelabel = Dict((i,j)=>D[i,j] for j=2:nvertices for i=1:j-1 if D[i,j]!=0)
     p = graphplot(g, curves=false,
-        names=nodelabel, nodeshape=:circle,
-        method=:stress, 
+        names=nodelabel, nodeshape=:circle, nodesize=0.2, nodecolor=:lightblue,
+        method=:layout, fontsize=7, 
         edgelabel=edgelabel,
-        edge_label_box=true)
+        edgelabelbox=true)
     return p
-end
-function plot_solutions_graph(g::SimpleWeightedGraphs.SimpleWeightedGraph;
-    kwargs...)
-    return GraphPlot.gplot(g; kwargs...)
 end
 
 
@@ -136,12 +133,15 @@ function wef(lm::LossyModel)
     dist = solutions_distances(lm)
     dist_from_zero = dist[:,1]
     max_dist = lm.fg.n
-    return StatsBase.counts(dist_from_zero,max_dist )
+    return StatsBase.counts(dist_from_zero,max_dist)
 end
 
 function plot_wef(lm::LossyModel)
     w = wef(lm)
     p = Plots.bar(w, label="", title="WEF")
-    println("Total number of solutions: ", sum(w)+1)
+    # println("Total number of solutions: ", sum(w)+1)
     return p
 end
+
+
+

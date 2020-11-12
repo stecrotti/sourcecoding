@@ -24,48 +24,58 @@ function ldpc_graph(q::Int, n::Int, m::Int,
     hfv = [Int[] for f in 1:m]
     mfv = [OffsetArray{Float64,1,Array{Float64,1}}[] for f in 1:m]
 
-    edgesleft = zeros(Int, nedges)
-    edgesright = zeros(Int, nedges)
+    multi_edges = true
+    while multi_edges
+        multi_edges = false
 
-    ### Irregular Tanner Graph construction and FactorGraph object initialization ###
-    # Assign each edge "on the left" to a variable node
-    v = 1
-    r = 1
-    for i in 1:length(lambda)
-        deg = Int(round(lambda[i]/i*nedges,digits=10))   # number of edges incident on variable v
-        for _ in 1:deg
-            edgesleft[r:r+i-1] = v*ones(Int,i)
-            r += i
-            v += 1
-        end
-    end
+        Vneigs = [Int[] for v in 1:n]
+        Fneigs = [Int[] for f in 1:m]
+        hfv = [Int[] for f in 1:m]
+        mfv = [OffsetArray{Float64,1,Array{Float64,1}}[] for f in 1:m]
 
-    perm = edgesleft[randperm(length(edgesleft))]   # Permute nodes on the left
+        edgesleft = zeros(Int, nedges)
+        edgesright = zeros(Int, nedges)
 
-    # Assign each edge "on the right" to a factor node
-    f = 1
-    s = 1
-    for j in 1:length(rho)
-        deg = Int(round(rho[j]/j*nedges,digits=10))
-        for _ in 1:deg
-            for v in perm[s:s+j-1]
-                if findall(isequal(v), Fneigs[f])!=[]
-                    # verbose && println("Multi-edge discarded")
-                    continue
-                end
-                # Initialize neighbors
-                push!(Fneigs[f], v)
-                push!(Vneigs[v], f)
-                # Initalize parity check matrix elements
-                push!(hfv[f], rand(1:q-1))
-                # While we're here, initialize messages factor->variable
-                push!(mfv[f], OffsetArray(1/q*ones(q), 0:q-1))
+        ### Irregular Tanner Graph construction and FactorGraph object initialization ###
+        # Assign each edge "on the left" to a variable node
+        v = 1
+        r = 1
+        for i in 1:length(lambda)
+            deg = Int(round(lambda[i]/i*nedges,digits=10))   # number of edges incident on variable v
+            for _ in 1:deg
+                edgesleft[r:r+i-1] = v*ones(Int,i)
+                r += i
+                v += 1
             end
-            s += j
-            f += 1
+        end
+
+        perm = edgesleft[randperm(length(edgesleft))]   # Permute nodes on the left
+
+        # Assign each edge "on the right" to a factor node
+        f = 1
+        s = 1
+        for j in 1:length(rho)
+            deg = Int(round(rho[j]/j*nedges,digits=10))
+            for _ in 1:deg
+                for v in perm[s:s+j-1]
+                    if findall(isequal(v), Fneigs[f])!=[]
+                        verbose && @warn "Multi-edge discarded"
+                        multi_edges = true
+                        break
+                    end
+                    # Initialize neighbors
+                    push!(Fneigs[f], v)
+                    push!(Vneigs[v], f)
+                    # Initalize parity check matrix elements
+                    push!(hfv[f], rand(1:q-1))
+                    # While we're here, initialize messages factor->variable
+                    push!(mfv[f], OffsetArray(1/q*ones(q), 0:q-1))
+                end
+                s += j
+                f += 1
+            end
         end
     end
-
     # Get multiplication and iverse table for GF(q)
     mult, gfinv, gfdiv = gftables(q, arbitrary_mult)
 

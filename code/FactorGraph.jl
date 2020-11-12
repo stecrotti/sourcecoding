@@ -1,5 +1,5 @@
 #### A factor graph type thought for GF(q) belief propagation ####
-using OffsetArrays
+using OffsetArrays, StatsBase
 
 struct FactorGraph
     q::Int                              # field order
@@ -87,7 +87,9 @@ isvarleaf(fg::FactorGraph, v::Int)::Bool = vardegree(fg,v)==1
 isfactleaf(fg::FactorGraph, f::Int)::Bool = factdegree(fg,f)==1
 
 vardegrees(fg::FactorGraph) = [vardegree(fg,v) for v in eachindex(fg.Vneigs)]
+vardegrees_distr(fg::FactorGraph) = proportionmap(vardegrees(fg))
 factdegrees(fg::FactorGraph) = [factdegree(fg,f) for f in eachindex(fg.Fneigs)]
+factdegrees_distr(fg::FactorGraph) = proportionmap(factdegrees(fg))
 
 # deletes elements in vec that are equal to val
 function deleteval!(vec::Vector{T}, val::T) where T

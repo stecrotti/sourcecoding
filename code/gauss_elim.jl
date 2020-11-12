@@ -106,7 +106,7 @@ function lightweight_nullspace(lm::LossyModel; cutoff::Real=Inf,
     verbose::Bool=false)
     # Start with a basis of the system
     oldbasis = nullspace(lm)
-    hw_old = hw(oldbasis)
+    hw_old = maximum([hw(collect(col)) for col in eachcol(oldbasis)])
     if verbose
         println("Finding a low-Hamming-weight basis...")
         println("\tThe basis I'm starting from has total Hamming weight ", hw_old,
@@ -149,7 +149,7 @@ function lightweight_nullspace(lm::LossyModel; cutoff::Real=Inf,
                     nadded += 1
                     newbasis[:,nadded] = hop
                     if nadded == nsdim 
-                        hw_new = hw(newbasis)
+                        hw_new = maximum([hw(collect(col)) for col in eachcol(newbasis)])
                         verbose && println("\tDone! The new basis has total ",
                         "Hamming weight ", hw_new)
                         return newbasis

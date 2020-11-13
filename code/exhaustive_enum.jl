@@ -85,6 +85,14 @@ function connected_components(lm::LossyModel; kwargs...)
     return LightGraphs.connected_components(distances_graph)
 end
 
+"""
+    n_cc(lm::LossyModel; kwargs...)
+
+Returns the number of connected components
+"""
+function n_cc(lm::LossyModel; kwargs...)
+    length(connected_components(lm; kwargs...))
+end
 
 import SimpleWeightedGraphs.SimpleWeightedGraph
 """
@@ -116,7 +124,7 @@ function plot_solutions_graph(lm::LossyModel; layout::Symbol=:stress,
     edgelabel = Dict((i,j)=>D[i,j] for j=2:nvertices for i=1:j-1 if D[i,j]!=0)
     p = graphplot(g, curves=false,
         names=nodelabel, nodeshape=:circle, nodesize=0.2, nodecolor=:lightblue,
-        method=:layout, fontsize=7, 
+        method=layout, fontsize=7, 
         edgelabel=edgelabel,
         edgelabelbox=true)
     return p

@@ -4,6 +4,7 @@ using LinearAlgebra
 mutable struct LossyModel
     fg::FactorGraph     # Factor graph instance
     x::Vector{Int}      # Current state
+    # basis::Array{Int,2} # basis for solutions. Not constructed by default because it takes time
     beta1::Real         # Inverse temperature for checks
     beta2::Real         # Inverse temperature for overlap with input vector y
     y::Vector{Int}      # Vector to be compressed
@@ -15,6 +16,7 @@ function LossyModel(q::Int, n::Int, m::Int; beta1::Real=Inf, beta2::Real=1.0,
         rho::Vector{T}=generate_polyn(n,m)[3],
         fields = [Fun(1e-3*randn(q)) for v in 1:n], verbose=false,
         arbitrary_mult = false,
+        # basis = Array{Int,2}(undef,n,0),
         randseed::Int=0) where {T<:AbstractFloat}
 
     !ispow2(q) && warning("The value of q you inserted (q=$q) is not a power of 2")
@@ -28,10 +30,15 @@ end
 function Base.show(io::IO, lm::LossyModel)
     println(io, "Lossy compression model:")
     println(io, " - ", dispstring(lm.fg))
-    println(io, " - Inverse temperatures β₁=$(lm.beta1) for checks and β₂=$(lm.beta2) for overlap")
+    println(io, " - Inverse temperatures β₁=$(lm.beta1) for checks and",
+        " β₂=$(lm.beta2) for overlap")
 end
 
-rate(lm::LossyModel) = 1 - lm.fg.m/lm.fg.n
+function rate(lm::LossyModel) 
+    n_indep_rows = rank(lm)
+    r = 1 - n_indep_rows/lm.fg.n
+    return r
+end
 function distortion(lm::LossyModel, x::Vector{Int}=lm.x)
     # return hd(x,lm.y)/(lm.fg.n*log2(lm.fg.q))
     return distortion(lm.fg, lm.y, x)
@@ -39,9 +46,15 @@ end
 adjmat(lm::LossyModel) = adjmat(lm.fg)
 import LinearAlgebra.nullspace, LinearAlgebra.rank
 nullspace(lm::LossyModel) = gfnullspace(adjmat(lm), lm.fg.q)
-nsolutions(lm::LossyModel) = lm.fg.q^size(nullspace(lm), 2)
-rank(lm::LossyModel) = gfrank(adjmat(lm), lm.fg.q)
-isfullrank(lm::LossyModel) = rank(lm::LossyModel)==lm.fg.m
+log_nsolutions(lm::LossyModel)::Int = size(nullspace(lm), 2)
+nsolutions(lm::LossyModel)::Int = lm.fg.q^log_nsolutions(lm)
+rank(lm::LossyModel)::Int = gfrank(adjmat(lm), lm.fg.q)
+isfullrank(lm::LossyModel)::Bool = rank(lm::LossyModel)==lm.fg.m
+
+function breduction!(lm::LossyModel, args...; kwargs...)
+    b = breduction!(lm.fg, args...; kwargs...)
+    return b
+end
 
 # Support for general input x (can also be a matrix)
 function paritycheck(lm::LossyModel, x::Array{Int,2}, varargin...)

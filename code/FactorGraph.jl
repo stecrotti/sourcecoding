@@ -85,6 +85,12 @@ end
 isvarleaf(fg::FactorGraph, v::Int)::Bool = vardegree(fg,v)==1
 isfactleaf(fg::FactorGraph, f::Int)::Bool = factdegree(fg,f)==1
 
+varleaves(fg::FactorGraph) = [v for v in 1:fg.n if isvarleaf(fg,v)]
+factleaves(fg::FactorGraph) = [v for v in 1:fg.n if isfactleaf(fg,v)]
+
+nvarleaves(fg::FactorGraph)::Int = sum(vardegrees(fg).==1)
+nfactleaves(fg::FactorGraph)::Int = sum(factdegrees(fg).==1)
+
 vardegrees(fg::FactorGraph) = [vardegree(fg,v) for v in eachindex(fg.Vneigs)]
 vardegrees_distr(fg::FactorGraph) = proportionmap(vardegrees(fg))
 factdegrees(fg::FactorGraph) = [factdegree(fg,f) for f in eachindex(fg.Fneigs)]
@@ -106,8 +112,16 @@ function deletefactor!(fg::FactorGraph, f::Int=rand(filter(ff -> factdegree(fg,f
     fg.Fneigs[f] = []
     return f
 end
+function deletefactors!(fg::FactorGraph, ff::Vector{Int}) 
+    for f in ff
+        deletefactor!(fg,f)
+    end
+    return ff
+end
 
-function deletevar!(fg::FactorGraph, v::Int=rand(filter(vv -> vardegree(fg,vv)!=0, 1:fg.n)))
+
+function deletevar!(fg::FactorGraph, 
+    v::Int=rand(filter(vv -> vardegree(fg,vv)!=0, 1:fg.n)))
     for f in eachindex(fg.Fneigs)
         # delete i from its neighbors' neighbor lists
         v_idx = findall(isequal(v), fg.Fneigs[f])
@@ -121,18 +135,27 @@ function deletevar!(fg::FactorGraph, v::Int=rand(filter(vv -> vardegree(fg,vv)!=
     fg.Vneigs[v] = []
     return v
 end
+function deletevars!(fg::FactorGraph, vv::Vector{Int}) 
+    for v in vv
+        deletevar!(fg,v)
+    end
+    return vv
+end
 
 # Recursive leaf removal
 function lr!(fg::FactorGraph)
     flag = false    # raised if there are still leaves to remove
+    nremoved = 0
     for v in eachindex(fg.Vneigs)
         if vardegree(fg,v)==1
+            # delete factor and all its edges
             deletefactor!(fg, fg.Vneigs[v][1])
+            nremoved += 1
             flag = true
         end
     end
     flag && lr!(fg)
-    nothing
+    return nremoved
 end
 
 # Leaf removal but starting from leaf factors!
@@ -153,7 +176,9 @@ end
 function only_factors_graph(fg::FactorGraph)
     fg2 = deepcopy(fg)
     # Ensure all variables have degree 2 and we're working on GF(2)
-    @assert all(vardegrees(fg2) .== 2) && fg2.q==2
+    @assert all(vardegrees(fg2) .<= 2) && fg2.q==2
+    # Delete variable leaves
+    deletevars!(fg2, varleaves(fg2))
     lr_factors!(fg2)
     # Start
     g = SimpleWeightedGraph(fg2.m)
@@ -195,11 +220,13 @@ function nfacts(fg::FactorGraph)    # number of hyperedges in the core
      return Nfact
 end
 
-function breduction!(fg::FactorGraph, b::Int; randseed::Int=0)
+function breduction!(fg::FactorGraph, b::Int=1; randseed::Int=0)
     randseed != 0 && Random.seed!(randseed)     # for reproducibility
+    to_be_removed = rand(filter(ff -> factdegree(fg,ff)!=0, 1:fg.m),b)
     for _ in 1:b
-        deletefactor!(fg)
+        deletefactors!(fg, to_be_removed)
     end
+    return b
 end
 
 function polyn(fg::FactorGraph)

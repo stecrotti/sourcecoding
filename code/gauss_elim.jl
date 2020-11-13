@@ -80,8 +80,8 @@ function gfnullspace(H::Array{Int,2}, q::Int=2,
     dimker = ncols - gfrank(H, q, gfmult, gfdiv)
     # As in https://en.wikipedia.org/wiki/Kernel_(linear_algebra)#Computation_by_Gaussian_elimination
     HI = [H; I]
-    HIcef = gfcef(HI, q)
-    ns = HIcef[nrows+1:end, end-dimker+1:end]
+    gfcef!(HI, q)
+    ns = HI[nrows+1:end, end-dimker+1:end]
     return ns
 end
 

@@ -8,6 +8,8 @@ function ldpc_graph(q::Int, n::Int, m::Int,
     arbitrary_mult = false,
     randseed::Int=0) where {T<:AbstractFloat}
 
+    m < 2 && error("Cannot build a graph with m≤1 factors")
+
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
 
     ### Argument validation ###
@@ -19,15 +21,20 @@ function ldpc_graph(q::Int, n::Int, m::Int,
         error("m, rho and nedges incompatible")
     end
 
+    if verbose
+        println("Building factor graph...")
+        println("lambda = ", lambda, "\nrho = ", rho)
+    end
+
     Vneigs = [Int[] for v in 1:n]
     Fneigs = [Int[] for f in 1:m]
     hfv = [Int[] for f in 1:m]
     mfv = [OffsetArray{Float64,1,Array{Float64,1}}[] for f in 1:m]
 
-    multi_edges = true
-    while multi_edges
-        multi_edges = false
+    too_many_trials = 1000
+    for t in 1:too_many_trials
 
+        multi_edge_found = false
         Vneigs = [Int[] for v in 1:n]
         Fneigs = [Int[] for f in 1:m]
         hfv = [Int[] for f in 1:m]
@@ -59,8 +66,8 @@ function ldpc_graph(q::Int, n::Int, m::Int,
             for _ in 1:deg
                 for v in perm[s:s+j-1]
                     if findall(isequal(v), Fneigs[f])!=[]
-                        verbose && @warn "Multi-edge discarded"
-                        multi_edges = true
+                        verbose && println("Multi-edge discarded")
+                        multi_edge_found = true
                         break
                     end
                     # Initialize neighbors
@@ -75,11 +82,15 @@ function ldpc_graph(q::Int, n::Int, m::Int,
                 f += 1
             end
         end
+        if !multi_edge_found
+            # Get multiplication and iverse table for GF(q)
+            mult, gfinv, gfdiv = gftables(q, arbitrary_mult)
+            return FactorGraph(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, 
+                fields, hfv, mfv)
+        end
     end
-    # Get multiplication and iverse table for GF(q)
-    mult, gfinv, gfdiv = gftables(q, arbitrary_mult)
-
-    return FactorGraph(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
+    # If you got here, multi-edges made it impossible to build a graph
+    error("Could not build factor graph. Too many multi-edges were popping up")    
 end
 
 function generate_polyn(n::Int, m::Int)

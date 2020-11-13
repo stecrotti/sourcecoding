@@ -29,9 +29,8 @@ function FactorGraph(q::Int, n::Int, m::Int)
 end
 
 # Construct graph from adjacency matrix (for checks with simple examples)
-function FactorGraph(q::Int, A::Array{Int,2},
+function FactorGraph(A::Array{Int,2}, q::Int= nextpow(2,maximum(A)+0.5),
     fields = [Fun(1e-3*randn(q)) for v in 1:size(A,2)])
-
     m,n = size(A)
     Vneigs = [Int[] for v in 1:n]
     Fneigs = [Int[] for f in 1:m]
@@ -123,7 +122,7 @@ function deletevar!(fg::FactorGraph, v::Int=rand(filter(vv -> vardegree(fg,vv)!=
     return v
 end
 
-# Leaf removal
+# Recursive leaf removal
 function lr!(fg::FactorGraph)
     flag = false    # raised if there are still leaves to remove
     for v in eachindex(fg.Vneigs)
@@ -136,16 +135,44 @@ function lr!(fg::FactorGraph)
     nothing
 end
 
-# Remove only 1 leaf
-function onelr!(fg::FactorGraph, idx::Vector{Int}=randperm(fg.n))
-    for v in idx
-        if vardegree(fg,v)==1
-            deletefactor!(fg, fg.Vneigs[v][1])
-            # deletevar!(fg, v)
-            return v
+# Leaf removal but starting from leaf factors!
+function lr_factors!(fg::FactorGraph)
+    flag = false    # raised if there are still leaves to remove
+    for f in eachindex(fg.Fneigs)
+        if factdegree(fg,f)==1
+            deletevar!(fg, fg.Fneigs[f][1])
+            flag = true
         end
     end
-    return 0
+    flag && lr_factors!(fg)
+    nothing
+end
+
+# Experiment! build a graph with only factors (for degree-2 variables only)
+# Weights in the final graph are number of mini-loops
+function only_factors_graph(fg::FactorGraph)
+    fg2 = deepcopy(fg)
+    # Ensure all variables have degree 2 and we're working on GF(2)
+    @assert all(vardegrees(fg2) .== 2) && fg2.q==2
+    lr_factors!(fg2)
+    # Start
+    g = SimpleWeightedGraph(fg2.m)
+    
+    # Remove all leaves, being factors or variables
+    lr_factors!(fg2)
+
+    H = adjmat(fg2)
+    (m,n) = size(H)
+    for j in 1:n
+        involved = findall(Bool.(H[:,j]))
+        involved == [] && continue
+        if has_edge(g, (involved...))
+            g.weights[involved...] += 1
+        else
+            add_edge!(g, (involved...))
+        end
+    end
+    return g
 end
 
 # The following 2 are used to get the number of variables or factors left in

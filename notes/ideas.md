@@ -15,3 +15,9 @@ If the size grows subextensively....
 (Euler's formula).
 
 But this works **only for planar graphs!** Is ours?
+
+## Sometimes removing a factor doesn't change anything
+Suppose the factor has degree 2 and is part of a loop. 
+When you remove it, the number of solutions is left unchanged: a loop was removed but a path was created.
+
+Monte Carlo over basis coefficients in this case won't feel any change, because the energy for vectors satisfying all checks will be the same as it was before the b-reduction

@@ -5,12 +5,23 @@ using Parameters    # constructors with default values
     algo::T = T()
     q::Int = 2
     n::Int = 100
-    R::Float64 = 0.5
+    m::Int = 50
+    niter::Int = 50
     b::Int = 0
-    navg::Int = 50
-    it::Int = 1
+    # it::Int = 1
     arbitrary_mult::Bool = false
-    # opts::AlgoOptions = AlgoOptions(algo)
-    results::Dict{Symbol,Any} = Dict{Symbol,Any}()
-    runtimes::Vector{Float64} = zeros(navg)
+    results::Vector{Dict{Symbol,Any}} = Vector{Dict{Symbol,Any}}(undef,niter)
+    runtimes::Vector{Float64} = zeros(niter)
+end
+
+function Simulation(lm::LossyModel, algo::LossyAlgo, niter::Int=50; kwargs...)
+    q = lm.fg.q
+    n = lm.fg.n
+    m = lm.fg.m 
+    arbitrary_mult = (lm.fg.mult == gftables(lm.fg.q))
+    for it in 1:niter
+        (results[it], runtimes[it]) = @timed solve!(lm, algo)
+    end
+    return Simulation(algo, q, n, m, arbitrary_mult=arbitrary_mult;
+        kwargs...)
 end

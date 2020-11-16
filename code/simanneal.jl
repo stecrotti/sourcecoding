@@ -17,7 +17,7 @@ end
     nsamples::Int = Int(1e2)                                                # Number of samples
     sample_every::Int = Int(1e0)                                            # Frequency of sampling
     stop_crit::Function = (crit(varargs...) = false)                        # Stopping criterion callback
-    init_state::Function = (init(lm::LossyModel)=rand(0:lm.fg.q-1,lm.fg.n)) # Function to initialize internal state
+    init_state::Function = (init(lm::LossyModel)=zeros(Int, lm.fg.n))       # Function to initialize internal state
 end
 
 # Quick constructor that adapts the number of iterations to the size of the problem
@@ -25,7 +25,7 @@ function SA(lm::LossyModel; kwargs...)
     nsamples = 10*(lm.fg.n-lm.fg.m)
     basis = nullspace(lm)
     mc_move = MetropBasisCoeffs(basis, zeros(Int,size(basis,2)))
-    SA(nsamples=nsamples; kwargs...)
+    return SA(nsamples=nsamples, mc_move=mc_move; kwargs...)
 end
 
 function solve!(lm::LossyModel, algo::SA,

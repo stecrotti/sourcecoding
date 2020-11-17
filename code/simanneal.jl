@@ -8,6 +8,15 @@ struct Metrop1 <: MCmove; end
     basis_coeffs::Vector{Int}=Vector{Int}(undef,0)
 end
 
+@with_kw struct SAResults <: LossyResults
+    outcome::Symbol
+    @assert outcome in [:stopped, :finished]
+    parity::Int
+    distortion::Float64
+    beta_argmin::Vector{Float64}                # Temperatures for which the min was achieved
+end
+
+# LossyResults(algo::SA) = SAResults()
 
 #### SIMULATED ANNEALING
 @with_kw struct SA <: LossyAlgo
@@ -36,6 +45,7 @@ function solve!(lm::LossyModel, algo::SA,
     nbetas = size(algo.betas,1)
     min_dist = Inf
     argmin_beta = nbetas+1
+    parity = sum(paritycheck(lm))
     for b in 1:nbetas
         # Update temperature
         lm.beta1 = algo.betas[b,1]
@@ -43,15 +53,18 @@ function solve!(lm::LossyModel, algo::SA,
         # Run MC
         distortions[b], acceptance_ratio = mc!(lm, algo, verbose=verbose,
             to_display="MC running β₁=$(lm.beta1), "*
-            "β₂=$(lm.beta2)")
+            "β₂=$(lm.beta2) ")
         (m,i) = findmin(distortions[b])
         if m < min_dist
             min_dist = m
             argmin_beta = b
         end
+        parity = sum(paritycheck(lm))
         # Check stopping criterion
         if algo.stop_crit(lm, distortions[b], acceptance_ratio)
-            return (:stopped, min_dist, algo.betas[b,:], argmin_beta)
+            # return (:stopped, min_dist, algo.betas[b,:], argmin_beta)
+            return SAResults(outcome=:stopped, parity=parity, distortion=min_dist,
+                beta_argmin=algo.betas[argmin_beta,:])
         end
         if verbose
             println("Temperature $b of $nbetas:",
@@ -59,7 +72,9 @@ function solve!(lm::LossyModel, algo::SA,
             "Energy = $(energy(lm)). Distortion = $(min_dist)")
         end
     end
-    return (:finished, min_dist, algo.betas[nbetas], argmin_beta)
+    # return (:finished, min_dist, algo.betas[nbetas], argmin_beta)
+    return SAResults(outcome=:finished, parity=parity, distortion=min_dist,
+    beta_argmin=algo.betas[argmin_beta,:])
 end
 
 

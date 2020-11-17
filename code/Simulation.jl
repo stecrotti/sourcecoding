@@ -1,7 +1,6 @@
 using StatsBase, JLD, Dates, Statistics,
     PrettyTables, Printf, Random
 
-
 struct Simulation
     q::Int
     n::Int

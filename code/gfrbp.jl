@@ -3,6 +3,9 @@ using Parameters    # constructors with default values
 
 abstract type LossyAlgo end
 
+# convenience method
+beta2_init(algo::LossyAlgo) = 1.0
+
 # Belief Propagation
 @with_kw struct BP <: LossyAlgo
     maxiter::Int = Int(1e3)             # Max mun of iterations
@@ -28,6 +31,27 @@ end
     beta2::Float64 = 1.0                # Inverse temperature for overlap energy
     sigma::Float64 = 1e-4               # Random noise on external fields
 end
+
+beta2_init(algo::T) where {T<:Union{BP,MS}} = algo.beta2
+
+abstract type LossyResults end
+
+@with_kw struct BPResults{T<:Union{BP,MS}} <: LossyResults
+    converged::Bool = false
+    parity::Int = 0
+    distortion::Float64 = 1.0
+    trials::Int = 0
+    iterations::Int = 0
+    maxdiff::Vector{Float64} = Vector{Float64}(undef,0)
+    codeword::BitArray{1} = BitArray{1}(undef,0)
+    maxchange::Vector{Float64} = Vector{Float64}(undef,0)
+end
+
+# function LossyResults(algo::T) where {T<:Union{BP,MS}}
+#     return BPResults{T}(maxdiff=zeros(algo.maxiter), 
+#         codeword=falses(algo.maxiter),
+#         maxchange=zeros(algo.maxiter))
+# end
 
 function onebpiter!(fg::FactorGraph, algo::BP, neutral=neutralel(algo,fg.q))
 
@@ -156,7 +180,8 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
         for t in 1:algo.maxiter
             newguesses,maxdiff[t] = onebpiter!(fg, algo)
             newmessages .= fg.mfv
-            codeword[t] = (sum(paritycheck(fg))==0)
+            parity = sum(paritycheck(fg))
+            codeword[t] = (parity==0)
             if algo.convergence == :messages
                 for f in eachindex(newmessages)
                     for (v_idx,msg) in enumerate(newmessages[f])
@@ -167,7 +192,10 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                     end
                 end
                 if maxchange[t] < algo.tol
-                    return :converged, distortion(fg, y), t, trial
+                    # return :converged, distortion(fg, y), t, trial
+                    return BPResults{typeof(algo)}(converged=true, parity=parity,
+                        distortion=distortion(fg, y), trials=trial, iterations=t,
+                        maxdiff=maxdiff, codeword=codeword, maxchange=maxchange)
                 end
                 oldmessages .= deepcopy(newmessages)
                 performance_name = "max change"
@@ -176,7 +204,10 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                 if newguesses == oldguesses
                     n += 1
                     if n >= algo.nmin
-                        return :converged, distortion(fg, y), t, trial
+                        # return :converged, distortion(fg, y), t, trial
+                        return BPResults{typeof(algo)}(converged=true, parity=parity,
+                        distortion=distortion(fg, y), trials=trial, iterations=t,
+                        maxdiff=maxdiff, codeword=codeword, maxchange=maxchange)
                     end
                 else
                     n=0
@@ -187,7 +218,10 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             elseif algo.convergence == :parity
                 parity = sum(paritycheck(fg))
                 if parity == 0
-                    return :converged, distortion(fg, y), t, trial
+                    # return :converged, distortion(fg, y), t, trial
+                    return BPResults{typeof(algo)}(converged=true, parity=parity,
+                        distortion=distortion(fg, y), trials=trial, iterations=t,
+                        maxdiff=maxdiff, codeword=codeword, maxchange=maxchange)
                 end
                 performance_name = "parity"
                 performance_value = parity
@@ -219,7 +253,11 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     #     print("\u1b[2K")    # clear line
     #     print("\u1b[1F")    # move cursor to beginning of line
     # end
-    return :unconverged, distortion(fg, y), maxiter, algo.Tmax
+    # return :unconverged, distortion(fg, y), maxiter, algo.Tmax
+    return BPResults{typeof(algo)}(converged=true, parity=parity,
+                distortion=distortion(fg, y), trials=algo.Tmax, 
+                iterations=algo.maxiter, maxdiff=maxdiff, codeword=codeword, 
+                maxchange=maxchange)
 end
 
 function reinforce!(fg::FactorGraph, algo::Union{BP,MS})

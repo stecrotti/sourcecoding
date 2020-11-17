@@ -5,16 +5,14 @@ Is there any hope of finding decoupled loops in large graphs?
 Or maybe b-reduction breaks one of these loops?
 
 A pool of loops is a connected component in the dual graph. 
-The size of pools can be checked by computing the sizes of such connected components.
+The size of pools (number of loops in a pool) can be checked by computing the sizes of such connected components.
 If the size grows subextensively....
 
 
-## Rank of problem if all variables have degree less or equal to 2
-> rk = #factors + #leaves - #CC
+## Rank of problem if all variables have degree equal to 2
+> rk = #factors - #CC
 
-(Euler's formula).
-
-But this works **only for planar graphs!** Is ours?
+(Kinda like Euler's formula).
 
 ## Sometimes removing a factor doesn't change anything
 Suppose the factor has degree 2 and is part of a loop. 

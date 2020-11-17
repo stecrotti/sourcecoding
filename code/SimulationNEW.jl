@@ -34,8 +34,24 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
     results = Vector{LossyResults}(undef, niter)
     runtimes = zeros(niter)
     for it in 1:niter
-        (results[it], runtimes[it]) = @timed solve!(lm, algo)
+        (results[it], runtimes[it]) = @timed solve!(lm, algo, randseed0randseed)
     end
     return Simulation{typeof(algo)}(q=q, n=n, m=m, arbitrary_mult=arbitrary_mult,
         results=results, niter=niter)
 end
+
+
+
+
+# Binary entropy function
+function H2(x::Real)
+    if 0<x<1
+        return -x*log2(x)-(1-x)*log2(1-x)
+    elseif x==0 || x==1
+        return 0
+    else
+        error("$x is outside the domain [0,1]")
+    end
+end
+
+rdb(D::Real) = 1-H2(D)

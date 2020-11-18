@@ -175,6 +175,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     oldguesses = guesses(fg)
     oldmessages = deepcopy(fg.mfv)
     newmessages = deepcopy(fg.mfv)
+    parity = sum(paritycheck(fg))
     n = 0
     for trial in 1:algo.Tmax
         for t in 1:algo.maxiter
@@ -249,13 +250,14 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             n = 0
         end
     end
-    # if verbose
-    #     print("\u1b[2K")    # clear line
-    #     print("\u1b[1F")    # move cursor to beginning of line
-    # end
+    # Clear the last progress line
+    if verbose
+        print("\u1b[2K")    # clear line
+        print("\u1b[1F")    # move cursor to beginning of line
+    end
     # return :unconverged, distortion(fg, y), maxiter, algo.Tmax
-    return BPResults{typeof(algo)}(converged=true, parity=parity,
-                distortion=distortion(fg, y), trials=algo.Tmax, 
+    return BPResults{typeof(algo)}(converged=false, parity=parity,
+                distortion=0.5, trials=algo.Tmax, 
                 iterations=algo.maxiter, maxdiff=maxdiff, codeword=codeword, 
                 maxchange=maxchange)
 end
@@ -317,8 +319,8 @@ function solve!(lm::LossyModel, algo::Union{BP,MS}, args...; kwargs...)
 end
 
 function extfields!(lm::LossyModel, algo::Union{BP,MS}, sigma::Real=1e-4; randseed::Int=0)
-    lm.fg.fields .= extfields(lm.fg.q,lm.y,algo,lm.beta2,
-        sigma, randseed=randseed)
+    lm.fg.fields .= extfields(lm.fg.q,lm.y,algo,
+        randseed=randseed)
 end
 
 function distortion(fg::FactorGraph, y::Vector{Int}, x::Vector{Int}=guesses(fg))

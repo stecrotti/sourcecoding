@@ -12,10 +12,15 @@ If the size grows subextensively....
 ## Rank of problem if all variables have degree equal to 2
 > rk = #factors - #CC
 
-(Kinda like Euler's formula).
+(From Euler's formula). Does this work only for planar graphs??
 
 ## Sometimes removing a factor doesn't change anything
 Suppose the factor has degree 2 and is part of a loop. 
 When you remove it, the number of solutions is left unchanged: a loop was removed but a path was created.
 
 Monte Carlo over basis coefficients in this case won't feel any change, because the energy for vectors satisfying all checks will be the same as it was before the b-reduction
+
+## Region graphs
+https://www.ics.uci.edu/~fowlkes/papers/planar.pdf: planar graphs with variable node degrees <= 2 are 'good' for region-based free energy approximations.
+
+https://www.cs.princeton.edu/courses/archive/spring06/cos598C/papers/YedidaFreemanWeiss2004.pdf

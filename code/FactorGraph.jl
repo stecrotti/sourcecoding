@@ -1,5 +1,5 @@
 #### A factor graph type thought for GF(q) belief propagation ####
-using OffsetArrays, StatsBase
+using OffsetArrays, StatsBase, LightGraphs, GraphRecipes, Plots
 
 struct FactorGraph
     q::Int                              # field order
@@ -61,6 +61,15 @@ function adjmat(fg::FactorGraph)
         end
     end
     A
+end
+
+# Returns the proper square adjacency matrix
+function full_adjmat(fg::FactorGraph)
+    H = adjmat(fg)
+    (m,n) = (fg.m, fg.n)
+    A = [zeros(Int,m,m) H;
+         permutedims(H) zeros(Int,n,n)]
+    return A
 end
 
 dispstring(fg::FactorGraph) = "Factor Graph with n=$(fg.n) variables and m=$(fg.m) factors defined on GF($(fg.q))"
@@ -143,15 +152,20 @@ function deletevars!(fg::FactorGraph, vv::Vector{Int})
 end
 
 # Recursive leaf removal
-function lr!(fg::FactorGraph)
+function lr!(fg::FactorGraph; plotting::Bool=false)
     flag = false    # raised if there are still leaves to remove
     nremoved = 0
+    plotting && plot(fg)
     for v in eachindex(fg.Vneigs)
         if vardegree(fg,v)==1
             # delete factor and all its edges
             deletefactor!(fg, fg.Vneigs[v][1])
             nremoved += 1
             flag = true
+            if plotting
+                display(plot(fg))
+                sleep(1)
+            end
         end
     end
     flag && lr!(fg)
@@ -245,4 +259,28 @@ function polyn(fg::FactorGraph)
     lambda ./= sum(lambda)
 
     return lambda, rho
+end
+
+function plot(fg::FactorGraph;
+    highlighted_nodes=Int[], highlighted_factors=Int[])
+    m = fg.m
+    if typeof(highlighted_nodes)==Int
+        highlighted_nodes = [highlighted_nodes]
+    end
+    g = SimpleGraph(full_adjmat(fg))
+    if ne(g) == 0
+        println("Graph contains no edges")
+        return nothing
+    end
+    node_idx = [ones(Int,fg.m); 2*ones(Int,fg.n)]
+    node_idx[highlighted_factors] .= 3
+    node_idx[m .+ highlighted_nodes] .= 4
+    shapes = [:rect, :circle, :rect, :circle]
+    nodeshape = shapes[node_idx]
+    colors = [:yellow, :white, :orange, :red]
+    nodecolor = colors[node_idx]
+    
+    return graphplot(g, curves=false, names = [1:fg.m; 1:fg.n],
+        nodeshape = nodeshape, nodecolor=colors[node_idx],
+        method=:spring, nodesize=0.15, fontsize=8, nodestrokewidth=0.5)
 end

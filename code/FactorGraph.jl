@@ -262,7 +262,7 @@ function polyn(fg::FactorGraph)
 end
 
 function plot(fg::FactorGraph;
-    highlighted_nodes=Int[], highlighted_factors=Int[])
+    highlighted_nodes=Int[], highlighted_factors=Int[], method=:spring)
     m = fg.m
     if typeof(highlighted_nodes)==Int
         highlighted_nodes = [highlighted_nodes]
@@ -272,15 +272,19 @@ function plot(fg::FactorGraph;
         println("Graph contains no edges")
         return nothing
     end
+    names = [""*string(i)*"" for i in [1:fg.m; 1:fg.n]]
     node_idx = [ones(Int,fg.m); 2*ones(Int,fg.n)]
     node_idx[highlighted_factors] .= 3
     node_idx[m .+ highlighted_nodes] .= 4
     shapes = [:rect, :circle, :rect, :circle]
     nodeshape = shapes[node_idx]
-    colors = [:yellow, :white, :orange, :red]
+    colors = [:white, :yellow, :red, :orange]
     nodecolor = colors[node_idx]
+    strokewidths = [0.5, 0.1, 0.5, 0.1]
+    nodestrokewidth = strokewidths[node_idx]
     
-    return graphplot(g, curves=false, names = [1:fg.m; 1:fg.n],
+    return graphplot(g, curves=false, names=names,
         nodeshape = nodeshape, nodecolor=colors[node_idx],
-        method=:spring, nodesize=0.15, fontsize=8, nodestrokewidth=0.5)
+        method=method, nodesize=0.15, fontsize=7, 
+        nodestrokewidth=nodestrokewidth)
 end

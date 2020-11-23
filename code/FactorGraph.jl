@@ -152,24 +152,30 @@ function deletevars!(fg::FactorGraph, vv::Vector{Int})
 end
 
 # Recursive leaf removal
-function lr!(fg::FactorGraph; plotting::Bool=false)
+function lr!(fg::FactorGraph, depth::Int=1, depths=zeros(Int,1:fg.n))
     flag = false    # raised if there are still leaves to remove
-    nremoved = 0
-    plotting && plot(fg)
+    # nremoved = 0
     for v in eachindex(fg.Vneigs)
         if vardegree(fg,v)==1
             # delete factor and all its edges
             deletefactor!(fg, fg.Vneigs[v][1])
-            nremoved += 1
+            # assign depth to variable `v`
+            depths[v] = depth
+            # nremoved += 1
             flag = true
-            if plotting
-                display(plot(fg))
-                sleep(1)
-            end
         end
     end
-    flag && lr!(fg)
-    return nremoved
+    flag && lr!(fg, depth+1, depths)
+    # return nremoved
+    return depths
+end
+function lr(fg::FactorGraph) 
+    fg_ = deepcopy(fg)
+    return fg_, lr!(fg_)
+end
+function plotdepths(fg::FactorGraph)
+    _, depths = lr(fg)
+    plot(fg, varnames = depths)
 end
 
 # Leaf removal but starting from leaf factors!
@@ -261,8 +267,9 @@ function polyn(fg::FactorGraph)
     return lambda, rho
 end
 
-function plot(fg::FactorGraph;
-    highlighted_nodes=Int[], highlighted_factors=Int[], method=:spring)
+function plot(fg::FactorGraph; varnames=1:fg.n, factnames=1:fg.m,
+    highlighted_nodes=Int[], highlighted_factors=Int[], 
+    highlighted_edges=Tuple{Int,Int}[], method=:spring)
     m = fg.m
     if typeof(highlighted_nodes)==Int
         highlighted_nodes = [highlighted_nodes]
@@ -272,7 +279,7 @@ function plot(fg::FactorGraph;
         println("Graph contains no edges")
         return nothing
     end
-    names = [""*string(i)*"" for i in [1:fg.m; 1:fg.n]]
+    nodenames = [""*string(i)*"" for i in [factnames; varnames]]
     node_idx = [ones(Int,fg.m); 2*ones(Int,fg.n)]
     node_idx[highlighted_factors] .= 3
     node_idx[m .+ highlighted_nodes] .= 4
@@ -282,9 +289,13 @@ function plot(fg::FactorGraph;
     nodecolor = colors[node_idx]
     strokewidths = [0.5, 0.1, 0.5, 0.1]
     nodestrokewidth = strokewidths[node_idx]
+    edges_idx = [1 for _ in edges(g)]
+    edgecolor = [a==1 ? :black : :none for a in adjacency_matrix(g)]
+    highlighted_edges_ = [(t[1],t[2]+fg.m) for t in highlighted_edges]
+    edgecolor[CartesianIndex.(highlighted_edges_)] .= :red
     
-    return graphplot(g, curves=false, names=names,
+    return graphplot(g, curves=false, names=nodenames,
         nodeshape = nodeshape, nodecolor=colors[node_idx],
         method=method, nodesize=0.15, fontsize=7, 
-        nodestrokewidth=nodestrokewidth)
+        nodestrokewidth=nodestrokewidth, edgecolor=edgecolor)
 end

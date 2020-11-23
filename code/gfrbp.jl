@@ -47,12 +47,6 @@ abstract type LossyResults end
     maxchange::Vector{Float64} = Vector{Float64}(undef,0)
 end
 
-# function LossyResults(algo::T) where {T<:Union{BP,MS}}
-#     return BPResults{T}(maxdiff=zeros(algo.maxiter), 
-#         codeword=falses(algo.maxiter),
-#         maxchange=zeros(algo.maxiter))
-# end
-
 function onebpiter!(fg::FactorGraph, algo::BP, neutral=neutralel(algo,fg.q))
 
     maxdiff = diff = 0.0

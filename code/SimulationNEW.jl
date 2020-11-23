@@ -1,5 +1,5 @@
 #### Perform simulations and store results ####
-using Parameters    # constructors with default values
+using Parameters, Lazy    # constructors with default values
 
 @with_kw struct Simulation{T<:LossyAlgo}
     # algo::T = T()
@@ -22,25 +22,32 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
     randseed = 100,                 # For reproducibility
     verbose = true)
 
-    lm = LossyModel(q, n, m+b, beta2=init_beta2(algo), verbose=verbose, 
-        arbitrary_mult=arbitrary_mult,
-        randseed=randseed)
+    results = Vector{LossyResults}(undef, niter)
+    runtimes = zeros(niter)
+
+    lm = LossyModel(q, n, m+b, beta2=beta2_init(algo), verbose=verbose, 
+        arbitrary_mult=arbitrary_mult, randseed=randseed)
 
     breduction!(lm.fg, b, randseed=randseed)
 
-    
-
-    arbitrary_mult = (lm.fg.mult == gftables(lm.fg.q))
-    results = Vector{LossyResults}(undef, niter)
-    runtimes = zeros(niter)
+    verbose && println()
     for it in 1:niter
-        (results[it], runtimes[it]) = @timed solve!(lm, algo, randseed0randseed)
+        if !samevector
+            lm.y .= rand(MersenneTwister(randseed+it), 0:q-1, n)
+        end
+        if !samegraph
+            lm.fg = ldpc_graph(q, n, m+b, verbose=verbose,
+                randseed=randseed+it, arbitrary_mult=arbitrary_mult)
+            breduction!(lm.fg, b, randseed=randseed+it)
+        end
+        (results[it], runtimes[it]) = @timed solve!(lm, algo, randseed=randseed)
+        
+        # Reinitialize messages if you're gonna reuse the same graph
+        samegraph && refresh!(lm.fg)
     end
-    return Simulation{typeof(algo)}(q=q, n=n, m=m, arbitrary_mult=arbitrary_mult,
-        results=results, niter=niter)
+    arbitrary_mult = (lm.fg.mult == gftables(lm.fg.q))
+    return Simulation{typeof(algo)}(q,n,m,niter,b,arbitrary_mult,results,runtimes)
 end
-
-
 
 
 # Binary entropy function
@@ -55,3 +62,8 @@ function H2(x::Real)
 end
 
 rdb(D::Real) = 1-H2(D)
+
+function distortion(results::Vector{LossyResults})
+    D = [r.distortion for r in results]
+end
+@forward Simulation.results distortion

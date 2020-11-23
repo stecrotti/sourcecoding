@@ -233,8 +233,7 @@ end
 
 function nfacts(fg::FactorGraph)    # number of hyperedges in the core
      Nfact = 0
-     Fneigs = fg.Fneigs
-     for f in Fneigs
+     for f in fg.Fneigs
          f != [] && (Nfact += 1)
      end
      return Nfact

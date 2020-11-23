@@ -41,13 +41,13 @@ function allgfqstrings(q::Int, len::Int)::Array{Int,2}
 end
 
 """
-    Enum <: LossyAlgo
+Exhaust_enum <: LossyAlgo
 
 Algorithm to solve lossy compression problem exactly by exhaustive enumeration.
 """
-struct Enum <: LossyAlgo; end
+struct ExhaustEnum <: LossyAlgo; end
 
-function solve!(lm::LossyModel, algo::Enum)
+function solve!(lm::LossyModel, algo::ExhaustEnum)
     solutions = enum_solutions(lm)
     distortions = [distortion(lm,x) for x in solutions]
     (minval, minidx) = findmin(distortions)

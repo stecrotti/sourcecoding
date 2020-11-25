@@ -308,6 +308,9 @@ end
 
 function solve!(lm::LossyModel, algo::Union{BP,MS}, args...; kwargs...)
     output = bp!(lm.fg, algo, lm.y, args...; kwargs...)
+    if kwargs[:verbose] 
+        println("Distortion ", output.distortion, ". Parity ", output.parity)
+    end
     lm.x = guesses(lm.fg)
     return output
 end

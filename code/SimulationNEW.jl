@@ -1,5 +1,5 @@
 #### Perform simulations and store results ####
-using Parameters, Lazy    # constructors with default values
+using Parameters, Lazy  
 
 @with_kw struct Simulation{T<:LossyAlgo}
     # algo::T = T()
@@ -20,7 +20,7 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
     samegraph = false,              # If true, only 1 graph is extracted and all |navg| simulations are run on it
     samevector = false,             # If true, only 1 vector is extracted and all |navg| simulations are run on it
     randseed = 100,                 # For reproducibility
-    verbose = true)
+    verbose = false)
 
     results = Vector{LossyResults}(undef, niter)
     runtimes = zeros(niter)
@@ -36,11 +36,12 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
             lm.y .= rand(MersenneTwister(randseed+it), 0:q-1, n)
         end
         if !samegraph
-            lm.fg = ldpc_graph(q, n, m+b, verbose=verbose,
+            lm.fg = ldpc_graph(q, n, m+b, verbose=false,
                 randseed=randseed+it, arbitrary_mult=arbitrary_mult)
             breduction!(lm.fg, b, randseed=randseed+it)
         end
-        (results[it], runtimes[it]) = @timed solve!(lm, algo, randseed=randseed)
+        (results[it], runtimes[it]) = @timed solve!(lm, algo, randseed=randseed,
+            verbose=verbose)
         
         # Reinitialize messages if you're gonna reuse the same graph
         samegraph && refresh!(lm.fg)
@@ -63,7 +64,25 @@ end
 
 rdb(D::Real) = 1-H2(D)
 
+function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}}; 
+    label::String="Experimental data") where {T<:LossyAlgo}
+
+    dist = distortion.(sims)
+    rate = [1-sim.m/sim.n for sim in sims]
+    Plots.scatter!(pl, rate, dist, label=label)
+    xlabel!(pl, "Rate")
+    ylabel!(pl, "Distortion")
+    return pl
+end
+
+function plot(sims::Vector{Simulation{T}}; kwargs...) where {T<:LossyAlgo}
+    d = LinRange(0,0.5,100)
+    r = LinRange(0, 1, 100)
+    pl = Plots.plot(rdb.(d), d, label="RDB")
+    return plot!(pl, sims; kwargs...)
+end
+
 function distortion(results::Vector{LossyResults})
-    D = [r.distortion for r in results]
+    D = mean([r.distortion for r in results])
 end
 @forward Simulation.results distortion

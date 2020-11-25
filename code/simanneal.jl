@@ -7,12 +7,8 @@ struct Metrop1 <: MCMove; end
     basis::Array{Int,2}=Array{Int,2}(undef,0,0)
     basis_coeffs::Vector{Int}=Vector{Int}(undef,0)
 end
+struct MetropSmallJumps <: MCMove; end
 
-# refresh!(mc_move::MCMove) = nothing
-# function refresh!(mc_move::MetropBasisCoeffs)
-#     mc_move.basis_coeffs=Vector{Int}(undef,0)
-#     return nothing
-# end
 
 @with_kw struct SAResults <: LossyResults
     outcome::Symbol
@@ -46,7 +42,7 @@ end
 
 function solve!(lm::LossyModel, algo::SA,
         distortions::Vector{Vector{Float64}}=[zeros(algo.nsamples) for _ in 1:size(algo.betas,1)];
-        verbose::Bool=true, randseed::Int=0)    
+        verbose::Bool=false, randseed::Int=0)    
     # Initialize to the requested initial state
     lm.x = algo.init_state(lm)
     nbetas = size(algo.betas,1)
@@ -69,7 +65,6 @@ function solve!(lm::LossyModel, algo::SA,
         parity = sum(paritycheck(lm))
         # Check stopping criterion
         if algo.stop_crit(lm, distortions[b], acceptance_ratio)
-            # return (:stopped, min_dist, algo.betas[b,:], argmin_beta)
             return SAResults(outcome=:stopped, parity=parity, distortion=min_dist,
                 beta_argmin=algo.betas[argmin_beta,:])
         end
@@ -93,7 +88,9 @@ function mc!(lm::LossyModel, algo::SA, randseed=0;
     acceptance_ratio = zeros(algo.nsamples)
     # Initial energy
     en = energy(lm)
-    verbose && (prog = Progress(algo.nsamples, to_display))
+    prog = Progress(algo.nsamples, to_display)
+    # wait_time = verbose ? 0.1 : Inf
+    # @showprogress wait_time to_display for n in 1:algo.nsamples
     for n in 1:algo.nsamples
         for it in 1:algo.sample_every
             acc, dE = onemcstep!(lm , algo.mc_move, randseed)
@@ -105,7 +102,7 @@ function mc!(lm::LossyModel, algo::SA, randseed=0;
         if sum(paritycheck(lm)) == 0
             distortions[n] = distortion(lm)
         end
-        verbose && next!(prog)
+        next!(prog)
     end
     return distortions, acceptance_ratio
 end
@@ -120,7 +117,7 @@ function onemcstep!(lm::LossyModel, mc_move::MCMove, randseed::Int=0)
 end
 
 # In general, accept by computing the full energy
-# For particular choices of proposed new state, this method is overridden for
+# For particular choices of proposed new state, this method can be overridden for
 #  something faster that exploits the fact that only a few terms in the energy change
 function accept(mc_move::MCMove, lm::LossyModel, xnew::Vector{Int},
         randseed::Int=0)
@@ -150,11 +147,119 @@ function propose(mc_move::MetropBasisCoeffs, lm::LossyModel, randseed::Int=0)
     to_be_flipped = rand(1:k)
     coeffs_new = copy(coeffs_old)
     # Flip
-    coeffs_new[to_be_flipped] = rand([k for k=0:q-1 if k!=coeffs_old[to_be_flipped]])
+    coeffs_new[to_be_flipped] = rand(MersenneTwister(randseed),
+        [k for k=0:q-1 if k!=coeffs_old[to_be_flipped]])
     # Project on basis to get the new state
     x_new = mc_move.basis*coeffs_new
     return x_new
 end
+
+function propose(mc_move::MetropSmallJumps, lm::LossyModel, randseed::Int=0)
+    xnew = copy(lm.x)
+    # Pick a site at random and start a seaweed from there
+    site = rand(MersenneTwister(randseed), 1:lm.fg.n)
+    sw = seaweed(lm.fg, site)
+    # Add seaweed (which is a valid solution) to the old state
+    xnew = xor.(xnew, sw)
+    return xnew
+end
+
+
+### Build a seaweed as described in https://arxiv.org/pdf/cond-mat/0207140.pdf
+
+function seaweed(fg::FactorGraph, seed::Int, depths::Vector{Int}=lr(fg)[2],
+    to_flip::BitArray{1}=falses(fg.n))
+    # Check that there is at least 1 leaf
+    @assert nvarleaves(fg) > 0 "Graph must contain at least 1 leaf"
+    # Check that seed is one of the variables in the graph
+    @assert seed <= fg.n "Cannot use var $seed as seed since FG has $(fg.n) variables"
+    # Check that core is empty
+    if !all(depths.!=0)
+        g = SimpleGraph(full_adjmat(fg))
+        @show length(connected_components(g))
+        error("Function not supported for non-empty core graphs")
+    end
+    # @assert all(depths.!=0) "Function not supported for non-empty core graphs"
+    grow!(fg, seed, 0, depths, to_flip)
+    # check that the resulting seaweed satisfies parity
+    to_flip_int = Int.(to_flip)
+    parity = sum(paritycheck(fg, to_flip_int))
+    @assert parity==0
+    return Int.(to_flip)
+end
+
+function grow!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
+        to_flip::BitArray{1})
+    # flip v
+    to_flip[v] = !(to_flip[v])
+    # branches must grow in all directions except the one we're coming from,
+    #  i.e. factor f
+    neigs_of_v = [e for e in fg.Vneigs[v] if e != f]
+    # find the factor below v (if any)
+    i = findfirst(ee->isbelow(ee, v, fg, depths), neigs_of_v)
+    # grow upwards branches everywhere except where you came from (factor f) and
+    #  factor below (factor with index i)
+    for (j,ee) in enumerate(neigs_of_v); if ee!=f && j!=i
+        grow_upwards!(fg, v, ee, depths, to_flip)
+    end; end
+    # grow downwards to maximum 1 factor
+    if !isnothing(i)
+        grow_downwards!(fg, v, neigs_of_v[i], depths, to_flip)
+    end
+    return nothing
+end
+
+function grow_downwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
+    to_flip::BitArray{1})
+    # consider all neighbors except the one we're coming from (v)
+    neigs_of_f = [w for w in fg.Fneigs[f] if w != v]
+    if !isempty(neigs_of_f)
+        # find maximum depth
+        maxdepth = maximum(depths[neigs_of_f])
+        argmaxdepth = findall(depths[neigs_of_f] .== maxdepth)
+        # pick at random one of the nieghbors with equal max depth
+        new_v = neigs_of_f[rand(argmaxdepth)]
+        grow!(fg, new_v, f, depths, to_flip)
+    end
+    return nothing
+end
+
+function grow_upwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
+    to_flip::BitArray{1})
+    # consider all neighbors except the one we're coming from (v)
+    neigs_of_f = [w for w in fg.Fneigs[f] if w != v]
+    if !isempty(neigs_of_f)
+        # find minimum depth
+        mindepth = minimum(depths[neigs_of_f])
+        argmindepth = findall(depths[neigs_of_f] .== mindepth)
+        # pick at random one of the nieghbors with equal min depth
+        new_v = neigs_of_f[rand(argmindepth)]
+        grow!(fg, new_v, f, depths, to_flip)
+    end
+    return nothing
+end
+
+function isbelow(e::Int, v::Int, fg::FactorGraph, depths::Vector{Int})
+    neigs_of_e = fg.Fneigs[e]
+    mindepth_idx = argmin(depths[neigs_of_e])
+    isbel = (neigs_of_e[mindepth_idx] == v)
+    return isbel
+end
+
+function plot_seaweed(fg::FactorGraph, seed::Int)
+    depths = lr(fg)[2]
+    sw = seaweed(fg, seed, depths)
+    sw_idx = (1:fg.n)[Bool.(sw)]
+    highlighted_edges = Tuple{Int,Int}[]
+    for v in sw_idx
+        for f in fg.Vneigs[v]
+            push!(highlighted_edges, (f,v))
+        end
+    end
+    plot(fg, highlighted_edges=highlighted_edges, varnames = depths)
+end
+
+
 
 function metrop_accept(dE::Real, randseed::Int)::Bool
     if dE < 0

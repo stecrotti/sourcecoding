@@ -3,8 +3,8 @@ unicodeplots()
 include("./../headers.jl")
 
 q = 2
-n = 10000
-mvals = Int.(round.(n*(0.5:0.05:0.9)))
+n = Int(5e4)
+mvals = Int.(round.(n*(0.5:0.05:1.0)))
 b = 1
 navg = 100
 seed = 12345

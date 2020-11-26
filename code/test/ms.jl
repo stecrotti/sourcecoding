@@ -4,8 +4,8 @@ unicodeplots()
 include("./../headers.jl")
 include("./../SimulationNEW.jl")
 
-const q = 2
-const n = 1200
+const q = 8
+const n = 800
 const mvals = reverse(Int.(round.(n*(0.2:0.35:0.9))))
 const b = Int(round(n/30))
 const niter = 30

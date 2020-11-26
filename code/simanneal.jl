@@ -1,5 +1,5 @@
 #### Perform simulated annealing on a LossyModel object. Flexible for new MC moves to be added ####
-using ProgressMeter
+using ProgressMeter, Statistics
 
 abstract type MCMove end
 struct Metrop1 <: MCMove; end
@@ -15,6 +15,7 @@ struct MetropSmallJumps <: MCMove; end
     @assert outcome in [:stopped, :finished]
     parity::Int
     distortion::Float64
+    acceptance_ratio::Float64
     beta_argmin::Vector{Float64}                # Temperatures for which the min was achieved
 end
 
@@ -41,7 +42,8 @@ function SA(lm::LossyModel; kwargs...)
 end
 
 function solve!(lm::LossyModel, algo::SA,
-        distortions::Vector{Vector{Float64}}=[zeros(algo.nsamples) for _ in 1:size(algo.betas,1)];
+        distortions::Vector{Vector{Float64}}=[zeros(algo.nsamples) for _ in 1:size(algo.betas,1)],
+        acceptance_ratio::Vector{Vector{Float64}}=[zeros(algo.nsamples) for _ in 1:size(algo.betas,1)];
         verbose::Bool=false, randseed::Int=0)    
     # Initialize to the requested initial state
     lm.x = algo.init_state(lm)
@@ -54,7 +56,7 @@ function solve!(lm::LossyModel, algo::SA,
         lm.beta1 = algo.betas[b,1]
         lm.beta2 = algo.betas[b,2]
         # Run MC
-        distortions[b], acceptance_ratio = mc!(lm, algo, randseed, 
+        distortions[b], acceptance_ratio[b] = mc!(lm, algo, randseed, 
         verbose=verbose, to_display="MC running β₁=$(lm.beta1), "*
             "β₂=$(lm.beta2) ")
         (m,i) = findmin(distortions[b])
@@ -64,19 +66,21 @@ function solve!(lm::LossyModel, algo::SA,
         end
         parity = sum(paritycheck(lm))
         # Check stopping criterion
-        if algo.stop_crit(lm, distortions[b], acceptance_ratio)
+        if algo.stop_crit(lm, distortions[b], acceptance_ratio[b])
             return SAResults(outcome=:stopped, parity=parity, distortion=min_dist,
-                beta_argmin=algo.betas[argmin_beta,:])
+                beta_argmin=algo.betas[argmin_beta,:], 
+                acceptance_ratio=mean(mean.(acceptance_ratio)))
         end
         if verbose
             println("Temperature $b of $nbetas:",
             "(β₁=$(algo.betas[b,1]),β₂=$(algo.betas[b,2])).",
-            " Distortion = $(min_dist)")
+            " Distortion $(min_dist). ", 
+            "Acceptance $(round(mean(mean.(acceptance_ratio)),digits=2))")
         end
     end
-    # return (:finished, min_dist, algo.betas[nbetas], argmin_beta)
     return SAResults(outcome=:finished, parity=parity, distortion=min_dist,
-    beta_argmin=algo.betas[argmin_beta,:])
+        beta_argmin=algo.betas[argmin_beta,:], 
+        acceptance_ratio=mean(mean.(acceptance_ratio)))
 end
 
 
@@ -89,11 +93,9 @@ function mc!(lm::LossyModel, algo::SA, randseed=0;
     # Initial energy
     en = energy(lm)
     prog = Progress(algo.nsamples, to_display)
-    # wait_time = verbose ? 0.1 : Inf
-    # @showprogress wait_time to_display for n in 1:algo.nsamples
     for n in 1:algo.nsamples
         for it in 1:algo.sample_every
-            acc, dE = onemcstep!(lm , algo.mc_move, randseed)
+            acc, dE = onemcstep!(lm , algo.mc_move, randseed+n*algo.sample_every+it)
             en = en + dE*acc
             acceptance_ratio[n] += acc
         end

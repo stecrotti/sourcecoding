@@ -74,7 +74,7 @@ end
 
 function energy(lm::LossyModel, x::Vector{Int}=lm.x)
     ener_checks = energy_checks(lm ,x)
-    ener_overlap = energy_overlap(lm)
+    ener_overlap = energy_overlap(lm, x)
     return ener_checks + ener_overlap
 end
 

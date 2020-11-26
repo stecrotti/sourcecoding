@@ -1,5 +1,5 @@
 #### Reinforced belief propagation and max-sum on 𝔾𝔽(2ᵏ) ####
-using Parameters    # constructors with default values
+using Parameters, ProgressMeter    # constructors with default values
 
 abstract type LossyAlgo end
 

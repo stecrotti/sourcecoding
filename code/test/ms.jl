@@ -15,7 +15,8 @@ sims = Vector{Simulation{MS}}(undef, length(mvals))
 ms = MS(maxiter=500, gamma=1e-2)
 
 for (j,m) in enumerate(mvals)
-    println("##### R = ", 1-n/m, " #####\n")
+    println("##### R = ", round(1-m/n, digits=2), ". ",
+    "$j of $(length(mvals)) #####\n")
     sims[j] = Simulation(q, n, m, ms, b=b, randseed=randseed+200*j, 
         verbose=true)
 end

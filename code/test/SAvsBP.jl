@@ -1,27 +1,28 @@
-# using Plots
-# unicodeplots()
 using Printf, Plots
+unicodeplots()
 
 include("./../headers.jl")
 include("./../SimulationNEW.jl")
 
-q = 2
-n = 1000
-mvals = Int.(round.(n*(0.2:0.1:0.9)))
-b = 10
-niter = 20
-randseed = 123
+const q = 2
+const n = 2000
+const mvals = reverse(Int.(round.(n*(0.25:0.15:0.7))))
+const b = Int(round(n/30))
+const niter = 30
+const randseed = 1234
 
-sa = SA(mc_move=MetropSmallJumps(), nsamples=1000, betas=[Inf 100.0])
+sa = SA(mc_move=MetropSmallJumps(), nsamples=100, 
+    betas=[Inf 0.1; Inf 1.0; Inf 10.0;])
 ms = MS(maxiter=200, gamma=5e-3)
 
 sim_sa = Vector{Simulation{SA}}(undef, length(mvals))
 sim_ms = Vector{Simulation{MS}}(undef, length(mvals))
 
 for (j,m) in enumerate(mvals)
-    sim_ms[j] = Simulation(q,n,m,ms,b=b, niter=niter, verbose=true, 
-        randseed=randseed)
+    println("\n####  m=", m, " ####\n")
     sim_sa[j] = Simulation(q,n,m,sa,b=b, niter=niter, verbose=true, 
+        randseed=randseed)
+    sim_ms[j] = Simulation(q,n,m,ms,b=b, niter=niter, verbose=true, 
         randseed=randseed)
     println("\n### Finished m=", m, " ###")
     println("Distortion SA: ", @sprintf("%.2f", distortion(sim_sa[j])))

@@ -5,9 +5,9 @@ include("./../headers.jl")
 include("./../SimulationNEW.jl")
 
 const q = 2
-const n = 1200
+const n = 3000
 const mvals = reverse(Int.(round.(n*(0.2:0.35:0.9))))
-const b = Int(round(n/30))
+const b = Int(round(n/50))
 const niter = 30
 const randseed = 1234
 

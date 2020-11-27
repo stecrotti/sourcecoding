@@ -166,7 +166,7 @@ end
 
 # Hamming weight
 function hw(x::Int)::Int
-    hd(x, 0)
+    return sum(int2bits(x))
 end
 
 hw(v::Vector{Int})::Int = sum(hw.(v))
@@ -242,8 +242,8 @@ function bits2int(x::Vector{Int})
     return sum(y*2^(i-1) for (i,y) in enumerate(reverse(x)))
 end
 
-function int2bits(x::Int, pad::Int=floor(Int,log2(x+1)))
-    x > 2^pad && error("Input x is too large to fit in a bit vector of length $pad")
+function int2bits(x::Int, pad::Int=ceil(Int,log2(x+1)))
+    x > 2^pad && error("Input $x is too large to fit in a bit vector of length $pad")
     return reverse(digits(x, base=2, pad=pad))
 end
 
@@ -265,10 +265,6 @@ function gfqto2(H::Array{Int,2}, k::Int=1)
     return Hnew
 end
 
-# function int2gfq(x::Int, k::Int=1)
-#     bits = int2bits(x, nextprod([floor(Int,log2(x+1))],2^k))
-#     return gf2toq(bits, k)
-# end
 function int2gfq(x::Int, k::Int=1, pad::Int=ndigits(x,base=2^k))
     # x > 2^pad && error("Input x is too large to fit in a bit vector of length $pad")
     return reverse(digits(x, base=2^k, pad=pad))

@@ -5,15 +5,15 @@ include("./../headers.jl")
 include("./../SimulationNEW.jl")
 
 const q = 2
-const n = 2000
+const n = 5000
 const mvals = reverse(Int.(round.(n*(0.25:0.15:0.7))))
 const b = Int(round(n/30))
-const niter = 30
+const niter = 40
 const randseed = 1234
 
-sa = SA(mc_move=MetropSmallJumps(), nsamples=100, 
+sa = SA(mc_move=MetropSmallJumps(), nsamples=300, 
     betas=[Inf 0.1; Inf 1.0; Inf 10.0;])
-ms = MS(maxiter=200, gamma=5e-3)
+ms = MS(maxiter=500, gamma=5e-3)
 
 sim_sa = Vector{Simulation{SA}}(undef, length(mvals))
 sim_ms = Vector{Simulation{MS}}(undef, length(mvals))

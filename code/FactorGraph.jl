@@ -169,7 +169,8 @@ function lr!(fg::FactorGraph, depth::Int=1, depths=zeros(Int,fg.n))
 end
 function lr(fg::FactorGraph) 
     fg_ = deepcopy(fg)
-    return fg_, lr!(fg_)
+    depths = lr!(fg_)
+    return fg_, depths
 end
 function plotdepths(fg::FactorGraph)
     _, depths = lr(fg)

@@ -3,11 +3,28 @@ using ProgressMeter, Statistics
 
 abstract type MCMove end
 struct Metrop1 <: MCMove; end
-@with_kw struct MetropBasisCoeffs <: MCMove
+@with_kw mutable struct MetropBasisCoeffs <: MCMove
     basis::Array{Int,2}=Array{Int,2}(undef,0,0)
     basis_coeffs::Vector{Int}=Vector{Int}(undef,0)
 end
-struct MetropSmallJumps <: MCMove; end
+@with_kw mutable struct MetropSmallJumps <: MCMove
+    depths::Vector{Int}=Vector{Int}(undef,0)
+    isincore::BitArray{1}=falses(0)
+end
+
+function adapt_to_model!(mc_move::MCMove, lm::LossyModel)
+    nothing
+end
+function adapt_to_model!(mc_move::MetropSmallJumps, lm::LossyModel)
+    _,depths = lr(lm.fg)
+    isincore = (depths .== 0)
+    mc_move.depths = depths
+    mc_move.isincore = isincore
+end
+function adapt_to_model!(mc_move::MetropBasisCoeffs, lm::LossyModel)
+    mc_move.basis = nullspace(lm)
+    mc_move.basis_coeffs = zeros(Int, size(mc_move.basis,2))
+end
 
 
 @with_kw struct SAResults <: LossyResults
@@ -19,7 +36,6 @@ struct MetropSmallJumps <: MCMove; end
     beta_argmin::Vector{Float64}                # Temperatures for which the min was achieved
 end
 
-# LossyResults(algo::SA) = SAResults()
 
 #### SIMULATED ANNEALING
 @with_kw struct SA <: LossyAlgo
@@ -30,7 +46,6 @@ end
     stop_crit::Function = (crit(varargs...) = false)                        # Stopping criterion callback
     init_state::Function = (init(lm::LossyModel)=zeros(Int, lm.fg.n))       # Function to initialize internal state
 end
-# refresh!(sa::SA) = refresh!(sa.mc_move)
 
 # Quick constructor that adapts the number of iterations to the size of the problem
 function SA(lm::LossyModel; kwargs...)
@@ -47,6 +62,8 @@ function solve!(lm::LossyModel, algo::SA,
         verbose::Bool=false, randseed::Int=0)    
     # Initialize to the requested initial state
     lm.x = algo.init_state(lm)
+    # Adapt mc_move parameters to the current model
+    adapt_to_model!(algo.mc_move, lm)
     nbetas = size(algo.betas,1)
     min_dist = Inf
     argmin_beta = nbetas+1
@@ -158,8 +175,9 @@ end
 
 function propose(mc_move::MetropSmallJumps, lm::LossyModel, randseed::Int=0)
     xnew = copy(lm.x)
-    # Pick a site at random and start a seaweed from there
-    site = rand(MersenneTwister(randseed), 1:lm.fg.n)
+    # Pick a site at random that is not in the core and start a seaweed from there
+    not_in_core = (1:lm.fg.n)[.!mc_move.isincore]
+    site = rand(MersenneTwister(randseed), not_in_core)
     sw = seaweed(lm.fg, site)
     # Add seaweed (which is a valid solution) to the old state
     xnew = xor.(xnew, sw)
@@ -175,14 +193,11 @@ function seaweed(fg::FactorGraph, seed::Int, depths::Vector{Int}=lr(fg)[2],
     @assert nvarleaves(fg) > 0 "Graph must contain at least 1 leaf"
     # Check that seed is one of the variables in the graph
     @assert seed <= fg.n "Cannot use var $seed as seed since FG has $(fg.n) variables"
-    # Check that core is empty
-    if !all(depths.!=0)
-        g = SimpleGraph(full_adjmat(fg))
-        @show length(connected_components(g))
-        error("Function not supported for non-empty core graphs")
-    end
-    # @assert all(depths.!=0) "Function not supported for non-empty core graphs"
-    grow!(fg, seed, 0, depths, to_flip)
+    # Store which variables are in the core
+    isincore = (depths .== 0)
+    @assert !isincore[seed] "Cannot grow seaweed starting from a variable in the core"
+    # Grow the seaweed
+    grow!(fg, seed, 0, depths, to_flip, isincore)
     # check that the resulting seaweed satisfies parity
     to_flip_int = Int.(to_flip)
     parity = sum(paritycheck(fg, to_flip_int))
@@ -191,7 +206,7 @@ function seaweed(fg::FactorGraph, seed::Int, depths::Vector{Int}=lr(fg)[2],
 end
 
 function grow!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
-        to_flip::BitArray{1})
+        to_flip::BitArray{1}, isincore::BitArray{1})
     # flip v
     to_flip[v] = !(to_flip[v])
     # branches must grow in all directions except the one we're coming from,
@@ -202,41 +217,41 @@ function grow!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int},
     # grow upwards branches everywhere except where you came from (factor f) and
     #  factor below (factor with index i)
     for (j,ee) in enumerate(neigs_of_v); if ee!=f && j!=i
-        grow_upwards!(fg, v, ee, depths, to_flip)
+        grow_upwards!(fg, v, ee, depths, to_flip, isincore)
     end; end
     # grow downwards to maximum 1 factor
     if !isnothing(i)
-        grow_downwards!(fg, v, neigs_of_v[i], depths, to_flip)
+        grow_downwards!(fg, v, neigs_of_v[i], depths, to_flip, isincore)
     end
     return nothing
 end
 
 function grow_downwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
-    to_flip::BitArray{1})
+    to_flip::BitArray{1}, isincore::BitArray{1})
     # consider all neighbors except the one we're coming from (v)
-    neigs_of_f = [w for w in fg.Fneigs[f] if w != v]
+    neigs_of_f = [w for w in fg.Fneigs[f] if (w != v && !isincore[w])]
     if !isempty(neigs_of_f)
         # find maximum depth
         maxdepth = maximum(depths[neigs_of_f])
         argmaxdepth = findall(depths[neigs_of_f] .== maxdepth)
         # pick at random one of the nieghbors with equal max depth
         new_v = neigs_of_f[rand(argmaxdepth)]
-        grow!(fg, new_v, f, depths, to_flip)
+        grow!(fg, new_v, f, depths, to_flip, isincore)
     end
     return nothing
 end
 
 function grow_upwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
-    to_flip::BitArray{1})
+    to_flip::BitArray{1}, isincore::BitArray{1})
     # consider all neighbors except the one we're coming from (v)
-    neigs_of_f = [w for w in fg.Fneigs[f] if w != v]
+    neigs_of_f = [w for w in fg.Fneigs[f] if (w != v && !isincore[w])]
     if !isempty(neigs_of_f)
         # find minimum depth
         mindepth = minimum(depths[neigs_of_f])
         argmindepth = findall(depths[neigs_of_f] .== mindepth)
         # pick at random one of the nieghbors with equal min depth
         new_v = neigs_of_f[rand(argmindepth)]
-        grow!(fg, new_v, f, depths, to_flip)
+        grow!(fg, new_v, f, depths, to_flip, isincore)
     end
     return nothing
 end

@@ -2,7 +2,6 @@
 using Parameters, Lazy  
 
 @with_kw struct Simulation{T<:LossyAlgo}
-    # algo::T = T()
     q::Int
     n::Int
     m::Int
@@ -15,6 +14,7 @@ end
 
 function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo; 
     b::Int=0, 
+    gauss_elim::Bool=false,
     niter::Int=50,
     arbitrary_mult::Bool = false,   # Shuffle multiplication table
     samegraph = false,              # If true, only 1 graph is extracted and all |navg| simulations are run on it
@@ -30,6 +30,8 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
         arbitrary_mult=arbitrary_mult, randseed=randseed)
 
     breduction!(lm.fg, b, randseed=randseed)
+
+    gauss_elim && gfref!(lm)
 
     verbose && println()
     for it in 1:niter
@@ -68,7 +70,7 @@ rdb(D::Real) = 1-H2(D)
 function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}}; 
     label::String="Experimental data") where {T<:LossyAlgo}
 
-    dist = distortion.(sims)
+    dist = mean.(distortion.(sims))
     rate = [1-sim.m/sim.n for sim in sims]
     Plots.scatter!(pl, rate, dist, label=label)
     xlabel!(pl, "Rate")

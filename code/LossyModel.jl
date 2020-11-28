@@ -72,6 +72,10 @@ function paritycheck(lm::LossyModel, x::Vector{Int}=lm.x, varargin...)
     return paritycheck(lm.fg, x[:,:], varargin...)
 end
 
+function parity(lm::LossyModel, args...)
+    return sum(paritycheck(lm, args...))
+end
+
 function energy(lm::LossyModel, x::Vector{Int}=lm.x)
     ener_checks = energy_checks(lm ,x)
     ener_overlap = energy_overlap(lm, x)
@@ -90,4 +94,16 @@ end
 
 function energy_overlap(lm::LossyModel, x::Union{Vector{Int},Array{Int,2}}=lm.x)
     return lm.beta2*hd(x, lm.y)
+end
+
+function refresh!(lm::LossyModel, args...)
+    return refresh!(lm.fg, lm.y, args...)
+end
+
+# Gaussian elimination on the graph
+function gfref!(lm::LossyModel)
+    H = adjmat(lm)
+    gfref!(H, lm.fg.q, lm.fg.mult, lm.fg.gfdiv)
+    lm.fg = FactorGraph(H)
+    return nothing
 end

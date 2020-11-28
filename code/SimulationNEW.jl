@@ -20,7 +20,8 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
     samegraph = false,              # If true, only 1 graph is extracted and all |navg| simulations are run on it
     samevector = false,             # If true, only 1 vector is extracted and all |navg| simulations are run on it
     randseed = 100,                 # For reproducibility
-    verbose = false)
+    verbose::Bool = true,
+    showprogress::Bool = verbose)
 
     results = Vector{LossyResults}(undef, niter)
     runtimes = zeros(niter)
@@ -41,8 +42,8 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
             breduction!(lm.fg, b, randseed=randseed+it)
         end
         (results[it], runtimes[it]) = @timed solve!(lm, algo, randseed=randseed,
-            verbose=verbose)
-        
+            verbose=verbose, showprogress=showprogress)
+        verbose && println("# Finished iter $it of $niter: ", output_str(results[it]), "\n")
         # Reinitialize messages if you're gonna reuse the same graph
         samegraph && refresh!(lm.fg)
     end
@@ -83,6 +84,6 @@ function plot(sims::Vector{Simulation{T}}; kwargs...) where {T<:LossyAlgo}
 end
 
 function distortion(results::Vector{LossyResults})
-    D = mean([r.distortion for r in results])
+    D = [r.distortion for r in results]
 end
 @forward Simulation.results distortion

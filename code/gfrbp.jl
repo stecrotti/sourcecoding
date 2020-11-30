@@ -1,5 +1,5 @@
 #### Reinforced belief propagation and max-sum on 𝔾𝔽(2ᵏ) ####
-using Parameters, ProgressMeter    # constructors with default values
+using Parameters, ProgressMeter, Printf
 
 abstract type LossyAlgo end
 
@@ -36,6 +36,12 @@ beta2_init(algo::T) where {T<:Union{BP,MS}} = algo.beta2
 
 abstract type LossyResults end
 
+function output_str(res::LossyResults)
+    out_str = "Parity " * string(res.parity) * ". " *
+              "Distortion " * @sprintf("%.3f ", res.distortion) * "."
+    return out_str
+end
+
 @with_kw struct BPResults{T<:Union{BP,MS}} <: LossyResults
     converged::Bool = false
     parity::Int = 0
@@ -45,6 +51,15 @@ abstract type LossyResults end
     maxdiff::Vector{Float64} = Vector{Float64}(undef,0)
     codeword::BitArray{1} = BitArray{1}(undef,0)
     maxchange::Vector{Float64} = Vector{Float64}(undef,0)
+end
+
+function output_str(res::BPResults{<:Union{BP,MS}})
+    outcome_str = res.converged ? "C" : "U"
+    out_str = outcome_str * " after " * string(res.iterations) * " iters. " *
+              "Parity " * string(res.parity) * ". " *
+              "Distortion " * @sprintf("%.2f", res.distortion) *
+              "."
+    return out_str
 end
 
 function onebpiter!(fg::FactorGraph, algo::BP, neutral=neutralel(algo,fg.q))
@@ -162,7 +177,8 @@ guesses(fg::FactorGraph) = guesses(fg.fields)
 
 function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     maxdiff=zeros(algo.maxiter), codeword=falses(algo.maxiter),
-    maxchange=zeros(algo.maxiter); randseed::Int=0, verbose::Bool=false)
+    maxchange=zeros(algo.maxiter); randseed::Int=0, verbose::Bool=false,
+    showprogress::Bool=verbose)
 
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
     newguesses = zeros(Int,fg.n)
@@ -170,8 +186,10 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     oldmessages = deepcopy(fg.mfv)
     newmessages = deepcopy(fg.mfv)
     parity = sum(paritycheck(fg))
+    wait_time = showprogress ? 1 : Inf
     n = 0
     for trial in 1:algo.Tmax
+        prog = ProgressMeter.Progress(algo.maxiter, wait_time, "Trial $trial/$(algo.Tmax) ")
         for t in 1:algo.maxiter
             newguesses,maxdiff[t] = onebpiter!(fg, algo)
             newmessages .= fg.mfv
@@ -187,7 +205,6 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                     end
                 end
                 if maxchange[t] < algo.tol
-                    # return :converged, distortion(fg, y), t, trial
                     return BPResults{typeof(algo)}(converged=true, parity=parity,
                         distortion=distortion(fg, y), trials=trial, iterations=t,
                         maxdiff=maxdiff, codeword=codeword, maxchange=maxchange)
@@ -224,15 +241,16 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                 error("Field convergence must be one of :messages, :decvars, :parity")
             end
             reinforce!(fg, algo)
-            if verbose
-                steps_tot = 20
-                progress = div(t*steps_tot, algo.maxiter)
-                print("\u1b[2K")    # clear line
-                println("  [", "-"^progress," "^(steps_tot-progress), "] ",
-                    "$t/$(algo.maxiter), trial $trial/$(algo.Tmax), ",
-                    performance_name, ": ", performance_value)
-                print("\u1b[1F")    # move cursor to beginning of line
-            end
+            # if verbose
+            #     steps_tot = 20
+            #     progress = div(t*steps_tot, algo.maxiter)
+            #     print("\u1b[2K")    # clear line
+            #     println("  [", "-"^progress," "^(steps_tot-progress), "] ",
+            #         "$t/$(algo.maxiter), trial $trial/$(algo.Tmax), ",
+            #         performance_name, ": ", performance_value)
+            #     print("\u1b[1F")    # move cursor to beginning of line
+            # end
+            ProgressMeter.next!(prog)
         end
         if trial != algo.Tmax
             # If convergence not reached, re-initialize random fields and start again
@@ -244,12 +262,11 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             n = 0
         end
     end
-    # Clear the last progress line
-    if verbose
-        print("\u1b[2K")    # clear line
-        print("\u1b[1F")    # move cursor to beginning of line
-    end
-    # return :unconverged, distortion(fg, y), maxiter, algo.Tmax
+    # # Clear the last progress line
+    # if verbose
+    #     print("\u1b[2K")    # clear line
+    #     print("\u1b[1F")    # move cursor to beginning of line
+    # end
     return BPResults{typeof(algo)}(converged=false, parity=parity,
                 distortion=0.5, trials=algo.Tmax, 
                 iterations=algo.maxiter, maxdiff=maxdiff, codeword=codeword, 
@@ -299,18 +316,16 @@ function refresh!(fg::FactorGraph)
     return nothing
 end
 
-function refresh!(fg::FactorGraph, y::Vector{Int}, q::Int=2,
+function refresh!(fg::FactorGraph, y::Vector{Int},
     algo::Union{BP,MS}=MS(); randseed::Int=0)
     refresh!(fg)
-    fg.fields .= extfields(q, y, algo, randseed=randseed)
+    fg.fields .= extfields(fg.q, y, algo, randseed=randseed)
     return nothing
 end
 
 function solve!(lm::LossyModel, algo::Union{BP,MS}, args...; kwargs...)
+    extfields!(lm, algo, randseed=kwargs[:randseed])
     output = bp!(lm.fg, algo, lm.y, args...; kwargs...)
-    if kwargs[:verbose] 
-        println("Distortion ", output.distortion, ". Parity ", output.parity)
-    end
     lm.x = guesses(lm.fg)
     return output
 end

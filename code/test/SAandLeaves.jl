@@ -21,5 +21,7 @@ for (i,b) in enumerate(bvals)
 end
 
 unicodeplots()
-pl = plot(sims, label="SA")
+mean_dist = distortion(sims)
+Plots.plot(bvals, mean_dist, xlabel="b", ylabel="D")
+title!("Distortion vs number of removed factors")
 

@@ -1,5 +1,5 @@
 #### Perform simulated annealing on a LossyModel object. Flexible for new MC moves to be added ####
-using ProgressMeter, Statistics
+using ProgressMeter, Statistics, Printf
 
 abstract type MCMove end
 struct Metrop1 <: MCMove; end
@@ -36,6 +36,14 @@ end
     beta_argmin::Vector{Float64}                # Temperatures for which the min was achieved
 end
 
+function output_str(res::SAResults)
+    out_str = "Parity " * string(res.parity) * ". " *
+              "Distortion " * @sprintf("%.3f ", res.distortion) *
+              "at β₁=" * string(res.beta_argmin[1]) * ", β₂=" * 
+                string(res.beta_argmin[2]) * "."
+    return out_str
+end
+
 
 #### SIMULATED ANNEALING
 @with_kw struct SA <: LossyAlgo
@@ -57,9 +65,9 @@ function SA(lm::LossyModel; kwargs...)
 end
 
 function solve!(lm::LossyModel, algo::SA,
-        distortions::Vector{Vector{Float64}}=[zeros(algo.nsamples) for _ in 1:size(algo.betas,1)],
+        distortions::Vector{Vector{Float64}}=[fill(0.5, algo.nsamples) for _ in 1:size(algo.betas,1)],
         acceptance_ratio::Vector{Vector{Float64}}=[zeros(algo.nsamples) for _ in 1:size(algo.betas,1)];
-        verbose::Bool=false, randseed::Int=0)    
+        verbose::Bool=false, randseed::Int=0, showprogress::Bool=verbose)    
     # Initialize to the requested initial state
     lm.x = algo.init_state(lm)
     # Adapt mc_move parameters to the current model
@@ -75,7 +83,7 @@ function solve!(lm::LossyModel, algo::SA,
         # Run MC
         distortions[b], acceptance_ratio[b] = mc!(lm, algo, randseed, 
         verbose=verbose, to_display="MC running β₁=$(lm.beta1), "*
-            "β₂=$(lm.beta2) ")
+            "β₂=$(lm.beta2) ", showprogress=showprogress)
         (m,i) = findmin(distortions[b])
         if m < min_dist
             min_dist = m
@@ -92,7 +100,7 @@ function solve!(lm::LossyModel, algo::SA,
             println("Temperature $b of $nbetas:",
             "(β₁=$(algo.betas[b,1]),β₂=$(algo.betas[b,2])).",
             " Distortion $(min_dist). ", 
-            "Acceptance $(round(mean(mean.(acceptance_ratio)),digits=2))")
+            "Acceptance ", @sprintf("%.0f",mean(mean.(acceptance_ratio))*100), "%")
         end
     end
     return SAResults(outcome=:finished, parity=parity, distortion=min_dist,
@@ -104,15 +112,19 @@ end
 #### Monte Carlo subroutines
 
 function mc!(lm::LossyModel, algo::SA, randseed=0;
-    verbose::Bool=false, to_display::String="Running Monte Carlo...")
+    verbose::Bool=false, to_display::String="Running Monte Carlo...", 
+    showprogress::Bool=verbose)
+
     distortions = fill(+Inf, algo.nsamples)
     acceptance_ratio = zeros(algo.nsamples)
     # Initial energy
     en = energy(lm)
-    prog = Progress(algo.nsamples, to_display)
+    wait_time = showprogress ? 1 : Inf
+    prog = Progress(algo.nsamples, wait_time, to_display)
     for n in 1:algo.nsamples
         for it in 1:algo.sample_every
-            acc, dE = onemcstep!(lm , algo.mc_move, randseed+n*algo.sample_every+it)
+            acc, dE = onemcstep!(lm , algo.mc_move, 
+                randseed+n*algo.sample_every+it)
             en = en + dE*acc
             acceptance_ratio[n] += acc
         end
@@ -187,14 +199,14 @@ end
 
 ### Build a seaweed as described in https://arxiv.org/pdf/cond-mat/0207140.pdf
 
-function seaweed(fg::FactorGraph, seed::Int, depths::Vector{Int}=lr(fg)[2],
-    to_flip::BitArray{1}=falses(fg.n))
+function seaweed(fg::FactorGraph, seed::Int, depths::Vector{Int}=lr(fg)[2], 
+        isincore::BitArray{1} = (depths .== 0),
+        to_flip::BitArray{1}=falses(fg.n))
     # Check that there is at least 1 leaf
     @assert nvarleaves(fg) > 0 "Graph must contain at least 1 leaf"
     # Check that seed is one of the variables in the graph
     @assert seed <= fg.n "Cannot use var $seed as seed since FG has $(fg.n) variables"
-    # Store which variables are in the core
-    isincore = (depths .== 0)
+    # Check that seed is a variable outside the core    
     @assert !isincore[seed] "Cannot grow seaweed starting from a variable in the core"
     # Grow the seaweed
     grow!(fg, seed, 0, depths, to_flip, isincore)

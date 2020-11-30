@@ -55,7 +55,8 @@ end
 
 function output_str(res::BPResults{<:Union{BP,MS}})
     outcome_str = res.converged ? "C" : "U"
-    out_str = outcome_str * " after " * string(res.iterations) * " iters. " *
+    out_str = outcome_str * " after " * string(res.iterations) * " iters, " *
+              string(res.trials) * " trials. " *
               "Parity " * string(res.parity) * ". " *
               "Distortion " * @sprintf("%.2f", res.distortion) *
               "."
@@ -189,7 +190,8 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     wait_time = showprogress ? 1 : Inf
     n = 0
     for trial in 1:algo.Tmax
-        prog = ProgressMeter.Progress(algo.maxiter, wait_time, "Trial $trial/$(algo.Tmax) ")
+        prog = ProgressMeter.Progress(algo.maxiter, wait_time, 
+            "Trial $trial/$(algo.Tmax) ")
         for t in 1:algo.maxiter
             newguesses,maxdiff[t] = onebpiter!(fg, algo)
             newmessages .= fg.mfv
@@ -216,7 +218,6 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                 if newguesses == oldguesses
                     n += 1
                     if n >= algo.nmin
-                        # return :converged, distortion(fg, y), t, trial
                         return BPResults{typeof(algo)}(converged=true, parity=parity,
                         distortion=distortion(fg, y), trials=trial, iterations=t,
                         maxdiff=maxdiff, codeword=codeword, maxchange=maxchange)
@@ -230,7 +231,6 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             elseif algo.convergence == :parity
                 parity = sum(paritycheck(fg))
                 if parity == 0
-                    # return :converged, distortion(fg, y), t, trial
                     return BPResults{typeof(algo)}(converged=true, parity=parity,
                         distortion=distortion(fg, y), trials=trial, iterations=t,
                         maxdiff=maxdiff, codeword=codeword, maxchange=maxchange)
@@ -241,15 +241,6 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                 error("Field convergence must be one of :messages, :decvars, :parity")
             end
             reinforce!(fg, algo)
-            # if verbose
-            #     steps_tot = 20
-            #     progress = div(t*steps_tot, algo.maxiter)
-            #     print("\u1b[2K")    # clear line
-            #     println("  [", "-"^progress," "^(steps_tot-progress), "] ",
-            #         "$t/$(algo.maxiter), trial $trial/$(algo.Tmax), ",
-            #         performance_name, ": ", performance_value)
-            #     print("\u1b[1F")    # move cursor to beginning of line
-            # end
             ProgressMeter.next!(prog)
         end
         if trial != algo.Tmax
@@ -262,11 +253,6 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             n = 0
         end
     end
-    # # Clear the last progress line
-    # if verbose
-    #     print("\u1b[2K")    # clear line
-    #     print("\u1b[1F")    # move cursor to beginning of line
-    # end
     return BPResults{typeof(algo)}(converged=false, parity=parity,
                 distortion=0.5, trials=algo.Tmax, 
                 iterations=algo.maxiter, maxdiff=maxdiff, codeword=codeword, 

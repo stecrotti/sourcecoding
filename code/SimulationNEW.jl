@@ -45,7 +45,8 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
         end
         (results[it], runtimes[it]) = @timed solve!(lm, algo, randseed=randseed,
             verbose=verbose, showprogress=showprogress)
-        verbose && println("# Finished iter $it of $niter: ", output_str(results[it]), "\n")
+        verbose && 
+            println("# Finished iter $it of $niter: ", output_str(results[it]))
         # Reinitialize messages if you're gonna reuse the same graph
         samegraph && refresh!(lm.fg)
     end
@@ -70,9 +71,14 @@ rdb(D::Real) = 1-H2(D)
 function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}}; 
     label::String="Experimental data") where {T<:LossyAlgo}
 
-    dist = mean.(distortion.(sims))
+    dist_avg = mean.(distortion.(sims))
+    dist_sd = std.(distortion.(sims))
     rate = [1-sim.m/sim.n for sim in sims]
-    Plots.scatter!(pl, rate, dist, label=label)
+    if Plots.backend() == Plots.UnicodePlotsBackend()
+        Plots.scatter!(pl, rate, dist_avg, label=label)
+    else
+        Plots.scatter!(pl, rate, dist_avg, label=label, yerror=dist_sd)
+    end
     xlabel!(pl, "Rate")
     ylabel!(pl, "Distortion")
     return pl
@@ -82,6 +88,7 @@ function plot(sims::Vector{Simulation{T}}; kwargs...) where {T<:LossyAlgo}
     d = LinRange(0,0.5,100)
     r = LinRange(0, 1, 100)
     pl = Plots.plot(rdb.(d), d, label="RDB")
+    Plots.plot!(pl, r, 0.5*(-r.+1), label="Naive compression")
     return plot!(pl, sims; kwargs...)
 end
 

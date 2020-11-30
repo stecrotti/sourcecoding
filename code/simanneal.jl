@@ -32,7 +32,7 @@ end
     @assert outcome in [:stopped, :finished]
     parity::Int
     distortion::Float64
-    acceptance_ratio::Float64
+    acceptance_ratio::Vector{Float64}
     beta_argmin::Vector{Float64}                # Temperatures for which the min was achieved
 end
 
@@ -40,7 +40,10 @@ function output_str(res::SAResults)
     out_str = "Parity " * string(res.parity) * ". " *
               "Distortion " * @sprintf("%.3f ", res.distortion) *
               "at β₁=" * string(res.beta_argmin[1]) * ", β₂=" * 
-                string(res.beta_argmin[2]) * "."
+                string(res.beta_argmin[2]) * ". " *
+              "Average proportion of accepted moves: " * 
+                string(res.acceptance_ratio) *
+                "."
     return out_str
 end
 
@@ -65,8 +68,10 @@ function SA(lm::LossyModel; kwargs...)
 end
 
 function solve!(lm::LossyModel, algo::SA,
-        distortions::Vector{Vector{Float64}}=[fill(0.5, algo.nsamples) for _ in 1:size(algo.betas,1)],
-        acceptance_ratio::Vector{Vector{Float64}}=[zeros(algo.nsamples) for _ in 1:size(algo.betas,1)];
+        distortions::Vector{Vector{Float64}}=[fill(0.5, algo.nsamples) 
+            for _ in 1:size(algo.betas,1)],
+        acceptance_ratio::Vector{Vector{Float64}}=[zeros(algo.nsamples) 
+            for _ in 1:size(algo.betas,1)];
         verbose::Bool=false, randseed::Int=0, showprogress::Bool=verbose)    
     # Initialize to the requested initial state
     lm.x = algo.init_state(lm)
@@ -94,7 +99,7 @@ function solve!(lm::LossyModel, algo::SA,
         if algo.stop_crit(lm, distortions[b], acceptance_ratio[b])
             return SAResults(outcome=:stopped, parity=parity, distortion=min_dist,
                 beta_argmin=algo.betas[argmin_beta,:], 
-                acceptance_ratio=mean(mean.(acceptance_ratio)))
+                acceptance_ratio=mean.(acceptance_ratio))
         end
         if verbose
             println("Temperature $b of $nbetas:",
@@ -105,7 +110,7 @@ function solve!(lm::LossyModel, algo::SA,
     end
     return SAResults(outcome=:finished, parity=parity, distortion=min_dist,
         beta_argmin=algo.betas[argmin_beta,:], 
-        acceptance_ratio=mean(mean.(acceptance_ratio)))
+        acceptance_ratio=mean.(acceptance_ratio))
 end
 
 

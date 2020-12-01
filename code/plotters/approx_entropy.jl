@@ -27,3 +27,5 @@ function H2inv(y::Real;
       return nothing
     end
 end
+
+H2prime(D::Real) = log2((1-D)/D)

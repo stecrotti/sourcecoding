@@ -41,7 +41,7 @@ function output_str(res::SAResults)
               "Distortion " * @sprintf("%.3f ", res.distortion) *
               "at β₁=" * string(res.beta_argmin[1]) * ", β₂=" * 
                 string(res.beta_argmin[2]) * ". " *
-              "Average proportion of accepted moves: " * 
+              "Acceptance: " * 
                 string(res.acceptance_ratio) *
                 "."
     return out_str
@@ -105,7 +105,7 @@ function solve!(lm::LossyModel, algo::SA,
             println("Temperature $b of $nbetas:",
             "(β₁=$(algo.betas[b,1]),β₂=$(algo.betas[b,2])).",
             " Distortion $(min_dist). ", 
-            "Acceptance ", @sprintf("%.0f",mean(mean.(acceptance_ratio))*100), "%")
+            "Acceptance ", @sprintf("%.0f",mean(acceptance_ratio[b])*100), "%")
         end
     end
     return SAResults(outcome=:finished, parity=parity, distortion=min_dist,

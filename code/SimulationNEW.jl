@@ -28,12 +28,10 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
 
     lm = LossyModel(q, n, m+b, beta2=beta2_init(algo), verbose=verbose, 
         arbitrary_mult=arbitrary_mult, randseed=randseed)
-
     breduction!(lm.fg, b, randseed=randseed)
 
     gauss_elim && gfref!(lm)
 
-    verbose && println()
     for it in 1:niter
         if !samevector
             lm.y .= rand(MersenneTwister(randseed+it), 0:q-1, n)
@@ -67,12 +65,13 @@ function H2(x::Real)
 end
 
 rdb(D::Real) = 1-H2(D)
+rdbinv(R::Real) = H2inv(1-R)
 
 function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}}; 
     label::String="Experimental data") where {T<:LossyAlgo}
 
     dist_avg = mean.(distortion.(sims))
-    dist_sd = std.(distortion.(sims))
+    dist_sd = std.(distortion.(sims)) ./ [sqrt(sim.niter) for sim in sims]
     rate = [1-sim.m/sim.n for sim in sims]
     if Plots.backend() == Plots.UnicodePlotsBackend()
         Plots.scatter!(pl, rate, dist_avg, label=label)

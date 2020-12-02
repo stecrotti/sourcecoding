@@ -240,11 +240,10 @@ end
 
 function breduction!(fg::FactorGraph, b::Int=1; randseed::Int=0)
     randseed != 0 && Random.seed!(randseed)     # for reproducibility
-    to_be_removed = rand(filter(ff -> factdegree(fg,ff)!=0, 1:fg.m),b)
-    for _ in 1:b
-        deletefactors!(fg, to_be_removed)
-    end
-    return b
+    non_isolated_factors = filter(ff -> factdegree(fg,ff)!=0, 1:fg.m)
+    to_be_removed = shuffle(non_isolated_factors)[1:b]
+    deletefactors!(fg, to_be_removed)
+    return to_be_removed
 end
 
 function polyn(fg::FactorGraph)

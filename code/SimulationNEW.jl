@@ -67,6 +67,8 @@ end
 rdb(D::Real) = 1-H2(D)
 rdbinv(R::Real) = H2inv(1-R)
 
+import Plots: plot!, plot
+
 function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}}; 
     label::String="Experimental data") where {T<:LossyAlgo}
 

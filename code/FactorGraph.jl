@@ -264,6 +264,7 @@ function polyn(fg::FactorGraph)
     return lambda, rho
 end
 
+import Plots.plot
 function plot(fg::FactorGraph; varnames=1:fg.n, factnames=1:fg.m,
     highlighted_nodes=Int[], highlighted_factors=Int[], 
     highlighted_edges::Vector{Tuple{Int,Int}}=Tuple{Int,Int}[], method=:spring)

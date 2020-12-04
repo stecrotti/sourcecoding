@@ -46,3 +46,15 @@ function Psi(delta, p, lambda1, lambda2, k, y0)
     return res
 end
 
+function zeroPsi(p, lambda1, k, y0)
+	lambda2 = 1 - lambda1
+	if p == 0
+		delta0 = 0
+	elseif p == 1
+		delta0 = 0
+	else
+		delta0 = find_zero(delta -> Psi(delta, p, lambda1, lambda2, k, y0), (0.001,0.5))
+	end
+	return delta0
+end
+

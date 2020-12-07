@@ -1,5 +1,5 @@
 #### Perform simulations and store results ####
-using Parameters, Lazy  
+using Parameters, Lazy, StatsBase, Dates
 
 @with_kw struct Simulation{T<:LossyAlgo}
     q::Int
@@ -11,6 +11,7 @@ using Parameters, Lazy
     results::Vector{LossyResults} = Vector{LossyResults}(undef, niter)
     runtimes::Vector{Float64} = zeros(niter)
 end
+
 
 function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo; 
     b::Int=0, 
@@ -52,7 +53,43 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
     return Simulation{typeof(algo)}(q,n,m,niter,b,arbitrary_mult,results,runtimes)
 end
 
+#### GETTERS
+function rate(sim::Simulation{<:LossyAlgo})
+    return 1 - sim.m/sim.n
+end
+function iterations(sim::Simulation{<:LossyAlgo}; convergedonly::Bool=false)
+    return [r.iterations for r in sim.results if (r.converged && convergedonly)]
+end
+function trials(sim::Simulation{<:LossyAlgo}; convergedonly::Bool=false)
+    return [r.trials for r in sim.results if (r.converged || !convergedonly)]
+end
+function runtime(sim::Simulation{<:LossyAlgo}; convergedonly::Bool=false)
+    conv = [r.converged for r in sim.results]
+    run = sim.runtimes
+    return sum(run[conv .| !convergedonly])
+end
+function runtime(sims::Vector{Simulation{T}}; kwargs...) where {T<:LossyAlgo}
+    return sum(runtime(sim; kwargs...) for sim in sims)
+end
 
+
+#### PRINTERS
+function Base.show(io::IO, sim::Simulation{<:LossyAlgo})
+    println(io, "\nSimulation with q=", sim.q,
+        ", n=", sim.n, ", R=", 
+        round(1-sim.m/sim.n,digits=2),
+         ", b=", sim.b,", niter=", sim.niter)
+    return nothing
+end
+function runtime_str(sim::Union{Simulation{<:T},Vector{Simulation{T}}}; 
+        kwargs...) where {T<:LossyAlgo}
+    seconds = Second(round(runtime(sim; kwargs...)))
+    c = canonicalize(seconds)
+    return string(c)
+end
+
+
+#### RATE-DISTORTION
 # Binary entropy function
 function H2(x::Real)
     if 0<x<1
@@ -72,18 +109,24 @@ end
 @forward Simulation.results distortion
 
 #### PLOTTING
-import Plots: plot!, plot
+import Plots: plot!, plot, histogram, bar
 
 function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}}; 
-    label::String="Experimental data") where {T<:LossyAlgo}
-
-    dist_avg = mean.(distortion.(sims))
-    dist_sd = std.(distortion.(sims)) ./ [sqrt(sim.niter) for sim in sims]
-    rate = [1-sim.m/sim.n for sim in sims]
-    if Plots.backend() == Plots.UnicodePlotsBackend()
-        Plots.scatter!(pl, rate, dist_avg, label=label)
+        allpoints::Bool=false,
+        label::String="Experimental data") where {T<:LossyAlgo}
+    dist = distortion.(sims)
+    r = [rate(sim) for sim in sims]
+    if allpoints
+        rate_augmented = vcat([rate(sim)*ones(sim.niter) for sim in sims]...)
+        Plots.scatter!(pl, rate_augmented, vcat(dist...), markersize=3)
     else
-        Plots.scatter!(pl, rate, dist_avg, label=label, yerror=dist_sd)
+        dist_avg = mean.(dist)
+        dist_sd = std.(distortion.(sims)) ./ [sqrt(sim.niter) for sim in sims]
+        if Plots.backend() == Plots.UnicodePlotsBackend()
+            Plots.scatter!(pl, r, dist_avg, label=label)
+        else
+            Plots.scatter!(pl, r, dist_avg, label=label, yerror=dist_sd)
+        end
     end
     xlabel!(pl, "Rate")
     ylabel!(pl, "Distortion")
@@ -99,4 +142,15 @@ function plot(sims::Vector{Simulation{T}}; kwargs...) where {T<:LossyAlgo}
 end
 plot(sim::Simulation{<:LossyAlgo}; kwargs...) = plot([sim]; kwargs...)
 
-# function trials_hist(sim::Simulation{<:LossyAlgo})
+function iters_hist(sim::Simulation{<:LossyAlgo}; kwargs...)
+    iters = iterations(sim; kwargs...)
+    h = Plots.histogram(iters, nbins=50)
+    return h
+end
+function trials_hist(sim::Simulation{<:LossyAlgo}; kwargs...)
+    t = trials(sim; kwargs...)
+    h = counts(t, 1:maximum(t))
+    b = Plots.bar(h, bar_width=1)
+    return b
+end
+

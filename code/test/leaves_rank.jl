@@ -8,20 +8,6 @@ bvals = [1, 10, 50, 200]
 niter = 10
 seed = 12
 
-# ranks = [zeros(niter) for b in bvals]
-
-# for (i,b) in enumerate(bvals)
-#     println("b = $b. $i of $(length(bvals))")
-#     for it in 1:niter
-#         lm = LossyModel(q, n, m+b)
-#         breduction!(lm, b)
-#         ranks[i][it] = rank(lm)
-#     end
-# end
-
-# unicodeplots()
-# h = Plots.histogram(ranks[1])
-
 exceptions = Tuple{Int, LossyModel}[]
 
 for (i,b) in enumerate(bvals)

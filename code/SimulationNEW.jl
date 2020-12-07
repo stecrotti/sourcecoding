@@ -5,6 +5,7 @@ using Parameters, Lazy, StatsBase, Dates
     q::Int
     n::Int
     m::Int
+    algo::LossyAlgo
     niter::Int
     b::Int = 0
     arbitrary_mult::Bool = false
@@ -50,7 +51,8 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
         samegraph && refresh!(lm.fg)
     end
     arbitrary_mult = (lm.fg.mult == gftables(lm.fg.q))
-    return Simulation{typeof(algo)}(q,n,m,niter,b,arbitrary_mult,results,runtimes)
+    return Simulation{typeof(algo)}(q,n,m,algo,niter,b,arbitrary_mult,results,
+        runtimes)
 end
 
 #### GETTERS
@@ -70,6 +72,9 @@ function runtime(sim::Simulation{<:LossyAlgo}; convergedonly::Bool=false)
 end
 function runtime(sims::Vector{Simulation{T}}; kwargs...) where {T<:LossyAlgo}
     return sum(runtime(sim; kwargs...) for sim in sims)
+end
+function convergence_ratio(sim::Simulation{<:LossyAlgo})
+    return mean(r.converged for r in sim.results)
 end
 
 
@@ -118,7 +123,8 @@ function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}};
     r = [rate(sim) for sim in sims]
     if allpoints
         rate_augmented = vcat([rate(sim)*ones(sim.niter) for sim in sims]...)
-        Plots.scatter!(pl, rate_augmented, vcat(dist...), markersize=3)
+        dist_augmented = vcat(dist...)
+        Plots.scatter!(pl, rate_augmented, dist_augmented, markersize=3)
     else
         dist_avg = mean.(dist)
         dist_sd = std.(distortion.(sims)) ./ [sqrt(sim.niter) for sim in sims]

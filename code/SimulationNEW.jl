@@ -17,11 +17,11 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
     gauss_elim::Bool=false,
     niter::Int=50,
     arbitrary_mult::Bool = false,   # Shuffle multiplication table
-    samegraph = false,              # If true, only 1 graph is extracted and all |navg| simulations are run on it
-    samevector = false,             # If true, only 1 vector is extracted and all |navg| simulations are run on it
-    randseed = 100,                 # For reproducibility
+    samegraph::Bool = false,              # If true, only 1 graph is extracted and all |navg| simulations are run on it
+    samevector::Bool = false,             # If true, only 1 vector is extracted and all |navg| simulations are run on it
+    randseed::Int = 100,                 # For reproducibility
     verbose::Bool = true,
-    showprogress::Bool = verbose)
+    showprogress::Bool = false)
 
     results = Vector{LossyResults}(undef, niter)
     runtimes = zeros(niter)
@@ -66,7 +66,12 @@ end
 
 rdb(D::Real) = 1-H2(D)
 rdbinv(R::Real) = H2inv(1-R)
+function distortion(results::Vector{LossyResults})
+    D = [r.distortion for r in results]
+end
+@forward Simulation.results distortion
 
+#### PLOTTING
 import Plots: plot!, plot
 
 function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}}; 
@@ -92,8 +97,6 @@ function plot(sims::Vector{Simulation{T}}; kwargs...) where {T<:LossyAlgo}
     Plots.plot!(pl, r, 0.5*(-r.+1), label="Naive compression")
     return plot!(pl, sims; kwargs...)
 end
+plot(sim::Simulation{<:LossyAlgo}; kwargs...) = plot([sim]; kwargs...)
 
-function distortion(results::Vector{LossyResults})
-    D = [r.distortion for r in results]
-end
-@forward Simulation.results distortion
+# function trials_hist(sim::Simulation{<:LossyAlgo})

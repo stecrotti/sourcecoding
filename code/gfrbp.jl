@@ -192,7 +192,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     for trial in 1:algo.Tmax
         prog = ProgressMeter.Progress(algo.maxiter, wait_time, 
             "Trial $trial/$(algo.Tmax) ")
-        for t in 1:algo.maxiter
+        @inbounds for t in 1:algo.maxiter
             newguesses,maxdiff[t] = onebpiter!(fg, algo)
             newmessages .= fg.mfv
             parity = sum(paritycheck(fg))
@@ -231,6 +231,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             elseif algo.convergence == :parity
                 parity = sum(paritycheck(fg))
                 if parity == 0
+                    showprogress && println()
                     return BPResults{typeof(algo)}(converged=true, parity=parity,
                         distortion=distortion(fg, y), trials=trial, iterations=t,
                         maxdiff=maxdiff, codeword=codeword, maxchange=maxchange)

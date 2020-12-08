@@ -1,5 +1,5 @@
 #### Perform simulations and store results ####
-using Parameters, Lazy, StatsBase, Dates
+using Parameters, Lazy, StatsBase, Dates, Printf
 
 @with_kw struct Simulation{T<:LossyAlgo}
     q::Int
@@ -45,9 +45,12 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
         end
         (results[it], runtimes[it]) = @timed solve!(lm, algo, randseed=randseed,
             verbose=verbose, showprogress=showprogress)
-        verbose && 
-            println("# Finished iter $it of $niter: ", output_str(results[it]))
-        # Reinitialize messages if you're gonna reuse the same graph
+        if verbose 
+            fmt = "%"*string(floor(Int, log10(niter))+1)*"d"
+            it_str = @sprintf(fmt, it)
+            println("# Finished iter "*it_str*" of $niter: ", output_str(results[it]))
+        end
+            # Reinitialize messages if you're gonna reuse the same graph
         samegraph && refresh!(lm.fg)
     end
     arbitrary_mult = (lm.fg.mult == gftables(lm.fg.q))
@@ -60,7 +63,7 @@ function rate(sim::Simulation{<:LossyAlgo})
     return 1 - sim.m/sim.n
 end
 function iterations(sim::Simulation{<:LossyAlgo}; convergedonly::Bool=false)
-    return [r.iterations for r in sim.results if (r.converged && convergedonly)]
+    return [r.iterations for r in sim.results if (r.converged || !convergedonly)]
 end
 function trials(sim::Simulation{<:LossyAlgo}; convergedonly::Bool=false)
     return [r.trials for r in sim.results if (r.converged || !convergedonly)]
@@ -76,11 +79,15 @@ end
 function convergence_ratio(sim::Simulation{<:LossyAlgo})
     return mean(r.converged for r in sim.results)
 end
+function distortion(results::Vector{LossyResults}; convergedonly::Bool=false)
+    D = [r.distortion for r in results if (r.converged || !convergedonly)]
+end
+@forward Simulation.results distortion
 
 
 #### PRINTERS
 function Base.show(io::IO, sim::Simulation{<:LossyAlgo})
-    println(io, "\nSimulation with q=", sim.q,
+    println(io, "\nSimulation{$(typeof(sim.algo))} with q=", sim.q,
         ", n=", sim.n, ", R=", 
         round(1-sim.m/sim.n,digits=2),
          ", b=", sim.b,", niter=", sim.niter)
@@ -108,34 +115,32 @@ end
 
 rdb(D::Real) = 1-H2(D)
 rdbinv(R::Real) = H2inv(1-R)
-function distortion(results::Vector{LossyResults})
-    D = [r.distortion for r in results]
-end
-@forward Simulation.results distortion
+
 
 #### PLOTTING
 import Plots: plot!, plot, histogram, bar
 
 function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}}; 
         allpoints::Bool=false,
-        label::String="Experimental data") where {T<:LossyAlgo}
-    dist = distortion.(sims)
+        label::String="Experimental data", kwargs...) where {T<:LossyAlgo}
+    dist = distortion.(sims; kwargs...)
+    npoints = length.(dist)
     r = [rate(sim) for sim in sims]
     if allpoints
-        rate_augmented = vcat([rate(sim)*ones(sim.niter) for sim in sims]...)
+        rate_augmented = vcat([rate(sims[i])*ones(npoints[i]) for i in eachindex(sims)]...)
         dist_augmented = vcat(dist...)
         Plots.scatter!(pl, rate_augmented, dist_augmented, markersize=3)
     else
         dist_avg = mean.(dist)
-        dist_sd = std.(distortion.(sims)) ./ [sqrt(sim.niter) for sim in sims]
         if Plots.backend() == Plots.UnicodePlotsBackend()
-            Plots.scatter!(pl, r, dist_avg, label=label)
+            Plots.scatter!(pl, r, dist_avg, label=label, size=(300,200))
         else
+            dist_sd = std.(distortion.(sims)) ./ [sqrt(npoints[i]) for sim in sims]
             Plots.scatter!(pl, r, dist_avg, label=label, yerror=dist_sd)
         end
     end
-    xlabel!(pl, "Rate")
-    ylabel!(pl, "Distortion")
+    xlabel!(pl, "R")
+    ylabel!(pl, "D")
     return pl
 end
 

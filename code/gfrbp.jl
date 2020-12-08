@@ -55,11 +55,15 @@ end
 
 function output_str(res::BPResults{<:Union{BP,MS}})
     outcome_str = res.converged ? "C" : "U"
-    out_str = outcome_str * " after " * string(res.iterations) * " iters, " *
-              string(res.trials) * " trials. " *
-              "Parity " * string(res.parity) * ". " *
-              "Distortion " * @sprintf("%.2f", res.distortion) *
-              "."
+    fmt_iters = "%"*string(floor(Int, log10(maximum(res.iterations)))+1)*"d"
+    fmt_trials = "%"*string(floor(Int, log10(maximum(res.trials)))+1)*"d"
+    fmt_parity = "%3d"
+    out_str = outcome_str * " after " * 
+            @sprintf(fmt_iters, res.iterations) * " iters, " *
+            @sprintf(fmt_trials, res.trials) * " trials. " *
+            "Parity " * @sprintf(fmt_parity, res.parity) * ". " *
+            "Distortion " * @sprintf("%.2f", res.distortion) *
+            "."
     return out_str
 end
 
@@ -178,8 +182,9 @@ guesses(fg::FactorGraph) = guesses(fg.fields)
 
 function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     maxdiff=zeros(algo.maxiter), codeword=falses(algo.maxiter),
-    maxchange=zeros(algo.maxiter); randseed::Int=0, verbose::Bool=false,
-    showprogress::Bool=verbose)
+    maxchange=zeros(algo.maxiter); randseed::Int=0, 
+    default_distortion::Function=naive_compression_distortion,
+    verbose::Bool=false, showprogress::Bool=verbose)
 
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
     newguesses = zeros(Int,fg.n)
@@ -255,10 +260,11 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
         end
     end
     return BPResults{typeof(algo)}(converged=false, parity=parity,
-                distortion=0.5, trials=algo.Tmax, 
+                distortion=default_distortion(fg), trials=algo.Tmax, 
                 iterations=algo.maxiter, maxdiff=maxdiff, codeword=codeword, 
                 maxchange=maxchange)
 end
+naive_compression_distortion(fg::FactorGraph) = 0.5*(fg.m/fg.n)
 
 function reinforce!(fg::FactorGraph, algo::Union{BP,MS})
     for (v,gv) in enumerate(fg.fields)

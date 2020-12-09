@@ -3,12 +3,12 @@ include("./../SimulationNEW.jl")
 using JLD
 
 const q = 2
-const gamma = 5e-4
-const n = Int(420*8/log2(q))
+const gamma = 1e-4
+const n = Int(420*10/log2(q))
 const R = [0.8]
 const m = Int.(round.(n*(1 .- R)))
-const b = Int(round(n/50))*ones(Int, length(m))
-const maxiter = Int(3e2)
+const b = Int(round(n/20))*ones(Int, length(m))
+const maxiter = Int(5e2)
 const niter = 20
 const randseed = 1234
 const Tmax = 8
@@ -24,7 +24,7 @@ for j in 1:length(m)
     sims[j] = sim
 end
 
-save("gf2_4.jld", "sims", sims)
+save("gf2_6.jld", "sims", sims)
 
 unicodeplots()
 plot(sims)

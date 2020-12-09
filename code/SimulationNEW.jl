@@ -46,11 +46,11 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
         (results[it], runtimes[it]) = @timed solve!(lm, algo, randseed=randseed,
             verbose=verbose, showprogress=showprogress)
         if verbose 
-            fmt = "%"*string(floor(Int, log10(niter))+1)*"d"
-            it_str = @sprintf(fmt, it)
+            # fmt = "%"*string(floor(Int, log10(niter))+1)*"d"
+            it_str = @sprintf("%3d", it)
             println("# Finished iter "*it_str*" of $niter: ", output_str(results[it]))
         end
-            # Reinitialize messages if you're gonna reuse the same graph
+        # Reinitialize messages if you're gonna reuse the same graph
         samegraph && refresh!(lm.fg)
     end
     arbitrary_mult = (lm.fg.mult == gftables(lm.fg.q))

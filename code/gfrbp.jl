@@ -55,13 +55,13 @@ end
 
 function output_str(res::BPResults{<:Union{BP,MS}})
     outcome_str = res.converged ? "C" : "U"
-    fmt_iters = "%"*string(floor(Int, log10(maximum(res.iterations)))+1)*"d"
-    fmt_trials = "%"*string(floor(Int, log10(maximum(res.trials)))+1)*"d"
-    fmt_parity = "%3d"
+    # fmt_iters = "%"*string(floor(Int, log10(maximum(res.iterations)))+1)*"d"
+    # fmt_trials = "%"*string(floor(Int, log10(maximum(res.trials)))+1)*"d"
+    # fmt_parity = "%3d"
     out_str = outcome_str * " after " * 
-            @sprintf(fmt_iters, res.iterations) * " iters, " *
-            @sprintf(fmt_trials, res.trials) * " trials. " *
-            "Parity " * @sprintf(fmt_parity, res.parity) * ". " *
+            @sprintf("%3d", res.iterations) * " iters, " *
+            @sprintf("%1d", res.trials) * " trials. " *
+            "Parity " * @sprintf("%3d", res.parity) * ". " *
             "Distortion " * @sprintf("%.2f", res.distortion) *
             "."
     return out_str

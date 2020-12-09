@@ -264,7 +264,8 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                 iterations=algo.maxiter, maxdiff=maxdiff, codeword=codeword, 
                 maxchange=maxchange)
 end
-naive_compression_distortion(fg::FactorGraph) = 0.5*(fg.m/fg.n)
+naive_compression_distortion(fg::FactorGraph) = 0.5*(nfacts(fg)/nvars(fg))
+naive_compression_distortion(R::Real) = 0.5*(1-R)
 
 function reinforce!(fg::FactorGraph, algo::Union{BP,MS})
     for (v,gv) in enumerate(fg.fields)

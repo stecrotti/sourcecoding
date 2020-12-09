@@ -129,29 +129,34 @@ function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}};
     if allpoints
         rate_augmented = vcat([rate(sims[i])*ones(npoints[i]) for i in eachindex(sims)]...)
         dist_augmented = vcat(dist...)
-        Plots.scatter!(pl, rate_augmented, dist_augmented, markersize=3)
+        Plots.scatter!(pl, rate_augmented, dist_augmented, markersize=3,
+            label=label; kwargs...)
     else
         dist_avg = mean.(dist)
         if Plots.backend() == Plots.UnicodePlotsBackend()
-            Plots.scatter!(pl, r, dist_avg, label=label, size=(300,200))
+            Plots.scatter!(pl, r, dist_avg, label=label, size=(300,200); kwargs...)
         else
-            dist_sd = std.(distortion.(sims)) ./ [sqrt(npoints[i]) for sim in sims]
-            Plots.scatter!(pl, r, dist_avg, label=label, yerror=dist_sd)
+            dist_sd = std.(distortion.(sims)) ./ [sqrt(npoints[i]) for i in eachindex(sims)]
+            Plots.scatter!(pl, r, dist_avg, label=label, yerror=dist_sd; kwargs...)
         end
     end
     xlabel!(pl, "R")
     ylabel!(pl, "D")
     return pl
 end
+function plot!(pl::Plots.Plot, sim::Simulation{<:LossyAlgo}; kwargs...)
+    plot!(pl, [sim]; kwargs...)
+end
 
-function plot(sims::Vector{Simulation{T}}; kwargs...) where {T<:LossyAlgo}
+function plot(sims::Union{Simulation{T},Vector{Simulation{T}}}; 
+        kwargs...) where {T<:LossyAlgo}
     d = LinRange(0,0.5,100)
     r = LinRange(0, 1, 100)
     pl = Plots.plot(rdb.(d), d, label="RDB")
     Plots.plot!(pl, r, 0.5*(-r.+1), label="Naive compression")
     return plot!(pl, sims; kwargs...)
 end
-plot(sim::Simulation{<:LossyAlgo}; kwargs...) = plot([sim]; kwargs...)
+
 
 function iters_hist(sim::Simulation{<:LossyAlgo}; kwargs...)
     iters = iterations(sim; kwargs...)

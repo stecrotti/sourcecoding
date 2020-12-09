@@ -128,9 +128,8 @@ function deletefactors!(fg::FactorGraph, ff::Vector{Int})
     return ff
 end
 
-
 function deletevar!(fg::FactorGraph, 
-    v::Int=rand(filter(vv -> vardegree(fg,vv)!=0, 1:fg.n)))
+        v::Int=rand(filter(vv -> vardegree(fg,vv)!=0, 1:fg.n)))
     for f in eachindex(fg.Fneigs)
         # delete i from its neighbors' neighbor lists
         v_idx = findall(isequal(v), fg.Fneigs[f])
@@ -222,7 +221,7 @@ end
 # The following 2 are used to get the number of variables or factors left in
 # the graph, which might be different from n,m i.e. the original ones
 
-function nvars(fg::FactorGraph)   # number of variables in the core
+function nvars(fg::FactorGraph)
     Nvars = 0
     for v in fg.Vneigs
         v != [] && (Nvars += 1)
@@ -230,7 +229,7 @@ function nvars(fg::FactorGraph)   # number of variables in the core
     return Nvars
 end
 
-function nfacts(fg::FactorGraph)    # number of hyperedges in the core
+function nfacts(fg::FactorGraph)   
      Nfact = 0
      for f in fg.Fneigs
          f != [] && (Nfact += 1)

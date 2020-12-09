@@ -153,14 +153,14 @@ end
 # Recursive leaf removal
 function lr!(fg::FactorGraph, depth::Int=1, depths=zeros(Int,fg.n))
     # Store vertices with degree <= 1 which haven't been given a depth yet
-    to_be_labeled = [v for v in eachindex(fg.Vneigs) if (vardegree(fg,v)<=1 && depths[v]== 0)]
+    to_be_visited = [v for v in eachindex(fg.Vneigs) if (vardegree(fg,v)<=1 && depths[v]== 0)]
     # Do something only if there are leaves or isolated vertices available
-    if !isempty(to_be_labeled)
-        for v in to_be_labeled
+    if !isempty(to_be_visited)
+        for (i,v) in enumerate(to_be_visited)
             # delete factor and all its edges
             deletefactors!(fg, fg.Vneigs[v][:])
         end
-        depths[to_be_labeled] .= depth
+        depths[to_be_visited] .= depth
         # recursively re-apply `lr!`
         lr!(fg, depth+1, depths)
     end
@@ -267,6 +267,7 @@ import Plots.plot
 function plot(fg::FactorGraph; varnames=1:fg.n, factnames=1:fg.m,
     highlighted_nodes=Int[], highlighted_factors=Int[], 
     highlighted_edges::Vector{Tuple{Int,Int}}=Tuple{Int,Int}[], method=:spring)
+    
     m = fg.m
     if typeof(highlighted_nodes)==Int
         highlighted_nodes = [highlighted_nodes]

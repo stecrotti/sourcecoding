@@ -1,5 +1,23 @@
-#### Ranks, kernels and gaussian elimination on 𝔾𝔽(2ᵏ) ####
+#### Linear algebra on 𝔾𝔽(2ᵏ) ####
 using LinearAlgebra, LightGraphs, SimpleWeightedGraphs
+
+function gf_invert_ut(T::Array{Int,2}, y::Vector{Int},
+        q::Int=2,
+        gfmult::OffsetArray{Int,2}=gftables(q)[1],
+        gfdiv::OffsetArray{Int,2}=gftables(q)[3])
+
+    @assert issquare(T)
+    @assert isunituppertriangular(T)
+    n = size(T,1)
+    @assert n==length(y)
+    @assert isgfq(T,q) && isgfq(y,q)
+
+    x = zeros(Int, n)
+    for k in n:-1:1
+        x[k] = gfdiv[xor(y[k], reduce(xor, gfmult[T[k,i],x[i]] for i=k:n)), T[k,k]]
+    end
+    return x
+end
 
 """Reduce matrix over GF(q) to row echelon form"""
 function gfref!(H::Array{Int,2},
@@ -85,23 +103,6 @@ function gfnullspace(H::Array{Int,2}, q::Int=2,
     return ns
 end
 
-function ispow(x::Int, b::Int)
-    if x > 0
-        return isinteger(log(b,x))
-    else
-        return false
-    end
-end
-
-function isgfq(X, q::Int)
-    for x in X
-        if (x<0 || x>q-1 || !isinteger(x))
-            return false
-        end
-    end
-    return true
-end
-
 function lightweight_nullspace(lm::LossyModel; cutoff::Real=Inf, 
     verbose::Bool=false)
     # Start with a basis of the system
@@ -178,6 +179,24 @@ function min_bottleneck_path(g::AbstractGraph, source::Int, dest::Int)
     return mbp, mb
 end
 
+
+###### UTILS ######
+
+function ispow(x::Int, b::Int)
+    if x > 0
+        return isinteger(log(b,x))
+    else
+        return false
+    end
+end
+function isgfq(X, q::Int)
+    for x in X
+        if (x<0 || x>q-1 || !isinteger(x))
+            return false
+        end
+    end
+    return true
+end
 function isinspan(A::Array{Int,2}, v::Vector{Int}; q::Int=2)
     if isempty(A)
         return true
@@ -188,6 +207,16 @@ function isinspan(A::Array{Int,2}, v::Vector{Int}; q::Int=2)
         rkAv = gfrank(Av)
         return rkA == rkAv
     end
+end
+function isuppertriangular(A::Array{Int,2})
+    return A == UpperTriangular(A)
+end
+function isunituppertriangular(A::Array{Int,2})
+    return isuppertriangular(A) && all(diag(A).==1)
+end
+function issquare(A::Array{Int,2})
+    (m,n) = size(A)
+    return m==n
 end
 
 ###### OLD STUFF #######

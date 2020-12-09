@@ -182,7 +182,7 @@ function gfdot(x::Vector{Int}, y::Vector{Int}, q::Int,
 end
 
 # Works only for GF(2^k)
-function gfmatrixmult(A::Array{Int,2}, B::Array{Int,2}, q::Int,
+function gfmatrixmult(A::Array{Int,2}, B::Array{Int,2}, q::Int=2,
     mult::OffsetArray{Int,2,Array{Int,2}}=gftables(q)[1])
     m,n = size(A)
     r,p = size(B)
@@ -195,7 +195,12 @@ function gfmatrixmult(A::Array{Int,2}, B::Array{Int,2}, q::Int,
             C[i,j] = gfdot(A[i,:], B[:,j], q, mult)
         end
     end
+    # If C is a column vector, just return it as a 1D Array
+    p==1 && (C = vec(C))
     return C
+end
+function gfmatrixmult(A::Array{Int,2}, B::Array{Int,1}, args...)
+    return gfmatrixmult(A, hcat(B))
 end
 
 function paritycheck(fg::FactorGraph, x::Array{Int,2},

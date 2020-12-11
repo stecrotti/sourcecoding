@@ -72,6 +72,7 @@ function full_adjmat(fg::FactorGraph)
     return A
 end
 
+
 dispstring(fg::FactorGraph) = "Factor Graph with n=$(fg.n) variables and m=$(fg.m) factors defined on GF($(fg.q))"
 
 function Base.show(io::IO, fg::FactorGraph)
@@ -118,53 +119,57 @@ function deletefactor!(fg::FactorGraph, f::Int=rand(filter(ff -> factdegree(fg,f
     # delete messages from f
     fg.mfv[f] = OffsetArray{Float64,1,Array{Float64,1}}[]
     # delete factor f
+    neigs_of_f = copy(fg.Fneigs[f])
     fg.Fneigs[f] = []
-    return f
+    return neigs_of_f
 end
 function deletefactors!(fg::FactorGraph, ff::Vector{Int}) 
-    for f in ff
-        deletefactor!(fg,f)
-    end
-    return ff
+    return unique!(vcat([deletefactor!(fg,f) for f in ff]...))
 end
 
 function deletevar!(fg::FactorGraph, 
         v::Int=rand(filter(vv -> vardegree(fg,vv)!=0, 1:fg.n)))
     for f in eachindex(fg.Fneigs)
         # delete i from its neighbors' neighbor lists
-        v_idx = findall(isequal(v), fg.Fneigs[f])
-        deleteat!(fg.Fneigs[f],v_idx)
+        deleteval!(fg.Fneigs[f],v)
         # delete messages to v
         deleteat!(fg.mfv[f], v_idx)
         # delete weight on the adjacency matrix
         deleteat!(fg.hfv[f], v_idx)
     end
     # delete node v
+    neigs_of_v = copy(fg.Vneigs[v])
     fg.Vneigs[v] = []
-    return v
+    return neigs_of_v
 end
 function deletevars!(fg::FactorGraph, vv::Vector{Int}) 
-    for v in vv
-        deletevar!(fg,v)
-    end
-    return vv
+    return [deletevar!(fg,v) for v in vv]
 end
 
 # Recursive leaf removal
-function lr!(fg::FactorGraph, depth::Int=1, depths=zeros(Int,fg.n))
-    # Store vertices with degree <= 1 which haven't been given a depth yet
-    to_be_visited = [v for v in eachindex(fg.Vneigs) if (vardegree(fg,v)<=1 && depths[v]== 0)]
-    # Do something only if there are leaves or isolated vertices available
+function lr!(fg::FactorGraph, depth::Int=1, depths=zeros(Int,fg.n),
+        to_be_visited::Vector{Int}=[v for v in eachindex(fg.Vneigs) if vardegree(fg,v)<=1],
+        independent::BitArray{1}=falses(fg.n))
+    # Initalize vector to be filled with leaves that will be exposed
+    to_be_visited_new = Int[]
+    # Assign depth to newly found leaves
+    depths[to_be_visited] .= depth
+    # Loop over leaves
     if !isempty(to_be_visited)
         for (i,v) in enumerate(to_be_visited)
             # delete factor and all its edges
-            deletefactors!(fg, fg.Vneigs[v][:])
+            newleaves = deletefactors!(fg, fg.Vneigs[v][:])
+            # If no new leaves are exposed, v is an independent variable
+            if newleaves==[] 
+                independent[v] = true
+            else
+                append!(to_be_visited_new, newleaves[depths[newleaves].==0])
+            end
         end
-        depths[to_be_visited] .= depth
         # recursively re-apply `lr!`
-        lr!(fg, depth+1, depths)
+        lr!(fg, depth+1, depths, to_be_visited_new, independent)
     end
-    return depths
+    return depths, independent
 end
 function lr(fg::FactorGraph) 
     fg_ = deepcopy(fg)

@@ -93,7 +93,8 @@ function ldpc_graph(q::Int, n::Int, m::Int,
     error("Could not build factor graph. Too many multi-edges were popping up")    
 end
 
-function generate_polyn(n::Int, m::Int)
+function generate_polyn(n::Int, m::Int; degree_type::Symbol=:edges)
+    @assert degree_type in [:edges, :nodes]
     # This part is fixed
     lambda = [0.0, 1.0]
     nedges = 2*n
@@ -105,9 +106,32 @@ function generate_polyn(n::Int, m::Int)
     rho[r+1] = (r+1)*(nedges - r*m)
     # Normalize
     rho ./= nedges
-
-    return nedges, lambda, rho
+    if degree_type == :edges
+        return nedges, lambda, rho
+    else
+        lambda_n, rho_n = edges2nodes(lambda, rho)
+        return nedges, lambda_n, rho_n
+    end
 end
+# Switch from the 2 alternative representations for graph degree profiles
+# "Edges" is the one expressing everything in terms of edge degree, as used in
+#   https://ieeexplore.ieee.org/document/910576
+# "Nodes" is the one expressing everything in terms of node degrees, as in
+#  https://web.stanford.edu/~montanar/RESEARCH/book.html 
+
+function edges2nodes(lambda::Vector{<:AbstractFloat}, 
+        rho::Vector{<:AbstractFloat})
+    lambda_new = [lambda[i]/i for i in eachindex(lambda)]
+    rho_new = [rho[j]/j for j in eachindex(rho)]
+    return lambda_new./sum(lambda_new), rho_new./sum(rho_new)
+end
+function nodes2edges(lambda::Vector{<:AbstractFloat}, 
+    rho::Vector{<:AbstractFloat})
+lambda_new = [lambda[i]*i for i in eachindex(lambda)]
+rho_new = [rho[j]*j for j in eachindex(rho)]
+return lambda_new./sum(lambda_new), rho_new./sum(rho_new)
+end
+
 
 function gftables(q::Int, arbitrary_mult::Bool=false)
     if q==2

@@ -206,6 +206,8 @@ function paritycheck(fg::FactorGraph, x::Array{Int,2},
     return gfmatrixmult(adjmat(fg)[f,:], x, fg.q, fg.mult)
 end
 
+parity(fg::FactorGraph, args...) = sum(paritycheck(fg, args...))
+
 # Parity-check for the adjacency matrix of a factor graph.
 # f specifies which factors to consider (default: all 1:m)
 function paritycheck(fg::FactorGraph, x::Vector{Int}=guesses(fg),

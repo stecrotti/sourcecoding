@@ -1,5 +1,5 @@
 #### A factor graph type thought for GF(q) belief propagation ####
-using OffsetArrays, StatsBase, LightGraphs, GraphRecipes, Plots
+using OffsetArrays, StatsBase, LightGraphs, GraphRecipes, Plots, Random
 
 struct FactorGraph
     q::Int                              # field order
@@ -199,6 +199,7 @@ end
 
 function newbasis(fg::FactorGraph)
     H_trian, column_idx = permute_to_triangular(fg)
+    # Turn upper-triangular matrix into diagonal
     gfrref!(H_trian)
     nrows = size(H_trian,1)
     H_indep = H_trian[:,nrows+1:end]
@@ -298,7 +299,8 @@ end
 import Plots.plot
 function plot(fg::FactorGraph; varnames=1:fg.n, factnames=1:fg.m,
     highlighted_nodes=Int[], highlighted_factors=Int[], 
-    highlighted_edges::Vector{Tuple{Int,Int}}=Tuple{Int,Int}[], method=:spring)
+    highlighted_edges::Vector{Tuple{Int,Int}}=Tuple{Int,Int}[], method=:spring,
+    randseed::Int=abs(rand(Int)))
     
     Plots.pyplot()
     m = fg.m
@@ -325,8 +327,25 @@ function plot(fg::FactorGraph; varnames=1:fg.n, factnames=1:fg.m,
     highlighted_edges_ = [(t[1],t[2]+fg.m) for t in highlighted_edges]
     edgecolor[CartesianIndex.(highlighted_edges_)] .= :red
     
+    Random.seed!(randseed)  # control random layou tchanges
     return graphplot(g, curves=false, names=nodenames,
         nodeshape = nodeshape, nodecolor=colors[node_idx],
         method=method, nodesize=0.15, fontsize=7, 
         nodestrokewidth=nodestrokewidth, edgecolor=edgecolor)
+end
+
+function animate_nodes(fg::FactorGraph, nodes::Vector{Vector{Int}};
+        fps::Real=0.5, randseed::Int=abs(rand(Int)), fn::String="graph.gif")
+    anim = @animate for nds in nodes
+        plot(fg, highlighted_nodes=nds, randseed=randseed)
+    end
+    gif(anim, fn, fps=fps, show_msg=false)
+    return nothing
+end
+
+function animate_basis(fg::FactorGraph, 
+        basis::Vector{Vector{Int}}=newbasis(fg); kwargs...)
+    nodes = [(1:fg.n)[Bool.(basis[:,i])] for i in 1:size(basis,2)]
+    animate_nodes(fg, nodes; kwargs...)
+    return nothing
 end

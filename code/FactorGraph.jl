@@ -186,6 +186,8 @@ end
 #  adjacency matrix as H=[T|U] where T is square and upper triangular
 function permute_to_triangular(fg::FactorGraph)
     H = adjmat(fg)
+    # `factors` is a vector containing 0 for indep vars and for dep vars, the 
+    #  index of the factor to which they were attached
     _,(_,factors) = lr(fg)
     independent = (factors .== 0) 
     # Re-organize column indices with dependent variables first

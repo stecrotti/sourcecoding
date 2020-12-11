@@ -149,7 +149,7 @@ end
 # Recursive leaf removal
 function lr!(fg::FactorGraph, depth::Int=1, depths=zeros(Int,fg.n),
         to_be_visited::Vector{Int}=[v for v in eachindex(fg.Vneigs) if vardegree(fg,v)<=1],
-        independent::BitArray{1}=falses(fg.n))
+        factors::Vector{Int}=zeros(Int, fg.n))
     # Initalize vector to be filled with leaves that will be exposed
     to_be_visited_new = Int[]
     # Assign depth to newly found leaves
@@ -157,28 +157,53 @@ function lr!(fg::FactorGraph, depth::Int=1, depths=zeros(Int,fg.n),
     # Loop over leaves
     if !isempty(to_be_visited)
         for (i,v) in enumerate(to_be_visited)
+            f = fg.Vneigs[v][:]
             # delete factor and all its edges
             newleaves = deletefactors!(fg, fg.Vneigs[v][:])
-            # If no new leaves are exposed, v is an independent variable
-            if newleaves==[] 
-                independent[v] = true
-            else
+            # If new leaves are exposed, v is a dependent variable
+            if newleaves!=[]
+                # Record to which factor the leaf was attached
+                factors[v] = f[1]
                 append!(to_be_visited_new, newleaves[depths[newleaves].==0])
             end
         end
         # recursively re-apply `lr!`
-        lr!(fg, depth+1, depths, to_be_visited_new, independent)
+        lr!(fg, depth+1, depths, unique!(to_be_visited_new), factors)
     end
-    return depths, independent
+    return depths, factors
 end
 function lr(fg::FactorGraph) 
     fg_ = deepcopy(fg)
-    depths = lr!(fg_)
-    return fg_, depths
+    lr_out = lr!(fg_)
+    return fg_, lr_out
 end
 function plotdepths(fg::FactorGraph)
     _, depths = lr(fg)
     plot(fg, varnames = depths)
+end
+
+# Permutes rows and columns (no multiplications!) to re-organize the graph
+#  adjacency matrix as H=[T|U] where T is square and upper triangular
+function permute_to_triangular(fg::FactorGraph)
+    H = adjmat(fg)
+    _,(_,factors) = lr(fg)
+    independent = (factors .== 0) 
+    # Re-organize column indices with dependent variables first
+    column_idx = vcat((1:fg.n)[.!independent], (1:fg.n)[independent])
+    H_permutecols = hcat(H[:,column_idx])
+    H_permuterows = H_permutecols[factors[.!independent],:]
+    return H_permuterows, column_idx
+end
+
+function newbasis(fg::FactorGraph)
+    H_trian, column_idx = permute_to_triangular(fg)
+    gfrref!(H_trian)
+    nrows = size(H_trian,1)
+    H_indep = H_trian[:,nrows+1:end]
+    nb = [H_indep; I]
+    # Invert the permutation that was done previoulsy on the columns
+    nb .= nb[invperm(column_idx),:]
+    return nb
 end
 
 # Leaf removal but starting from leaf factors!
@@ -273,6 +298,7 @@ function plot(fg::FactorGraph; varnames=1:fg.n, factnames=1:fg.m,
     highlighted_nodes=Int[], highlighted_factors=Int[], 
     highlighted_edges::Vector{Tuple{Int,Int}}=Tuple{Int,Int}[], method=:spring)
     
+    Plots.pyplot()
     m = fg.m
     if typeof(highlighted_nodes)==Int
         highlighted_nodes = [highlighted_nodes]

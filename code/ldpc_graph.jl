@@ -196,37 +196,6 @@ end
 hw(v::Vector{Int})::Int = sum(hw.(v))
 hw(v::Array{Int,2})::Int = hw(vec(v))
 
-
-# Works only for GF(2^k)
-function gfdot(x::Vector{Int}, y::Vector{Int}, q::Int,
-    mult::OffsetArray{Int,2,Array{Int,2}}=gftables(q)[1])
-    L = length(x)
-    @assert length(y) == L
-    return reduce(xor, [mult[x[k],y[k]] for k=1:L], init=0)
-end
-
-# Works only for GF(2^k)
-function gfmatrixmult(A::Array{Int,2}, B::Array{Int,2}, q::Int=2,
-    mult::OffsetArray{Int,2,Array{Int,2}}=gftables(q)[1])
-    m,n = size(A)
-    r,p = size(B)
-    q,s = size(mult)
-    @assert r == n  # check compatibility of dimensions for matrix product
-    @assert q == s  # check valid multiplication matrix
-    C = zeros(Int, m, p)
-    for j = 1:p
-        for i = 1:m
-            C[i,j] = gfdot(A[i,:], B[:,j], q, mult)
-        end
-    end
-    # If C is a column vector, just return it as a 1D Array
-    p==1 && (C = vec(C))
-    return C
-end
-function gfmatrixmult(A::Array{Int,2}, B::Array{Int,1}, args...)
-    return gfmatrixmult(A, hcat(B))
-end
-
 function paritycheck(fg::FactorGraph, x::Array{Int,2},
     f::Int)
     return gfmatrixmult(adjmat(fg)[[f],:], x, fg.q, fg.mult)

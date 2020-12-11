@@ -52,12 +52,14 @@ end
 adjmat(lm::LossyModel) = adjmat(lm.fg)
 import LinearAlgebra.nullspace, LinearAlgebra.rank
 nullspace(fg::FactorGraph) = gfnullspace(adjmat(fg), fg.q)
-nullspace(lm::LossyModel) = gfnullspace(lm.fg)
+nullspace(lm::LossyModel) = nullspace(lm.fg)
 log_nsolutions(lm::LossyModel)::Int = size(nullspace(lm), 2)
 nsolutions(lm::LossyModel)::Int = lm.fg.q^log_nsolutions(lm)
 rank(fg::FactorGraph)::Int = gfrank(adjmat(fg), fg.q)
-rank(lm::LossyModel)::Int = gfrank(lm.fg)
+rank(lm::LossyModel)::Int = rank(lm.fg)
 isfullrank(lm::LossyModel)::Bool = rank(lm::LossyModel)==lm.fg.m
+
+
 
 function breduction!(lm::LossyModel, args...; kwargs...)
     b = breduction!(lm.fg, args...; kwargs...)
@@ -103,9 +105,86 @@ function refresh!(lm::LossyModel, args...)
 end
 
 # Gaussian elimination on the graph
-function gfref!(lm::LossyModel)
+function gfrref!(lm::LossyModel)
     H = adjmat(lm)
-    gfref!(H, lm.fg.q, lm.fg.mult, lm.fg.gfdiv)
+    gfrref!(H, lm.fg.q, lm.fg.mult, lm.fg.gfdiv)
     lm.fg = FactorGraph(H)
     return nothing
+end
+
+
+function lightweight_nullspace(lm::LossyModel; cutoff::Real=Inf, 
+    verbose::Bool=false)
+    # Start with a basis of the system
+    oldbasis = nullspace(lm)
+    hw_old = maximum([hw(collect(col)) for col in eachcol(oldbasis)])
+    if verbose
+        println("Finding a low-Hamming-weight basis...")
+        println("\tThe basis I'm starting from has total Hamming weight ", hw_old,
+        ".")
+    end
+    nsdim = size(oldbasis,2)
+    allsolutions = enum_solutions(lm)
+    newbasis = zeros(Int, size(oldbasis))
+    g = solutions_graph(lm, cutoff=cutoff)
+    if verbose
+        conn = is_connected(g) ? "" : "NON "
+         println("\tThe graph of solutions obtained with the",
+            " required cutoff is ", conn, "CONNECTED.")
+    end
+    # Store all min bottleneck paths from 0 to the solutions in the old basis.
+    # On graph g each node is a solution labelled with a number from 1 on.
+    #  1 is the label for the zero vector.
+    #  The index of the arrival node (the i-th basis vector) can be
+    #  obtained recalling how the basis was constructed (linear combinations
+    #  with all the possible strings of length n) => label(i)=lm.fg.q^(i-1)+1
+    #  and keeping in mind that in Julia array indices start at 1.
+    mbpaths = [min_bottleneck_path(g, 1, lm.fg.q^(i-1)+1) for i in 1:nsdim]
+    mbpaths_idx = first.(mbpaths)
+    mbpaths_val = last.(mbpaths)
+    # Sort basis vectors so that small bottlenecks come first
+    new_idx = sortperm(mbpaths_val)
+    verbose && println("\tI'm sorting basis vector in order of ascending min ",
+        "bottleneck. Values are: ", mbpaths_val[new_idx])
+    sorted_mbpaths_idx = mbpaths_idx[new_idx]
+    nadded = 0
+    for i in 1:nsdim
+        # vector containing the solutions in the path
+        mbpath = allsolutions[sorted_mbpaths_idx[i]]
+        # If there are other solutions on the path, try adding them to the basis
+        if length(mbpath) > 0
+            for t in 1:length(mbpath)-1
+                # check if is not already in the span of newbasis
+                hop = xor.(mbpath[t], mbpath[t+1])
+                if !isinspan(newbasis, hop, q=lm.fg.q)
+                    nadded += 1
+                    newbasis[:,nadded] = hop
+                    if nadded == nsdim 
+                        hw_new = maximum([hw(collect(col)) for col in eachcol(newbasis)])
+                        verbose && println("\tDone! The new basis has total ",
+                        "Hamming weight ", hw_new)
+                        return newbasis
+                    end
+                end
+            end
+        end
+    end
+    # If you got here, solutions were too far apart for this method to work
+    verbose && println("\tCouldn't find a light basis, returning a generic one. ",
+        "Try increasing the cutoff")
+    return oldbasis
+end
+
+function min_bottleneck_path(g::AbstractGraph, source::Int, dest::Int)
+    # get maximum ST
+    mst_as_list = kruskal_mst(g, minimize=true)
+    sources = [m.src for m in mst_as_list]
+    dests = [m.dst for m in mst_as_list]
+    weights = [m.weight for m in mst_as_list]
+    mst_as_graph = SimpleWeightedGraph(sources, dests, weights)
+    all_sps = dijkstra_shortest_paths(mst_as_graph, source)
+    mbp = enumerate_paths(all_sps, dest)
+    mbp_weights = [mst_as_graph.weights[mbp[i],mbp[i+1]] for i in 1:length(mbp)-1]
+    mb = maximum(mbp_weights)
+    return mbp, mb
 end

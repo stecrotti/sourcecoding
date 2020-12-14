@@ -139,7 +139,6 @@ end
 function onemcstep!(lm::LossyModel, mc_move::MCMove, randseed::Int=0)
     xnew = propose(mc_move, lm, randseed)
     acc, dE = accept(mc_move, lm, xnew, randseed)
-    isinf(dE) && println("DEBUG: something's wrong, infinite ΔE in MC move")
     if acc
         lm.x = xnew
     end
@@ -179,6 +178,7 @@ function propose(mc_move::MetropBasisCoeffs, lm::LossyModel, randseed::Int=0)
         [k for k=0:lm.fg.q-1 if k!=coeffs_new[to_be_flipped]])
     # Project on basis to get the new state
     x_new = gfmatrixmult(mc_move.basis,coeffs_new, lm.fg.q, lm.fg.mult)
+    @assert parity(lm, x_new) == 0 "DEBUG: something's wrong, infinite ΔE in MC move"
     return x_new
 end
 
@@ -210,7 +210,7 @@ function seaweed(fg::FactorGraph, seed::Int, depths::Vector{Int}=lr(fg)[2],
     # check that the resulting seaweed satisfies parity
     to_flip_int = Int.(to_flip)
     @assert parity(fg, to_flip_int)==0
-    return Int.(to_flip)
+    return to_flip_int
 end
 
 function grow!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 

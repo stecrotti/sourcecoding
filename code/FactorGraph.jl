@@ -1,5 +1,6 @@
 #### A factor graph type thought for GF(q) belief propagation ####
-using OffsetArrays, StatsBase, LightGraphs, GraphRecipes, Plots, Random
+using OffsetArrays, StatsBase, LightGraphs, GraphRecipes, Plots, Random, 
+    LinearAlgebra
 
 struct FactorGraph
     q::Int                              # field order
@@ -188,6 +189,9 @@ end
 #  adjacency matrix as H=[T|U] where T is square and upper triangular
 function permute_to_triangular(fg::FactorGraph)
     H = adjmat(fg)
+    # Apply leaf-removal
+    nvarleaves(fg) < 1 && error("Cannot convert to triangular form if factor"* 
+        " graph doesn't have at least 1 leaf")
     _, var2fact, vars_order = lr(fg)
     # Re-organize column indices with dependent variables first
     independent = (vars_order .== 0)
@@ -353,3 +357,10 @@ function animate_basis(fg::FactorGraph,
     animate_nodes(fg, nodes; kwargs...)
     return nothing
 end
+
+
+
+import LinearAlgebra.nullspace, LinearAlgebra.rank
+nullspace(fg::FactorGraph) = gfnullspace(adjmat(fg), fg.q)
+rank(fg::FactorGraph)::Int = gfrank(adjmat(fg), fg.q)
+isfullrank(fg::FactorGraph)::Bool = rank(fg) == fg.m

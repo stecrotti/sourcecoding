@@ -6,6 +6,7 @@ struct Metrop1 <: MCMove; end
 @with_kw mutable struct MetropBasisCoeffs <: MCMove
     basis::Array{Int,2}=Array{Int,2}(undef,0,0)
     basis_coeffs::Vector{Int}=Vector{Int}(undef,0)
+    getbasis::Function=nullspace
 end
 @with_kw mutable struct MetropSmallJumps <: MCMove
     depths::Vector{Int}=Vector{Int}(undef,0)
@@ -13,17 +14,19 @@ end
 end
 
 function adapt_to_model!(mc_move::MCMove, lm::LossyModel)
-    nothing
+    return mc_move
 end
 function adapt_to_model!(mc_move::MetropSmallJumps, lm::LossyModel)
     _,depths = lr(lm.fg)
     isincore = (depths .== 0)
     mc_move.depths = depths
     mc_move.isincore = isincore
+    return mc_move
 end
 function adapt_to_model!(mc_move::MetropBasisCoeffs, lm::LossyModel)
-    mc_move.basis = nullspace(lm)
+    mc_move.basis = mc_move.getbasis(lm)
     mc_move.basis_coeffs = zeros(Int, size(mc_move.basis,2))
+    return mc_move
 end
 
 
@@ -34,6 +37,7 @@ end
     distortion::Float64
     acceptance_ratio::Vector{Float64}
     beta_argmin::Vector{Float64}                # Temperatures for which the min was achieved
+    converged::Bool     # Doesn't mean anything, here just for convenience
 end
 
 function output_str(res::SAResults)
@@ -50,21 +54,12 @@ end
 
 #### SIMULATED ANNEALING
 @with_kw struct SA <: LossyAlgo
-    mc_move::MCMove = MetropBasisCoeffs()                                             # Single MC move
-    betas:: Array{Float64,2} = [1.0 1.0]
+    mc_move::MCMove = MetropBasisCoeffs()                                   # Single MC move
+    betas:: Array{Float64,2} = [1.0 1.0]                                    # Cooling schedule
     nsamples::Int = Int(1e2)                                                # Number of samples
     sample_every::Int = Int(1e0)                                            # Frequency of sampling
     stop_crit::Function = (crit(varargs...) = false)                        # Stopping criterion callback
     init_state::Function = (init(lm::LossyModel)=zeros(Int, lm.fg.n))       # Function to initialize internal state
-end
-
-# Quick constructor that adapts the number of iterations to the size of the problem
-function SA(lm::LossyModel; kwargs...)
-    nsamples = 10*(lm.fg.n-lm.fg.m)
-    basis = nullspace(lm)
-    mc_move = MetropBasisCoeffs(basis, zeros(Int,size(basis,2)))
-    betas = [Inf 1.0]
-    return SA(nsamples=nsamples, mc_move=mc_move, betas=betas; kwargs...)
 end
 
 function solve!(lm::LossyModel, algo::SA,
@@ -72,7 +67,8 @@ function solve!(lm::LossyModel, algo::SA,
             for _ in 1:size(algo.betas,1)],
         acceptance_ratio::Vector{Vector{Float64}}=[zeros(algo.nsamples) 
             for _ in 1:size(algo.betas,1)];
-        verbose::Bool=false, randseed::Int=0, showprogress::Bool=verbose)    
+        verbose::Bool=false, randseed::Int=0, showprogress::Bool=verbose,
+        getbasis::Function=newbasis)    
     # Initialize to the requested initial state
     lm.x = algo.init_state(lm)
     # Adapt mc_move parameters to the current model
@@ -80,7 +76,7 @@ function solve!(lm::LossyModel, algo::SA,
     nbetas = size(algo.betas,1)
     min_dist = Inf
     argmin_beta = nbetas+1
-    parity = sum(paritycheck(lm))
+    par = parity(lm)
     for b in 1:nbetas
         # Update temperature
         lm.beta1 = algo.betas[b,1]
@@ -94,10 +90,10 @@ function solve!(lm::LossyModel, algo::SA,
             min_dist = m
             argmin_beta = b
         end
-        parity = sum(paritycheck(lm))
+        par = parity(lm)
         # Check stopping criterion
         if algo.stop_crit(lm, distortions[b], acceptance_ratio[b])
-            return SAResults(outcome=:stopped, parity=parity, distortion=min_dist,
+            return SAResults(outcome=:stopped, parity=par, distortion=min_dist,
                 beta_argmin=algo.betas[argmin_beta,:], 
                 acceptance_ratio=mean.(acceptance_ratio))
         end
@@ -108,9 +104,11 @@ function solve!(lm::LossyModel, algo::SA,
             "Acceptance ", @sprintf("%.0f",mean(acceptance_ratio[b])*100), "%")
         end
     end
-    return SAResults(outcome=:finished, parity=parity, distortion=min_dist,
+    @show algo.betas, argmin_beta
+    return SAResults(outcome=:finished, parity=par, distortion=min_dist,
         beta_argmin=algo.betas[argmin_beta,:], 
-        acceptance_ratio=mean.(acceptance_ratio))
+        acceptance_ratio=mean.(acceptance_ratio),
+        converged=true)
 end
 
 
@@ -122,22 +120,17 @@ function mc!(lm::LossyModel, algo::SA, randseed=0;
 
     distortions = fill(+Inf, algo.nsamples)
     acceptance_ratio = zeros(algo.nsamples)
-    # Initial energy
-    en = energy(lm)
     wait_time = showprogress ? 1 : Inf
     prog = Progress(algo.nsamples, wait_time, to_display)
     for n in 1:algo.nsamples
         for it in 1:algo.sample_every
             acc, dE = onemcstep!(lm , algo.mc_move, 
                 randseed+n*algo.sample_every+it)
-            en = en + dE*acc
             acceptance_ratio[n] += acc
         end
         acceptance_ratio[n] = acceptance_ratio[n]/algo.sample_every
         # Store distortion only if parity is fulfilled
-        if sum(paritycheck(lm)) == 0
-            distortions[n] = distortion(lm)
-        end
+        parity(lm) == 0 && (distortions[n] = distortion(lm))
         next!(prog)
     end
     return distortions, acceptance_ratio
@@ -146,6 +139,7 @@ end
 function onemcstep!(lm::LossyModel, mc_move::MCMove, randseed::Int=0)
     xnew = propose(mc_move, lm, randseed)
     acc, dE = accept(mc_move, lm, xnew, randseed)
+    isinf(dE) && println("DEBUG: something's wrong, infinite ΔE in MC move")
     if acc
         lm.x = xnew
     end
@@ -176,17 +170,15 @@ function propose(mc_move::Metrop1, lm::LossyModel, randseed::Int=0)
 end
 
 function propose(mc_move::MetropBasisCoeffs, lm::LossyModel, randseed::Int=0)
-    q = lm.fg.q
-    k = log_nsolutions(lm)
-    coeffs_old = mc_move.basis_coeffs
+    k = size(mc_move.basis,2)
     # Pick one coefficient to be flipped
     to_be_flipped = rand(1:k)
-    coeffs_new = copy(coeffs_old)
+    coeffs_new = copy(mc_move.basis_coeffs)
     # Flip
     coeffs_new[to_be_flipped] = rand(MersenneTwister(randseed),
-        [k for k=0:q-1 if k!=coeffs_old[to_be_flipped]])
+        [k for k=0:lm.fg.q-1 if k!=coeffs_new[to_be_flipped]])
     # Project on basis to get the new state
-    x_new = mc_move.basis*coeffs_new
+    x_new = gfmatrixmult(mc_move.basis,coeffs_new, lm.fg.q, lm.fg.mult)
     return x_new
 end
 

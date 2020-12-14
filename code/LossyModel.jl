@@ -1,5 +1,5 @@
 #### A wrapper for a FactorGraph object with temperature(s), current guess for the solution, source vector ####
-using LinearAlgebra
+using LinearAlgebra, Lazy
 
 mutable struct LossyModel
     fg::FactorGraph     # Factor graph instance
@@ -8,6 +8,10 @@ mutable struct LossyModel
     beta2::Real         # Inverse temperature for overlap with input vector y
     y::Vector{Int}      # Vector to be compressed
 end
+
+# 'Inherit' methods from inner property `fg`
+@forward LossyModel.fg adjmat, nullspace, rank, isfullrank, newbasis, 
+    permute_to_triangular
 
 # Constructor for lossy model with LDPC matrix
 function LossyModel(q::Int, n::Int, m::Int; beta1::Real=Inf, beta2::Real=1.0,
@@ -49,17 +53,8 @@ function distortion(lm::LossyModel, x::Vector{Int}=lm.x)
     # return hd(x,lm.y)/(lm.fg.n*log2(lm.fg.q))
     return distortion(lm.fg, lm.y, x)
 end
-adjmat(lm::LossyModel) = adjmat(lm.fg)
-import LinearAlgebra.nullspace, LinearAlgebra.rank
-nullspace(fg::FactorGraph) = gfnullspace(adjmat(fg), fg.q)
-nullspace(lm::LossyModel) = nullspace(lm.fg)
 log_nsolutions(lm::LossyModel)::Int = size(nullspace(lm), 2)
 nsolutions(lm::LossyModel)::Int = lm.fg.q^log_nsolutions(lm)
-rank(fg::FactorGraph)::Int = gfrank(adjmat(fg), fg.q)
-rank(lm::LossyModel)::Int = rank(lm.fg)
-isfullrank(lm::LossyModel)::Bool = rank(lm::LossyModel)==lm.fg.m
-
-
 
 function breduction!(lm::LossyModel, args...; kwargs...)
     b = breduction!(lm.fg, args...; kwargs...)

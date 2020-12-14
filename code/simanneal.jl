@@ -217,8 +217,7 @@ function seaweed(fg::FactorGraph, seed::Int, depths::Vector{Int}=lr(fg)[2],
     grow!(fg, seed, 0, depths, to_flip, isincore)
     # check that the resulting seaweed satisfies parity
     to_flip_int = Int.(to_flip)
-    p = sum(paritycheck(fg, to_flip_int))
-    @assert p==0
+    @assert parity(fg, to_flip_int)==0
     return Int.(to_flip)
 end
 

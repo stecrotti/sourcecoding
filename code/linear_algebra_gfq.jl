@@ -85,7 +85,7 @@ function ut2diag!(T::Array{Int,2}, q::Int=2,
     end
     return T
 end
-ut2diag(H::Array{Int,2}, args...; kw...) = ut2diag!(copy(H), args...; kw...)
+ut2diag(H::Array{Int,2}, args...) = ut2diag!(copy(H), args...)
 
 n_nonzerorows(H::Array{Int,2}) = sum([!all(H[r,:] .== 0) for r in 1:size(H,1)])
 

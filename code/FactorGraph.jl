@@ -147,9 +147,10 @@ function deletevars!(fg::FactorGraph, vv::Vector{Int})
 end
 
 # Recursive leaf removal
-function lr!(fg::FactorGraph, depth::Int=1, depths=zeros(Int,fg.n),
+function lr!(fg::FactorGraph, depth::Int=1, depths::Vector{Int}=zeros(Int,fg.n),
         to_be_visited::Vector{Int}=[v for v in eachindex(fg.Vneigs) if vardegree(fg,v)<=1],
-        factors::Vector{Int}=zeros(Int, fg.n))
+        cnt::Int=1, var2fact::Vector{Int}=zeros(Int, fg.n), 
+        vars_order::Vector{Int}=zeros(Int, fg.n))
     # Initalize vector to be filled with leaves that will be exposed
     to_be_visited_new = Int[]
     # Assign depth to newly found leaves
@@ -157,26 +158,27 @@ function lr!(fg::FactorGraph, depth::Int=1, depths=zeros(Int,fg.n),
     # Loop over leaves
     if !isempty(to_be_visited)
         for (i,v) in enumerate(to_be_visited)
+            # neighbors of v: either one or none
             f = fg.Vneigs[v][:]
             # delete factor and all its edges
-            newleaves = deletefactors!(fg, fg.Vneigs[v][:])
+            newleaves = deletefactors!(fg, f)
             # If new leaves are exposed, v is a dependent variable
             if newleaves!=[]
-                # Record to which factor the leaf was attached
-                factors[v] = f[1]
+                # Store order with which nodes are removed and update counter
+                var2fact[v] = f[1]
+                vars_order[v] = cnt; cnt += 1
                 append!(to_be_visited_new, newleaves[depths[newleaves].==0])
             end
         end
         # recursively re-apply `lr!`
-        lr!(fg, depth+1, depths, unique!(to_be_visited_new), factors)
+        lr!(fg, depth+1, depths, unique!(to_be_visited_new), cnt, var2fact, 
+            vars_order)
     end
-    return depths, factors
+    return depths, var2fact, vars_order
 end
-function lr(fg::FactorGraph) 
-    fg_ = deepcopy(fg)
-    lr_out = lr!(fg_)
-    return fg_, lr_out
-end
+
+lr(fg::FactorGraph) = lr!(deepcopy(fg)) 
+
 function plotdepths(fg::FactorGraph)
     _, depths = lr(fg)
     plot(fg, varnames = depths)
@@ -186,21 +188,22 @@ end
 #  adjacency matrix as H=[T|U] where T is square and upper triangular
 function permute_to_triangular(fg::FactorGraph)
     H = adjmat(fg)
-    # `factors` is a vector containing 0 for indep vars and for dep vars, the 
-    #  index of the factor to which they were attached
-    _,(_,factors) = lr(fg)
-    independent = (factors .== 0) 
+    _, var2fact, vars_order = lr(fg)
     # Re-organize column indices with dependent variables first
-    column_idx = vcat((1:fg.n)[.!independent], (1:fg.n)[independent])
-    H_permutecols = hcat(H[:,column_idx])
-    H_permuterows = H_permutecols[factors[.!independent],:]
-    return H_permuterows, column_idx
+    independent = (vars_order .== 0)
+    dep = findall(.!independent)
+    v = vars_order[vars_order .!= 0]
+    vars_perm = dep[invperm(v)]
+    fact_perm = var2fact[vars_perm]
+    column_idx = vcat(vars_perm, (1:fg.n)[independent])
+    H_permutedcols = hcat(H[:,column_idx])
+    H_permutedrows = H_permutedcols[fact_perm,:]
+    return H_permutedrows, column_idx
 end
 
-function newbasis(fg::FactorGraph)
-    H_trian, column_idx = permute_to_triangular(fg)
+function newbasis(H_trian::Array{Int,2}, column_idx::Vector{Int})
     # Turn upper-triangular matrix into diagonal
-    gfrref!(H_trian)
+    ut2diag!(H_trian)
     nrows = size(H_trian,1)
     H_indep = H_trian[:,nrows+1:end]
     nb = [H_indep; I]
@@ -208,6 +211,7 @@ function newbasis(fg::FactorGraph)
     nb .= nb[invperm(column_idx),:]
     return nb
 end
+newbasis(fg::FactorGraph) = newbasis(permute_to_triangular(fg)...)
 
 # Leaf removal but starting from leaf factors!
 function lr_factors!(fg::FactorGraph)

@@ -1,5 +1,5 @@
 #### Linear algebra on 𝔾𝔽(2ᵏ) ####
-using LinearAlgebra, LightGraphs, SimpleWeightedGraphs
+using LinearAlgebra, LightGraphs, SimpleWeightedGraphs, SparseArrays
 
 
 """Reduce matrix over GF(q) to reduced row echelon form"""
@@ -28,6 +28,9 @@ function gfrref!(H::Array{Int,2},
                     # Adjust to make pivot 1
                     f = gfdiv[H[p,c], H[r,c]]
                     H[r,:] .= xor.(gfmult[f, H[r,:]], H[p,:])
+                # else
+                #     # From now on only zeros in column c
+                #     break
                 end
             end
             p == m && break
@@ -60,6 +63,29 @@ function gfrcef(H::Array{Int,2},
     gfrcef!(tmp, q, gfmult, gfdiv)
     return tmp
 end
+
+# Convert upper triangular matrix into diagonal
+#  [T|X] -> [D|Y] 
+function ut2diag!(T::Array{Int,2}, q::Int=2,
+        gfmult::OffsetArray{Int,2}=gftables(q)[1],
+        gfdiv::OffsetArray{Int,2}=gftables(q)[3])
+        
+    (m,n) = size(T)
+    # Check that the left part of T is unit upper triangular
+    @assert isunituppertriangular(T[:,1:m])
+    # Loop over diagonal elements
+    for c in m:-1:1
+        # Find non-zero elements above T[c,c] and perform row operations to 
+        #  cancel them out
+        nz = (T[1:c-1,c] .!= 0)
+        for j in findall(nz)
+            T[j,c:end] .= 
+                xor.(T[j,c:end], gfmult[gfdiv[T[j,c],T[c,c]], T[c,c:end]])
+        end
+    end
+    return T
+end
+ut2diag(H::Array{Int,2}, args...; kw...) = ut2diag!(copy(H), args...; kw...)
 
 n_nonzerorows(H::Array{Int,2}) = sum([!all(H[r,:] .== 0) for r in 1:size(H,1)])
 

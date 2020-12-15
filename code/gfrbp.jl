@@ -17,6 +17,7 @@ beta2_init(algo::LossyAlgo) = 1.0
     Tmax::Int = 5                       # Max number of restarts with new random init
     beta2::Float64 = 1.0                # Inverse temperature for overlap energy
     sigma::Float64 = 1e-4               # Random noise on external fields
+    default_distortion::Function=naive_compression_distortion
 end
 
 # Max-sum
@@ -30,6 +31,7 @@ end
     Tmax::Int = 5                       # Max number of restarts with new random init
     beta2::Float64 = 1.0                # Inverse temperature for overlap energy
     sigma::Float64 = 1e-4               # Random noise on external fields
+    default_distortion::Function=naive_compression_distortion
 end
 
 beta2_init(algo::T) where {T<:Union{BP,MS}} = algo.beta2
@@ -183,7 +185,6 @@ guesses(fg::FactorGraph) = guesses(fg.fields)
 function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     maxdiff=zeros(algo.maxiter), codeword=falses(algo.maxiter),
     maxchange=zeros(algo.maxiter); randseed::Int=0, 
-    default_distortion::Function=naive_compression_distortion,
     verbose::Bool=false, showprogress::Bool=verbose)
 
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
@@ -260,12 +261,11 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
         end
     end
     return BPResults{typeof(algo)}(converged=false, parity=parity,
-                distortion=default_distortion(fg), trials=algo.Tmax, 
+                distortion=algo.default_distortion(fg,y), trials=algo.Tmax, 
                 iterations=algo.maxiter, maxdiff=maxdiff, codeword=codeword, 
                 maxchange=maxchange)
 end
-naive_compression_distortion(fg::FactorGraph) = 0.5*(nfacts(fg)/nvars(fg))
-naive_compression_distortion(R::Real) = 0.5*(1-R)
+
 
 function reinforce!(fg::FactorGraph, algo::Union{BP,MS})
     for (v,gv) in enumerate(fg.fields)
@@ -331,4 +331,35 @@ end
 
 function distortion(fg::FactorGraph, y::Vector{Int}, x::Vector{Int}=guesses(fg))
     return hd(x,y)/(fg.n*log2(fg.q))
+end
+
+#### Distortion for non-converged instances
+naive_compression_distortion(fg::FactorGraph,args...;kw...) = 0.5*(nfacts(fg)/nvars(fg))
+naive_compression_distortion(R::Real) = 0.5*(1-R)
+
+# Fix the independent variables to their value in the source vector
+function fix_indep_from_src(fg::FactorGraph, y::Vector{Int})
+    x = _fix_indep(fg,y)
+    return distortion(fg, y, x)
+end
+
+# Fix the independent variables to the decision variables outputted by max-sum
+function fix_indep_from_ms(fg::FactorGraph, y::Vector{Int})
+    x = _fix_indep(fg,guesses(fg))
+    return distortion(fg, y, x)
+end
+
+function _fix_indep(fg::FactorGraph, z::Vector{Int})
+    # If graph has no leaves, remove one
+    nvarleaves(fg) == 0 && breduction!(fg)
+    # Retrieve permuted parity-check matrix in the form [T|U]
+    M, col_perm = permute_to_triangular(fg)
+    m,n = size(M)
+    dependent = col_perm[1:m]
+    independent = col_perm[m+1:end]
+    x = zeros(Int,n)
+    x[independent] = z[independent]
+    b = gfmatrixmult(M[:,m+1:end], z[independent])
+    x[dependent] = gf_invert_ut(M[:,1:m], b)
+    return x
 end

@@ -1,5 +1,4 @@
 include("./../headers.jl")
-# include("./../SimulationNEW.jl")
 using JLD
 
 const q = 2

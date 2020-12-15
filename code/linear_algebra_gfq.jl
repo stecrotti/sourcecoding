@@ -159,7 +159,7 @@ function gf_invert_ut(T::Array{Int,2}, y::Vector{Int},
     gfdiv::OffsetArray{Int,2}=gftables(q)[3])
 
     @assert issquare(T)
-    @assert isunituppertriangular(T)
+    @assert isuppertriangular(T)
     n = size(T,1)
     @assert n==length(y)
     @assert isgfq(T,q) && isgfq(y,q)

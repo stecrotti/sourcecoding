@@ -78,7 +78,7 @@ end
 function convergence_ratio(sim::Simulation{<:LossyAlgo})
     return mean(r.converged for r in sim.results)
 end
-function distortion(results::Vector{LossyResults}; convergedonly::Bool=false)
+function distortion(results::Vector{LossyResults}, convergedonly::Bool=false)
     D = [r.distortion for r in results if (r.converged || !convergedonly)]
 end
 @forward Simulation.results distortion
@@ -121,22 +121,23 @@ import Plots: plot!, plot, histogram, bar
 
 function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}}; 
         allpoints::Bool=false,
-        label::String="Experimental data", kwargs...) where {T<:LossyAlgo}
-    dist = distortion.(sims; kwargs...)
+        label::String="Experimental data", 
+        convergedonly::Bool=false, plotkw...) where {T<:LossyAlgo}
+    dist = distortion.(sims, convergedonly)
     npoints = length.(dist)
     r = [rate(sim) for sim in sims]
     if allpoints
         rate_augmented = vcat([rate(sims[i])*ones(npoints[i]) for i in eachindex(sims)]...)
         dist_augmented = vcat(dist...)
         Plots.scatter!(pl, rate_augmented, dist_augmented, markersize=3,
-            label=label; kwargs...)
+            label=label; plotkw...)
     else
         dist_avg = mean.(dist)
         if Plots.backend() == Plots.UnicodePlotsBackend()
-            Plots.scatter!(pl, r, dist_avg, label=label, size=(300,200); kwargs...)
+            Plots.scatter!(pl, r, dist_avg, label=label, size=(300,200); plotkw...)
         else
             dist_sd = std.(distortion.(sims)) ./ [sqrt(npoints[i]) for i in eachindex(sims)]
-            Plots.scatter!(pl, r, dist_avg, label=label, yerror=dist_sd; kwargs...)
+            Plots.scatter!(pl, r, dist_avg, label=label, yerror=dist_sd; plotkw...)
         end
     end
     xlabel!(pl, "R")

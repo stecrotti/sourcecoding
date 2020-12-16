@@ -40,7 +40,7 @@ abstract type LossyResults end
 
 function output_str(res::LossyResults)
     out_str = "Parity " * string(res.parity) * ". " *
-              "Distortion " * @sprintf("%.3f ", res.distortion) * "."
+              "Dist " * @sprintf("%.3f ", res.distortion) * "."
     return out_str
 end
 

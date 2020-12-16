@@ -47,7 +47,7 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
             verbose=verbose, showprogress=showprogress)
         if verbose 
             it_str = @sprintf("%3d", it)
-            println("# Finished iter "*it_str*" of $niter: ", output_str(results[it]))
+            println("# Iter "*it_str*" of $niter: ", output_str(results[it]))
         end
         # Reinitialize messages if you're gonna reuse the same graph
         samegraph && refresh!(lm.fg)
@@ -75,13 +75,20 @@ end
 function runtime(sims::Vector{Simulation{T}}; kwargs...) where {T<:LossyAlgo}
     return sum(runtime(sim; kwargs...) for sim in sims)
 end
+function nconverged(sim::Simulation{<:LossyAlgo})
+    return sum(r.converged for r in sim.results)
+end
+function nunconverged(sim::Simulation{<:LossyAlgo})
+    return sim.niter - nconverged(sim)
+end
 function convergence_ratio(sim::Simulation{<:LossyAlgo})
-    return mean(r.converged for r in sim.results)
+    return nconverged(sim)/sim.niter
 end
 function distortion(results::Vector{LossyResults}, convergedonly::Bool=false)
     D = [r.distortion for r in results if (r.converged || !convergedonly)]
 end
 @forward Simulation.results distortion
+
 
 
 #### PRINTERS
@@ -122,22 +129,29 @@ import Plots: plot!, plot, histogram, bar
 function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}}; 
         allpoints::Bool=false,
         label::String="Experimental data", 
-        convergedonly::Bool=false, plotkw...) where {T<:LossyAlgo}
+        convergedonly::Bool=false, msw::Number=0.5, plotkw...) where {T<:LossyAlgo}
     dist = distortion.(sims, convergedonly)
     npoints = length.(dist)
     r = [rate(sim) for sim in sims]
     if allpoints
-        rate_augmented = vcat([rate(sims[i])*ones(npoints[i]) for i in eachindex(sims)]...)
-        dist_augmented = vcat(dist...)
-        Plots.scatter!(pl, rate_augmented, dist_augmented, markersize=3,
-            label=label; plotkw...)
+        rate_c_augmented = vcat([rate(sim)*ones(nconverged(sim)) for sim in sims]...)
+        rate_u_augmented = vcat([rate(sim)*ones(nunconverged(sim)) for sim in sims]...)
+        dist_c = [[r.distortion for r in sim.results if r.converged] for sim in sims] 
+        dist_u = [[r.distortion for r in sim.results if !r.converged] for sim in sims] 
+        dist_c_augmented = vcat(dist_c...)
+        dist_u_augmented = vcat(dist_u...)
+        Plots.scatter!(pl, rate_c_augmented, dist_c_augmented, markersize=3,
+            label="Converged"; msw=msw, plotkw...)
+        Plots.scatter!(pl, rate_u_augmented, dist_u_augmented, markersize=3,
+            label="Unconverged"; msw=msw, plotkw...)
     else
         dist_avg = mean.(dist)
         if Plots.backend() == Plots.UnicodePlotsBackend()
             Plots.scatter!(pl, r, dist_avg, label=label, size=(300,200); plotkw...)
         else
             dist_sd = std.(distortion.(sims)) ./ [sqrt(npoints[i]) for i in eachindex(sims)]
-            Plots.scatter!(pl, r, dist_avg, label=label, yerror=dist_sd; plotkw...)
+            Plots.scatter!(pl, r, dist_avg, label=label, yerror=dist_sd; 
+                msw=msw, plotkw...)
         end
     end
     xlabel!(pl, "R")

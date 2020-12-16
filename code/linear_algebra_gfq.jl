@@ -136,7 +136,7 @@ function gfmatrixmult(A::Array{Int,2}, B::Array{Int,2}, q::Int=2,
     return C
 end
 function gfmatrixmult(A::Array{Int,2}, V::Vector{Int}, args...)
-    return gfmatrixmult(A, hcat(V))
+    return gfmatrixmult(A, hcat(V), args...)
 end
 
 function gfmatrixinv(H::Array{Int,2},

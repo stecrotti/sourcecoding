@@ -359,7 +359,7 @@ function _fix_indep(fg::FactorGraph, z::Vector{Int})
     independent = col_perm[m+1:end]
     x = zeros(Int,n)
     x[independent] = z[independent]
-    b = gfmatrixmult(M[:,m+1:end], z[independent])
-    x[dependent] = gf_invert_ut(M[:,1:m], b)
+    b = gfmatrixmult(M[:,m+1:end], z[independent], fg.q, fg.mult)
+    x[dependent] = gf_invert_ut(M[:,1:m], b, fg.q, fg.mult)
     return x
 end

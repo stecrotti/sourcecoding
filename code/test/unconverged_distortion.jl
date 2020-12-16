@@ -3,7 +3,7 @@ include("./../headers.jl")
 
 q = 2
 gamma = 5e-3
-n = Int(round(420*4/log2(q)))
+n = Int(round(420*10/log2(q)))
 R = collect(0.21:0.1:0.81) 
 m = Int.(round.(n*(1 .- R)))
 b = Int(round(n/100))*ones(Int, length(m))

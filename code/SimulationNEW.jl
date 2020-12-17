@@ -78,6 +78,7 @@ end
 function nconverged(sim::Simulation{<:LossyAlgo})
     return sum(r.converged for r in sim.results)
 end
+convergenceratio(sim::Simulation{<:LossyAlgo}) = nconverged(sim)/sim.niter
 function nunconverged(sim::Simulation{<:LossyAlgo})
     return sim.niter - nconverged(sim)
 end

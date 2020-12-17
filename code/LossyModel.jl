@@ -19,13 +19,13 @@ function LossyModel(q::Int, n::Int, m::Int; beta1::Real=Inf, beta2::Real=1.0,
         rho::Vector{T}=generate_polyn(n,m)[3],
         fields = [Fun(1e-3*randn(q)) for v in 1:n], verbose=false,
         arbitrary_mult = false,
-        randseed::Int=0) where {T<:AbstractFloat}
+        randseed::Int=0,
+        y::Vector{Int}=rand(MersenneTwister(randseed), 0:q-1, n)) where {T<:AbstractFloat}
 
     !ispow2(q) && warning("The value of q you inserted (q=$q) is not a power of 2")
     fg = ldpc_graph(q,n,m, nedges, lambda, rho, fields, verbose=false,
         arbitrary_mult=arbitrary_mult, randseed=randseed)
     x = zeros(Int, n)
-    y = rand(MersenneTwister(randseed), 0:q-1, n)
     return LossyModel(fg, x, beta1, beta2, y)
 end
 
@@ -106,6 +106,10 @@ function gfrref!(lm::LossyModel)
     lm.fg = FactorGraph(H)
     return nothing
 end
+
+# function compress(lm::LossyModel, getbasis::Function=newbasis)
+#     nb = getbasis(lm)
+# end
 
 
 function lightweight_nullspace(lm::LossyModel; cutoff::Real=Inf, 

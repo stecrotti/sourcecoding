@@ -126,7 +126,7 @@ function gfmatrixmult(A::Array{Int,2}, B::Array{Int,2}, q::Int=2,
     @assert r == n  # check compatibility of dimensions for matrix product
     @assert q == s  # check valid multiplication matrix
     C = zeros(Int, m, p)
-    for j = 1:p
+    @inbounds for j = 1:p
         for i = 1:m
             C[i,j] = gfdot(A[i,:], B[:,j], q, mult)
         end

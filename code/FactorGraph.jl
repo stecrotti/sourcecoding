@@ -188,6 +188,9 @@ end
 # Permutes rows and columns (no multiplications!) to re-organize the graph
 #  adjacency matrix as H=[T|U] where T is square and upper triangular
 function permute_to_triangular(fg::FactorGraph)
+    if nvarleaves(fg) < 1
+        breduction!(fg)
+    end
     H = adjmat(fg)
     # Apply leaf-removal
     nvarleaves(fg) < 1 && error("Cannot convert to triangular form if factor"* 

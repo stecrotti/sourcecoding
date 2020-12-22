@@ -61,7 +61,7 @@ function adjmat(fg::FactorGraph)
             A[f,v] = fg.hfv[f][v_idx]
         end
     end
-    A
+    return A
 end
 
 # Returns the proper square adjacency matrix
@@ -239,8 +239,8 @@ function lr_factors!(fg::FactorGraph)
     nothing
 end
 
-# Experiment! build a graph with only factors (for degree-2 variables only)
-# Weights in the final graph are number of mini-loops
+# Build a graph with only factors (for degree-2 variables only)
+# Weights in the final graph are number of multi-edges
 function only_factors_graph(fg::FactorGraph)
     fg2 = deepcopy(fg)
     # Ensure all variables have degree 2 and we're working on GF(2)
@@ -250,9 +250,6 @@ function only_factors_graph(fg::FactorGraph)
     lr_factors!(fg2)
     # Start
     g = SimpleWeightedGraph(fg2.m)
-    
-    # Remove all leaves, being factors or variables
-    lr_factors!(fg2)
 
     H = adjmat(fg2)
     (m,n) = size(H)
@@ -344,7 +341,7 @@ function plot(fg::FactorGraph; varnames=1:fg.n, factnames=1:fg.m,
     highlighted_edges_ = [(t[1],t[2]+fg.m) for t in highlighted_edges]
     edgecolor[CartesianIndex.(highlighted_edges_)] .= :red
     
-    Random.seed!(randseed)  # control random layou tchanges
+    Random.seed!(randseed)  # control random layout changes
     return graphplot(g, curves=false, names=nodenames,
         nodeshape = nodeshape, nodecolor=colors[node_idx],
         method=method, nodesize=0.15, fontsize=7, 

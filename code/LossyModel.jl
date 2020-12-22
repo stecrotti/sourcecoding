@@ -53,8 +53,10 @@ function distortion(lm::LossyModel, x::Vector{Int}=lm.x)
     # return hd(x,lm.y)/(lm.fg.n*log2(lm.fg.q))
     return distortion(lm.fg, lm.y, x)
 end
-log_nsolutions(lm::LossyModel)::Int = size(nullspace(lm), 2)
-nsolutions(lm::LossyModel)::Int = lm.fg.q^log_nsolutions(lm)
+function log_nsolutions(lm::LossyModel, getbasis::Function=nullspace)::Int
+    return size(getbasis(lm), 2)
+end
+nsolutions(lm::LossyModel, args...)::Int = lm.fg.q^log_nsolutions(lm, args...)
 
 function breduction!(lm::LossyModel, args...; kwargs...)
     b = breduction!(lm.fg, args...; kwargs...)
@@ -128,6 +130,26 @@ function decompress(x_compressed::Vector{Int}, lm::LossyModel,
     return decompress(x_compressed, lm.fg, getbasis)
 end
 
+
+function weighted_full_adjmat(lm::LossyModel; sigma::Real=1e-3)
+    @assert lm.fg.q == 2
+    H = convert.(Float64, full_adjmat(lm.fg))
+    # diff = Bool.(xor.(lm.x, lm.y))
+    # for v in (1:lm.fg.n)[diff]
+    for v in 1:lm.fg.n
+        # Add random noise to break symmetries
+        noise = sigma*randn(lm.fg.n+lm.fg.m)
+        if lm.x[v] != lm.y[v]
+            H[lm.fg.m+v,:] .*= -1
+            H[:,lm.fg.m+v] .*= -1
+        end  
+        H[lm.fg.m+v,:] .+= noise .* (H[lm.fg.m+v,:].!=0)
+        H[:,lm.fg.m+v] .+= noise .* (H[:,lm.fg.m+v].!=0)      
+    end
+    return H
+end
+
+########
 function lightweight_nullspace(lm::LossyModel; cutoff::Real=Inf, 
     verbose::Bool=false)
     # Start with a basis of the system

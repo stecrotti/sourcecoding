@@ -107,10 +107,26 @@ function gfrref!(lm::LossyModel)
     return nothing
 end
 
-# function compress(lm::LossyModel, getbasis::Function=newbasis)
-#     nb = getbasis(lm)
-# end
+function compress(lm::LossyModel, getbasis::Function=newbasis)
+    indep = falses(lm.fg.n)
+    # Return a basis plus store in `indep` the indices of indep variables
+    nb = getbasis(lm, indep)
+    x_compressed = lm.x[indep]
+    return x_compressed
+end
 
+function decompress(x_compressed::Vector{Int}, basis::Vector{Int}, args...)
+    x_reconstructed = gfmatrixmult(basis, x_compressed, args...)
+    return x_reconstructed
+end
+function decompress(x_compressed::Vector{Int}, fg::FactorGraph, 
+        getbasis::Function=newbasis)
+    x_reconstructed = gfmatrixmult(getbasis(fg), x_compressed, q_mult_div(fg)[(1:2)]...)
+end
+function decompress(x_compressed::Vector{Int}, lm::LossyModel, 
+        getbasis::Function=newbasis)
+    return decompress(x_compressed, lm.fg, getbasis)
+end
 
 function lightweight_nullspace(lm::LossyModel; cutoff::Real=Inf, 
     verbose::Bool=false)

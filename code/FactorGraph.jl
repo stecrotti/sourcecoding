@@ -73,6 +73,10 @@ function full_adjmat(fg::FactorGraph)
     return A
 end
 
+function q_mult_div(fg::FactorGraph)
+    return fg.q, fg.mult, fg.gfdiv
+end
+
 
 dispstring(fg::FactorGraph) = "Factor Graph with n=$(fg.n) variables and m=$(fg.m) factors defined on GF($(fg.q))"
 
@@ -187,7 +191,8 @@ end
 
 # Permutes rows and columns (no multiplications!) to re-organize the graph
 #  adjacency matrix as H=[T|U] where T is square and upper triangular
-function permute_to_triangular(fg::FactorGraph)
+function permute_to_triangular(fg::FactorGraph, 
+        independent::BitArray{1}=falses(fg.n))
     if nvarleaves(fg) < 1
         breduction!(fg)
     end
@@ -197,28 +202,30 @@ function permute_to_triangular(fg::FactorGraph)
         " graph doesn't have at least 1 leaf")
     _, var2fact, vars_order = lr(fg)
     # Re-organize column indices with dependent variables first
-    independent = (vars_order .== 0)
+    independent .= (vars_order .== 0)
     dep = findall(.!independent)
     v = vars_order[vars_order .!= 0]
     vars_perm = dep[invperm(v)]
     fact_perm = var2fact[vars_perm]
-    column_idx = vcat(vars_perm, (1:fg.n)[independent])
-    H_permutedcols = hcat(H[:,column_idx])
+    column_perm = vcat(vars_perm, (1:fg.n)[independent])
+    H_permutedcols = hcat(H[:,column_perm])
     H_permutedrows = H_permutedcols[fact_perm,:]
-    return H_permutedrows, column_idx
+    return H_permutedrows, column_perm
 end
 
-function newbasis(H_trian::Array{Int,2}, column_idx::Vector{Int})
+function newbasis(H_trian::Array{Int,2}, column_perm::Vector{Int})
     # Turn upper-triangular matrix into diagonal
     ut2diag!(H_trian)
     nrows = size(H_trian,1)
     H_indep = H_trian[:,nrows+1:end]
     nb = [H_indep; I]
     # Invert the permutation that was done previoulsy on the columns
-    nb .= nb[invperm(column_idx),:]
+    nb .= nb[invperm(column_perm),:]
     return nb
 end
-newbasis(fg::FactorGraph) = newbasis(permute_to_triangular(fg)...)
+function newbasis(fg::FactorGraph, independent::BitArray{1}=falses(fg.n))
+    return newbasis(permute_to_triangular(fg, independent)...)
+end
 
 # Leaf removal but starting from leaf factors!
 function lr_factors!(fg::FactorGraph)

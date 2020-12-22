@@ -73,6 +73,9 @@ function full_adjmat(fg::FactorGraph)
     return A
 end
 
+function q_mult_div(fg::FactorGraph)
+    return fg.q, fg.mult, fg.gfdiv
+end
 
 dispstring(fg::FactorGraph) = "Factor Graph with n=$(fg.n) variables and m=$(fg.m) factors defined on GF($(fg.q))"
 
@@ -131,8 +134,8 @@ end
 function deletevar!(fg::FactorGraph, 
         v::Int=rand(filter(vv -> vardegree(fg,vv)!=0, 1:fg.n)))
     for f in eachindex(fg.Fneigs)
-        # delete i from its neighbors' neighbor lists
-        deleteval!(fg.Fneigs[f],v)
+        v_idx = findall(isequal(v), fg.Fneigs[f])
+        deleteat!(fg.Fneigs[f],v_idx)
         # delete messages to v
         deleteat!(fg.mfv[f], v_idx)
         # delete weight on the adjacency matrix
@@ -187,7 +190,8 @@ end
 
 # Permutes rows and columns (no multiplications!) to re-organize the graph
 #  adjacency matrix as H=[T|U] where T is square and upper triangular
-function permute_to_triangular(fg::FactorGraph)
+function permute_to_triangular(fg::FactorGraph, 
+        independent::BitArray{1}=falses(fg.n))
     if nvarleaves(fg) < 1
         breduction!(fg)
     end
@@ -197,28 +201,30 @@ function permute_to_triangular(fg::FactorGraph)
         " graph doesn't have at least 1 leaf")
     _, var2fact, vars_order = lr(fg)
     # Re-organize column indices with dependent variables first
-    independent = (vars_order .== 0)
+    independent .= (vars_order .== 0)
     dep = findall(.!independent)
     v = vars_order[vars_order .!= 0]
     vars_perm = dep[invperm(v)]
     fact_perm = var2fact[vars_perm]
-    column_idx = vcat(vars_perm, (1:fg.n)[independent])
-    H_permutedcols = hcat(H[:,column_idx])
+    column_perm = vcat(vars_perm, (1:fg.n)[independent])
+    H_permutedcols = hcat(H[:,column_perm])
     H_permutedrows = H_permutedcols[fact_perm,:]
-    return H_permutedrows, column_idx
+    return H_permutedrows, column_perm
 end
 
-function newbasis(H_trian::Array{Int,2}, column_idx::Vector{Int})
+function newbasis(H_trian::Array{Int,2}, column_perm::Vector{Int})
     # Turn upper-triangular matrix into diagonal
     ut2diag!(H_trian)
     nrows = size(H_trian,1)
     H_indep = H_trian[:,nrows+1:end]
     nb = [H_indep; I]
     # Invert the permutation that was done previoulsy on the columns
-    nb .= nb[invperm(column_idx),:]
+    nb .= nb[invperm(column_perm),:]
     return nb
 end
-newbasis(fg::FactorGraph) = newbasis(permute_to_triangular(fg)...)
+function newbasis(fg::FactorGraph, independent::BitArray{1}=falses(fg.n))
+    return newbasis(permute_to_triangular(fg, independent)...)
+end
 
 # Leaf removal but starting from leaf factors!
 function lr_factors!(fg::FactorGraph)
@@ -311,7 +317,7 @@ import Plots.plot
 function plot(fg::FactorGraph; varnames=1:fg.n, factnames=1:fg.m,
     highlighted_nodes=Int[], highlighted_factors=Int[], 
     highlighted_edges::Vector{Tuple{Int,Int}}=Tuple{Int,Int}[], method=:spring,
-    randseed::Int=abs(rand(Int)))
+    randseed::Int=abs(rand(Int)), plt_kw...)
     
     Plots.pyplot()
     m = fg.m
@@ -342,7 +348,7 @@ function plot(fg::FactorGraph; varnames=1:fg.n, factnames=1:fg.m,
     return graphplot(g, curves=false, names=nodenames,
         nodeshape = nodeshape, nodecolor=colors[node_idx],
         method=method, nodesize=0.15, fontsize=7, 
-        nodestrokewidth=nodestrokewidth, edgecolor=edgecolor)
+        nodestrokewidth=nodestrokewidth, edgecolor=edgecolor; plt_kw...)
 end
 
 function animate_nodes(fg::FactorGraph, nodes::Vector{Vector{Int}};

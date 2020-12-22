@@ -317,14 +317,15 @@ function refresh!(fg::FactorGraph, y::Vector{Int},
     return nothing
 end
 
-function solve!(lm::LossyModel, algo::Union{BP,MS}, args...; kwargs...)
-    extfields!(lm, algo, randseed=kwargs[:randseed])
-    output = bp!(lm.fg, algo, lm.y, args...; kwargs...)
+function solve!(lm::LossyModel, algo::Union{BP,MS}, args...; randseed::Int=0,
+        kwargs...)
+    extfields!(lm, algo, randseed=randseed)
+    output = bp!(lm.fg, algo, lm.y, args...; randseed=randseed, kwargs...)
     lm.x = guesses(lm.fg)
     return output
 end
 
-function extfields!(lm::LossyModel, algo::Union{BP,MS}, sigma::Real=1e-4; randseed::Int=0)
+function extfields!(lm::LossyModel, algo::Union{BP,MS}; randseed::Int=0)
     lm.fg.fields .= extfields(lm.fg.q,lm.y,algo,
         randseed=randseed)
 end

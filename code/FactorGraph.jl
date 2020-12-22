@@ -77,7 +77,6 @@ function q_mult_div(fg::FactorGraph)
     return fg.q, fg.mult, fg.gfdiv
 end
 
-
 dispstring(fg::FactorGraph) = "Factor Graph with n=$(fg.n) variables and m=$(fg.m) factors defined on GF($(fg.q))"
 
 function Base.show(io::IO, fg::FactorGraph)
@@ -135,8 +134,8 @@ end
 function deletevar!(fg::FactorGraph, 
         v::Int=rand(filter(vv -> vardegree(fg,vv)!=0, 1:fg.n)))
     for f in eachindex(fg.Fneigs)
-        # delete i from its neighbors' neighbor lists
-        deleteval!(fg.Fneigs[f],v)
+        v_idx = findall(isequal(v), fg.Fneigs[f])
+        deleteat!(fg.Fneigs[f],v_idx)
         # delete messages to v
         deleteat!(fg.mfv[f], v_idx)
         # delete weight on the adjacency matrix
@@ -318,7 +317,7 @@ import Plots.plot
 function plot(fg::FactorGraph; varnames=1:fg.n, factnames=1:fg.m,
     highlighted_nodes=Int[], highlighted_factors=Int[], 
     highlighted_edges::Vector{Tuple{Int,Int}}=Tuple{Int,Int}[], method=:spring,
-    randseed::Int=abs(rand(Int)))
+    randseed::Int=abs(rand(Int)), plt_kw...)
     
     Plots.pyplot()
     m = fg.m
@@ -349,7 +348,7 @@ function plot(fg::FactorGraph; varnames=1:fg.n, factnames=1:fg.m,
     return graphplot(g, curves=false, names=nodenames,
         nodeshape = nodeshape, nodecolor=colors[node_idx],
         method=method, nodesize=0.15, fontsize=7, 
-        nodestrokewidth=nodestrokewidth, edgecolor=edgecolor)
+        nodestrokewidth=nodestrokewidth, edgecolor=edgecolor; plt_kw...)
 end
 
 function animate_nodes(fg::FactorGraph, nodes::Vector{Vector{Int}};

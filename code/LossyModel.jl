@@ -131,18 +131,18 @@ function decompress(x_compressed::Vector{Int}, lm::LossyModel,
 end
 
 
-function weighted_full_adjmat(lm::LossyModel; sigma::Real=1e-3)
+function weighted_full_adjmat(lm::LossyModel; sigma::Real=1e-5)
     @assert lm.fg.q == 2
     H = convert.(Float64, full_adjmat(lm.fg))
     # diff = Bool.(xor.(lm.x, lm.y))
     # for v in (1:lm.fg.n)[diff]
     for v in 1:lm.fg.n
         # Add random noise to break symmetries
-        noise = sigma*randn(lm.fg.n+lm.fg.m)
         if lm.x[v] != lm.y[v]
             H[lm.fg.m+v,:] .*= -1
             H[:,lm.fg.m+v] .*= -1
-        end  
+        end 
+        noise = sigma*randn(lm.fg.n+lm.fg.m)
         H[lm.fg.m+v,:] .+= noise .* (H[lm.fg.m+v,:].!=0)
         H[:,lm.fg.m+v] .+= noise .* (H[:,lm.fg.m+v].!=0)      
     end

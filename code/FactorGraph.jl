@@ -30,7 +30,7 @@ function FactorGraph(q::Int, n::Int, m::Int)
 end
 
 # Construct graph from adjacency matrix (for checks with simple examples)
-function FactorGraph(A::Array{Int,2}, q::Int= nextpow(2,maximum(A)+0.5),
+function FactorGraph(A::Array{Int,2}, q::Int=nextpow(2,maximum(A)+0.5),
     fields = [Fun(1e-3*randn(q)) for v in 1:size(A,2)])
     m,n = size(A)
     Vneigs = [Int[] for v in 1:n]
@@ -52,6 +52,19 @@ function FactorGraph(A::Array{Int,2}, q::Int= nextpow(2,maximum(A)+0.5),
     end
     mult, gfinv, gfdiv = gftables(q)
     return FactorGraph(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
+end
+
+# Add a factor and return a copy of the original one. This is because the struct
+#  is kept immutable for performance reasons
+function add_factor(fg::FactorGraph, fneigs::Vector{Int}=varleaves(fg), 
+        weights::Vector{Int}=ones(Int, length(fneigs)))
+    H = adjmat(fg)
+    fields = fg.fields
+    q = fg.q
+    newrow = zeros(Int, fg.n)
+    newrow[fneigs] .= weights 
+    Hnew = vcat(H, newrow')
+    return FactorGraph(Hnew, q, fields)
 end
 
 function adjmat(fg::FactorGraph)
@@ -358,13 +371,11 @@ function animate_nodes(fg::FactorGraph, nodes::Vector{Vector{Int}};
 end
 
 function animate_basis(fg::FactorGraph, 
-        basis::Vector{Vector{Int}}=newbasis(fg); kwargs...)
+    basis::Array{Int,2}=newbasis(fg); kwargs...)
     nodes = [(1:fg.n)[Bool.(basis[:,i])] for i in 1:size(basis,2)]
     animate_nodes(fg, nodes; kwargs...)
     return nothing
 end
-
-
 
 import LinearAlgebra.nullspace, LinearAlgebra.rank
 nullspace(fg::FactorGraph) = gfnullspace(adjmat(fg), fg.q)

@@ -17,7 +17,7 @@ beta2_init(algo::LossyAlgo) = 1.0
     Tmax::Int = 5                       # Max number of restarts with new random init
     beta2::Float64 = 1.0                # Inverse temperature for overlap energy
     sigma::Float64 = 1e-4               # Random noise on external fields
-    default_distortion::Function=naive_compression_distortion
+    default_distortion::Function=fix_indep_from_ms
 end
 
 # Max-sum
@@ -31,7 +31,7 @@ end
     Tmax::Int = 5                       # Max number of restarts with new random init
     beta2::Float64 = 1.0                # Inverse temperature for overlap energy
     sigma::Float64 = 1e-4               # Random noise on external fields
-    default_distortion::Function=naive_compression_distortion
+    default_distortion::Function=fix_indep_from_ms
 end
 
 beta2_init(algo::T) where {T<:Union{BP,MS}} = algo.beta2

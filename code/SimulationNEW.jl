@@ -169,6 +169,7 @@ function plot(sims::Union{Simulation{T},Vector{Simulation{T}}};
     r = LinRange(0, 1, 100)
     pl = Plots.plot(rdb.(d), d, label="RDB")
     Plots.plot!(pl, r, 0.5*(-r.+1), label="Naive compression")
+    
     return plot!(pl, sims; kwargs...)
 end
 

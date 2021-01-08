@@ -29,10 +29,16 @@ for j in 1:length(m)
         randseed=randseed, showprogress=true)
     sims_cycles[j] = Simulation(q, n, m[j], optimalcycle, b=0, niter=niter,
         randseed=randseed, showprogress=true)
-    sims_ms[j] = Simulation(q, n, m[j], maxsum, niter=niter, b=b, 
+    sims_ms[j] = Simulation(q, n, m[j], maxsum, niter=niter, b=b[j], 
         randseed=randseed, showprogress=true)
 end
 
-JLD2.@save "./method_comparison.jld" sims_cycles sims_ms sims_sa
+ms = 3 # marker size
 
+pl = plot(sims_ms, label="Max-Sum", size=(600,400), legend=:outertopright, dpi=200, ms=ms, marker=:square)
+plot!(pl, sims_cycles, label="Optimal cycle", ms=ms)
+plot!(pl, sims_sa, label="Simulated annealing", ms=ms, marker=:diamond)
 
+JLD2.@save "./method_comparison.jld" pl
+
+send_notification()

@@ -19,13 +19,13 @@ sims_ms = Vector{Simulation{MS}}(undef, length(m))
 
 for j in 1:length(m)
     println("\n---------- Simulation $j of ", length(m)," | R = ",R[j]," -----------")
-    # sims_ms[j] = Simulation(q, n, m[j], ms, niter=niter, b=b[j], 
-    #     randseed=randseed, showprogress=true)
+    sims_ms[j] = Simulation(q, n, m[j], ms, niter=niter, b=1, 
+        randseed=randseed, showprogress=true)
     sims_cycles[j] = Simulation(q, n, m[j], OptimalCycle(), b=0, niter=niter,
         randseed=randseed, showprogress=true)
 end
 
-# JLD2.@save "./rdb_optimal_cycles2.jld" sims_cycles sims_ms
+JLD2.@save "./rdb_optimal_cycles3.jld" sims_cycles sims_ms
 
 # include("./../headers.jl")
 # using JLD2

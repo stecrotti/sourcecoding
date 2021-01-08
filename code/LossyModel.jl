@@ -97,8 +97,9 @@ function energy_overlap(lm::LossyModel, x::Union{Vector{Int},Array{Int,2}}=lm.x)
     return lm.beta2*hd(x, lm.y)
 end
 
-function refresh!(lm::LossyModel, args...)
-    return refresh!(lm.fg, lm.y, args...)
+function refresh!(lm::LossyModel, args...; kwargs...)
+    lm.x .= zeros(Int, lm.fg.n)
+    return refresh!(lm.fg, lm.y, args...; kwargs...)
 end
 
 # Gaussian elimination on the graph
@@ -131,20 +132,14 @@ function decompress(x_compressed::Vector{Int}, lm::LossyModel,
 end
 
 
-function weighted_full_adjmat(lm::LossyModel; sigma::Real=1e-5)
+function weighted_full_adjmat(lm::LossyModel)
     @assert lm.fg.q == 2
-    H = convert.(Float64, full_adjmat(lm.fg))
-    # diff = Bool.(xor.(lm.x, lm.y))
-    # for v in (1:lm.fg.n)[diff]
+    H = full_adjmat(lm.fg)
     for v in 1:lm.fg.n
-        # Add random noise to break symmetries
         if lm.x[v] != lm.y[v]
             H[lm.fg.m+v,:] .*= -1
             H[:,lm.fg.m+v] .*= -1
-        end 
-        noise = sigma*randn(lm.fg.n+lm.fg.m)
-        H[lm.fg.m+v,:] .+= noise .* (H[lm.fg.m+v,:].!=0)
-        H[:,lm.fg.m+v] .+= noise .* (H[:,lm.fg.m+v].!=0)      
+        end      
     end
     return H
 end

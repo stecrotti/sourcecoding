@@ -49,8 +49,7 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
             it_str = @sprintf("%3d", it)
             println("# Iter "*it_str*" of $niter: ", output_str(results[it]))
         end
-        # Reinitialize messages if you're gonna reuse the same graph
-        samegraph && refresh!(lm.fg)
+        refresh!(lm)
     end
     arbitrary_mult = (lm.fg.mult == gftables(lm.fg.q))
     return Simulation{typeof(algo)}(q,n,m,algo,niter,b,arbitrary_mult,results,

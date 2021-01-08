@@ -3,11 +3,13 @@ using ProgressMeter, Statistics, Printf
 
 abstract type MCMove end
 struct Metrop1 <: MCMove; end
+# Propose states by flipping coefficients of expansion on a basis
 @with_kw mutable struct MetropBasisCoeffs <: MCMove
     basis::Array{Int,2}=Array{Int,2}(undef,0,0)
     basis_coeffs::Vector{Int}=Vector{Int}(undef,0)
     getbasis::Function=nullspace
 end
+# Propose states by flipping seaweeds
 @with_kw mutable struct MetropSmallJumps <: MCMove
     depths::Vector{Int}=Vector{Int}(undef,0)
     isincore::BitArray{1}=falses(0)
@@ -17,7 +19,11 @@ function adapt_to_model!(mc_move::MCMove, lm::LossyModel)
     return mc_move
 end
 function adapt_to_model!(mc_move::MetropSmallJumps, lm::LossyModel)
-    _,depths = lr(lm.fg)
+    # If graph has no leaves, remove one factor
+    if nvarleaves(lm.fg) == 0
+        breduction!(lm, 1)
+    end
+    depths,_,_ = lr(lm.fg)
     isincore = (depths .== 0)
     mc_move.depths = depths
     mc_move.isincore = isincore
@@ -67,8 +73,7 @@ function solve!(lm::LossyModel, algo::SA,
             for _ in 1:size(algo.betas,1)],
         acceptance_ratio::Vector{Vector{Float64}}=[zeros(algo.nsamples) 
             for _ in 1:size(algo.betas,1)];
-        verbose::Bool=false, randseed::Int=0, showprogress::Bool=verbose,
-        getbasis::Function=newbasis)    
+        verbose::Bool=false, randseed::Int=0, showprogress::Bool=verbose)    
     # Initialize to the requested initial state
     lm.x = algo.init_state(lm)
     # Adapt mc_move parameters to the current model
@@ -104,7 +109,6 @@ function solve!(lm::LossyModel, algo::SA,
             "Acceptance ", @sprintf("%.0f",mean(acceptance_ratio[b])*100), "%")
         end
     end
-    @show algo.betas, argmin_beta
     return SAResults(outcome=:finished, parity=par, distortion=min_dist,
         beta_argmin=algo.betas[argmin_beta,:], 
         acceptance_ratio=mean.(acceptance_ratio),
@@ -196,7 +200,7 @@ end
 
 ### Build a seaweed as described in https://arxiv.org/pdf/cond-mat/0207140.pdf
 
-function seaweed(fg::FactorGraph, seed::Int, depths::Vector{Int}=lr(fg)[2], 
+function seaweed(fg::FactorGraph, seed::Int, depths::Vector{Int}=lr(fg)[1], 
         isincore::BitArray{1} = (depths .== 0),
         to_flip::BitArray{1}=falses(fg.n))
     # Check that there is at least 1 leaf

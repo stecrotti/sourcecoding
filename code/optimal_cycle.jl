@@ -12,7 +12,7 @@ function optimal_cycle(G)
     match(i) = get_match(E, i - 1) + 1
     n = size(G,1);
     m = Int(length(rows)/2)
-    E = Matching(Float64, 2n+2m)
+    E = BlossomV.Matching(Float64, 2n+2m)
     D = Tuple{Int,Int}[]
     k = 2n+1
     for i=1:n
@@ -40,6 +40,7 @@ end
 
 # Wizardry to go from edge numbering in the graph used to find cycles (1:m+n) 
 #  to actual variable (1:n) and factor (1:m) indices
+# The output is of the form (fact,var) for each edge
 function variables_from_cycle(cy::Array{Tuple{Int64,Int64},1}, m::Int)
     cy_ = Array{Tuple{Int64,Int64},1}(undef, length(cy))
     for i in eachindex(cy)
@@ -51,7 +52,8 @@ end
 
 function one_loop_flip(lm::LossyModel)
     H = weighted_full_adjmat(lm)
-    op = variables_from_cycle(optimal_cycle(H)[1], lm.fg.m)
+    op_, w = optimal_cycle(H)
+    op = variables_from_cycle(op_, lm.fg.m)
     to_flip = unique!([tup[2] for tup in op])
     lm.x[to_flip] .⊻= 1
     return op, to_flip, w
@@ -73,8 +75,8 @@ struct OptimalCycle <: LossyAlgo; end
     distortion::Float64
 end
 
-function solve!(lm::LossyModel, algo::OptimalCycle, 
-    maxiter::Int=min(lm.fg.m,5);
+function solve!(lm::LossyModel, algo::OptimalCycle;
+    maxiter::Int=50,
     randseed::Int=abs(rand(Int)), verbose::Bool=true, 
     showprogress::Bool=verbose)
 
@@ -85,13 +87,21 @@ function solve!(lm::LossyModel, algo::OptimalCycle,
     finished = false
     # Loop maxiter only as a precaution in case something goes wrong and the 
     #  procedure doesn't stop
+    E = energy(lm)
+    @show E
     for it in 1:maxiter
         op,to_flip, w = one_loop_flip(lm)
         push!(dist, distortion(lm))
+        Enew = energy(lm)
+        deltaE = Enew - E
         showprogress && println("Iter ", length(dist), ". Distortion ", 
-            round(dist[end], digits=4), ". Cycle weight", round(w,digits=4))
-        if isempty(op)
+            round(dist[end], digits=4), ". Cycle weight ", round(w,digits=4),
+            ". Energy shift ", deltaE)
+        
+        if Enew - E == 0
             return OptimalCycleResults(true, parity(lm), distortion(lm))
+        else
+            E = Enew
         end
     end
     return OptimalCycleResults(false, parity(lm), distortion(lm))

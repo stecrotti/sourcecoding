@@ -88,7 +88,6 @@ function solve!(lm::LossyModel, algo::OptimalCycle;
     # Loop maxiter only as a precaution in case something goes wrong and the 
     #  procedure doesn't stop
     E = energy(lm)
-    @show E
     for it in 1:maxiter
         op,to_flip, w = one_loop_flip(lm)
         push!(dist, distortion(lm))

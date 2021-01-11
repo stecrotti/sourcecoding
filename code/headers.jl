@@ -13,6 +13,7 @@ include("./plotters/plot_pgf.jl")
 
 
 # Send notifications to telegram when program execution ends
+cwd = pwd()
 cd(@__DIR__)
 notifications_path = "../../telegram/notifications.jl"
 if isfile(notifications_path)
@@ -25,3 +26,4 @@ else
         nothing
     end
 end
+cd(cwd)

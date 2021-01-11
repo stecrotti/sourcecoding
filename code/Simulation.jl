@@ -47,7 +47,7 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
             verbose=verbose, showprogress=showprogress)
         if verbose 
             it_str = @sprintf("%3d", it)
-            println("# Iter "*it_str*" of $niter: ", output_str(results[it]))
+            println(it_str*" of $niter: ", output_str(results[it]))
         end
         refresh!(lm)
     end

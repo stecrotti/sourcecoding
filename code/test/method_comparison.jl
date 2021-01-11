@@ -3,18 +3,18 @@ using JLD2
 
 q = 2
 gamma = 5e-3
-n = Int(round(420*4/log2(q)))
+n = Int(round(420*5/log2(q)))
 R = collect(0.21:0.1:0.81) 
 m = Int.(round.(n*(1 .- R)))
 b = Int(round(n/100))*ones(Int, length(m))
 maxiter = Int(3e2)
-niter = 15
+niter = 20
 randseed = 1234
-Tmax = 1
+Tmax = 5
 
 # Three algorithms
 maxsum = MS(maxiter=maxiter, gamma=gamma, Tmax=Tmax)
-simanneal = SA(mc_move=MetropSmallJumps(), nsamples=100, 
+simanneal = SA(mc_move=MetropSmallJumps(), nsamples=200, 
     betas=[Inf 0.1; Inf 1.0; Inf 10.0;]);
 optimalcycle = OptimalCycle();
 
@@ -39,6 +39,6 @@ pl = plot(sims_ms, label="Max-Sum", size=(600,400), legend=:outertopright, dpi=2
 plot!(pl, sims_cycles, label="Optimal cycle", ms=ms)
 plot!(pl, sims_sa, label="Simulated annealing", ms=ms, marker=:diamond)
 
-JLD2.@save "./method_comparison.jld" pl
+JLD2.@save "./method_comparison3.jld" sims_sa sims_cycles sims_ms
 
 send_notification()

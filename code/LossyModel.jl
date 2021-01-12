@@ -10,8 +10,14 @@ mutable struct LossyModel
 end
 
 # 'Inherit' methods from inner property `fg`
-@forward LossyModel.fg adjmat, nullspace, rank, isfullrank, newbasis, 
+@forward LossyModel.fg adjmat, nullspace, rank, isfullrank, lightbasis, 
     permute_to_triangular
+
+function fix_indep_from_src(lm::LossyModel, x::Vector{Int}=lm.x)
+    fix_indep_from_src(lm.fg, lm.y, x)
+    lm.x = x
+    return x
+end
 
 # Constructor for lossy model with LDPC matrix
 function LossyModel(q::Int, n::Int, m::Int; beta1::Real=Inf, beta2::Real=1.0,
@@ -157,7 +163,7 @@ function lightweight_nullspace(lm::LossyModel; cutoff::Real=Inf,
     end
     nsdim = size(oldbasis,2)
     allsolutions = enum_solutions(lm)
-    newbasis = zeros(Int, size(oldbasis))
+    new_basis = zeros(Int, size(oldbasis))
     g = solutions_graph(lm, cutoff=cutoff)
     if verbose
         conn = is_connected(g) ? "" : "NON "
@@ -188,14 +194,14 @@ function lightweight_nullspace(lm::LossyModel; cutoff::Real=Inf,
             for t in 1:length(mbpath)-1
                 # check if is not already in the span of newbasis
                 hop = xor.(mbpath[t], mbpath[t+1])
-                if !isinspan(newbasis, hop, q=lm.fg.q)
+                if !isinspan(new_basis, hop, q=lm.fg.q)
                     nadded += 1
-                    newbasis[:,nadded] = hop
+                    new_basis[:,nadded] = hop
                     if nadded == nsdim 
-                        hw_new = maximum([hw(collect(col)) for col in eachcol(newbasis)])
+                        hw_new = maximum([hw(collect(col)) for col in eachcol(new_basis)])
                         verbose && println("\tDone! The new basis has total ",
                         "Hamming weight ", hw_new)
-                        return newbasis
+                        return new_basis
                     end
                 end
             end

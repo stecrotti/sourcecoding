@@ -3,7 +3,7 @@ using JLD2
 
 qq = 2 .^ [1 4 6 8]
 gamma = 5e-3
-nn = Int.(round.(420*3 ./log2.(q)))
+nn = Int.(round.(420*3 ./log2.(qq)))
 R = collect(0.21:0.1:0.81) 
 mm = [Int.(round.(n*(1 .- R))) for n in nn]
 maxiter = Int(1e3)
@@ -23,7 +23,7 @@ for (i,q) in enumerate(qq)
 end
 
 fn = @__FILE__
-send_notif(fn*" finished execution")
+send_notification(fn*" finished execution")
 
 date = Dates.format(now(), "yyyymmdd_HHMM")
 @save "gf$q-"*date*".jld" sims_vec

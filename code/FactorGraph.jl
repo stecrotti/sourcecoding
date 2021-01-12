@@ -90,7 +90,8 @@ function q_mult_div(fg::FactorGraph)
     return fg.q, fg.mult, fg.gfdiv
 end
 
-dispstring(fg::FactorGraph) = "Factor Graph with n=$(fg.n) variables and m=$(fg.m) factors defined on GF($(fg.q))"
+dispstring(fg::FactorGraph) = "Factor Graph with n=$(nvars(fg)) variables "*
+    "and m=$(nfacts(fg)) factors defined on GF($(fg.q))"
 
 function Base.show(io::IO, fg::FactorGraph)
     println(io, dispstring(fg))
@@ -225,7 +226,7 @@ function permute_to_triangular(fg::FactorGraph,
     return H_permutedrows, column_perm
 end
 
-function newbasis(H_trian::Array{Int,2}, column_perm::Vector{Int})
+function lightbasis(H_trian::Array{Int,2}, column_perm::Vector{Int})
     # Turn upper-triangular matrix into diagonal
     ut2diag!(H_trian)
     nrows = size(H_trian,1)
@@ -235,8 +236,8 @@ function newbasis(H_trian::Array{Int,2}, column_perm::Vector{Int})
     nb .= nb[invperm(column_perm),:]
     return nb
 end
-function newbasis(fg::FactorGraph, independent::BitArray{1}=falses(fg.n))
-    return newbasis(permute_to_triangular(fg, independent)...)
+function lightbasis(fg::FactorGraph, independent::BitArray{1}=falses(fg.n))
+    return lightbasis(permute_to_triangular(fg, independent)...)
 end
 
 # Leaf removal but starting from leaf factors!

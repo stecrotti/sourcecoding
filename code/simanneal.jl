@@ -7,7 +7,7 @@ struct Metrop1 <: MCMove; end
 @with_kw mutable struct MetropBasisCoeffs <: MCMove
     basis::Array{Int,2}=Array{Int,2}(undef,0,0)
     basis_coeffs::Vector{Int}=Vector{Int}(undef,0)
-    getbasis::Function=nullspace
+    getbasis::Function=lightbasis
 end
 # Propose states by flipping seaweeds
 @with_kw mutable struct MetropSmallJumps <: MCMove
@@ -84,8 +84,7 @@ function solve!(lm::LossyModel, algo::SA,
     par = parity(lm)
     for b in 1:nbetas
         # Update temperature
-        lm.beta1 = algo.betas[b,1]
-        lm.beta2 = algo.betas[b,2]
+        lm.beta1, lm.beta2 = algo.betas[b,1], algo.betas[b,2]
         # Run MC
         distortions[b], acceptance_ratio[b] = mc!(lm, algo, randseed, 
         verbose=verbose, to_display="MC running β₁=$(lm.beta1), "*
@@ -124,7 +123,7 @@ function mc!(lm::LossyModel, algo::SA, randseed=0;
 
     distortions = fill(+Inf, algo.nsamples)
     acceptance_ratio = zeros(algo.nsamples)
-    wait_time = showprogress ? 1 : Inf
+    wait_time = showprogress ? 1 : Inf   # trick not to display progess
     prog = Progress(algo.nsamples, wait_time, to_display)
     for n in 1:algo.nsamples
         for it in 1:algo.sample_every
@@ -133,7 +132,8 @@ function mc!(lm::LossyModel, algo::SA, randseed=0;
             acceptance_ratio[n] += acc
         end
         acceptance_ratio[n] = acceptance_ratio[n]/algo.sample_every
-        # Store distortion only if parity is fulfilled
+        # Store distortion only if parity is fulfilled because distortion from 
+        #  unconverged shouldn't compete for the minimum
         parity(lm) == 0 && (distortions[n] = distortion(lm))
         next!(prog)
     end
@@ -195,6 +195,15 @@ function propose(mc_move::MetropSmallJumps, lm::LossyModel, randseed::Int=0)
     # Add seaweed (which is a valid solution) to the old state
     xnew = xor.(xnew, sw)
     return xnew
+end
+
+function metrop_accept(dE::Real, randseed::Int)::Bool
+    if dE < 0
+        return true
+    else
+        r = rand(MersenneTwister(randseed))
+        return r < exp(-dE)
+    end
 end
 
 
@@ -286,15 +295,4 @@ function plot_seaweed(fg::FactorGraph, seed::Int)
         end
     end
     plot(fg, highlighted_edges=highlighted_edges, varnames = depths)
-end
-
-
-
-function metrop_accept(dE::Real, randseed::Int)::Bool
-    if dE < 0
-        return true
-    else
-        r = rand(MersenneTwister(randseed))
-        return r < exp(-dE)
-    end
 end

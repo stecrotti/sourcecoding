@@ -57,16 +57,16 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
 end
 
 #### GETTERS
-function rate(sim::Simulation{<:LossyAlgo})
+function rate(sim::Simulation)
     return 1 - sim.m/sim.n
 end
-function iterations(sim::Simulation{<:LossyAlgo}; convergedonly::Bool=false)
+function iterations(sim::Simulation; convergedonly::Bool=false)
     return [r.iterations for r in sim.results if (r.converged || !convergedonly)]
 end
-function trials(sim::Simulation{<:LossyAlgo}; convergedonly::Bool=false)
+function trials(sim::Simulation; convergedonly::Bool=false)
     return [r.trials for r in sim.results if (r.converged || !convergedonly)]
 end
-function runtime(sim::Simulation{<:LossyAlgo}; convergedonly::Bool=false)
+function runtime(sim::Simulation; convergedonly::Bool=false)
     conv = [r.converged for r in sim.results]
     run = sim.runtimes
     return sum(run[conv .| !convergedonly])
@@ -74,14 +74,14 @@ end
 function runtime(sims::Vector{Simulation{T}}; kwargs...) where {T<:LossyAlgo}
     return sum(runtime(sim; kwargs...) for sim in sims)
 end
-function nconverged(sim::Simulation{<:LossyAlgo})
+function nconverged(sim::Simulation)
     return sum(r.converged for r in sim.results)
 end
-convergenceratio(sim::Simulation{<:LossyAlgo}) = nconverged(sim)/sim.niter
-function nunconverged(sim::Simulation{<:LossyAlgo})
+convergenceratio(sim::Simulation) = nconverged(sim)/sim.niter
+function nunconverged(sim::Simulation)
     return sim.niter - nconverged(sim)
 end
-function convergence_ratio(sim::Simulation{<:LossyAlgo})
+function convergence_ratio(sim::Simulation)
     return nconverged(sim)/sim.niter
 end
 function distortion(results::Vector{LossyResults}, convergedonly::Bool=false)
@@ -92,14 +92,14 @@ end
 
 
 #### PRINTERS
-function Base.show(io::IO, sim::Simulation{<:LossyAlgo})
+function Base.show(io::IO, sim::Simulation)
     println(io, "\nSimulation{$(typeof(sim.algo))} with q=", sim.q,
         ", n=", sim.n, ", R=", 
         round(1-sim.m/sim.n,digits=2),
          ", b=", sim.b,", niter=", sim.niter)
     return nothing
 end
-function runtime_str(sim::Union{Simulation{<:T},Vector{Simulation{T}}}; 
+function runtime_str(sim::Union{Simulation,Vector{Simulation{T}}}; 
         kwargs...) where {T<:LossyAlgo}
     seconds = Second(round(runtime(sim; kwargs...)))
     c = canonicalize(seconds)
@@ -158,7 +158,7 @@ function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}};
     ylabel!(pl, "D")
     return pl
 end
-function plot!(pl::Plots.Plot, sim::Simulation{<:LossyAlgo}; kwargs...)
+function plot!(pl::Plots.Plot, sim::Simulation; kwargs...)
     plot!(pl, [sim]; kwargs...)
 end
 

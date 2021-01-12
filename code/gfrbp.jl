@@ -336,13 +336,15 @@ naive_compression_distortion(fg::FactorGraph,args...;kw...) = 0.5*(nfacts(fg)/nv
 naive_compression_distortion(R::Real) = 0.5*(1-R)
 
 # Fix the independent variables to their value in the source vector
-function fix_indep_from_src(fg::FactorGraph, y::Vector{Int})
-    x = _fix_indep(fg,y)
+function fix_indep_from_src(fg::FactorGraph, y::Vector{Int}, 
+        x::Vector{Int}=zeros(Int, fg.n))
+    x .= _fix_indep(fg,y)
     return distortion(fg, y, x)
 end
 
 # Fix the independent variables to the decision variables outputted by max-sum
-function fix_indep_from_ms(fg::FactorGraph, y::Vector{Int})
+function fix_indep_from_ms(fg::FactorGraph, y::Vector{Int}, 
+        x::Vector{Int}=zeros(Int, fg.n))
     x = _fix_indep(fg,guesses(fg))
     return distortion(fg, y, x)
 end

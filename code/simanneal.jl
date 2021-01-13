@@ -6,7 +6,6 @@ struct Metrop1 <: MCMove; end
 # Propose states by flipping coefficients of expansion on a basis
 @with_kw mutable struct MetropBasisCoeffs <: MCMove
     basis::Array{Int,2}=Array{Int,2}(undef,0,0)
-    basis_coeffs::Vector{Int}=Vector{Int}(undef,0)
     getbasis::Function=lightbasis
 end
 # Propose states by flipping seaweeds
@@ -31,7 +30,6 @@ function adapt_to_model!(mc_move::MetropSmallJumps, lm::LossyModel)
 end
 function adapt_to_model!(mc_move::MetropBasisCoeffs, lm::LossyModel)
     mc_move.basis = mc_move.getbasis(lm)
-    mc_move.basis_coeffs = zeros(Int, size(mc_move.basis,2))
     return mc_move
 end
 
@@ -43,7 +41,7 @@ end
     distortion::Float64
     acceptance_ratio::Vector{Float64}
     beta_argmin::Vector{Float64}                # Temperatures for which the min was achieved
-    converged::Bool     # Doesn't mean anything, here just for convenience
+    converged::Bool     # Doesn't mean anything, here just for consistency with the other Results types
 end
 
 function output_str(res::SAResults)
@@ -86,20 +84,20 @@ function solve!(lm::LossyModel, algo::SA,
         # Update temperature
         lm.beta1, lm.beta2 = algo.betas[b,1], algo.betas[b,2]
         # Run MC
-        distortions[b], acceptance_ratio[b] = mc!(lm, algo, randseed, 
+        mc!(lm, algo, randseed, distortions[b], acceptance_ratio[b],
         verbose=verbose, to_display="MC running β₁=$(lm.beta1), "*
             "β₂=$(lm.beta2) ", showprogress=showprogress)
+        # Store the beta at which the min distortion was obtained
         (m,i) = findmin(distortions[b])
         if m < min_dist
-            min_dist = m
-            argmin_beta = b
+            min_dist, argmin_beta = m, b
         end
         par = parity(lm)
         # Check stopping criterion
         if algo.stop_crit(lm, distortions[b], acceptance_ratio[b])
             return SAResults(outcome=:stopped, parity=par, distortion=min_dist,
                 beta_argmin=algo.betas[argmin_beta,:], 
-                acceptance_ratio=mean.(acceptance_ratio))
+                acceptance_ratio=mean.(acceptance_ratio), converged=true)
         end
         if verbose
             println("Temperature $b of $nbetas:",
@@ -117,18 +115,19 @@ end
 
 #### Monte Carlo subroutines
 
-function mc!(lm::LossyModel, algo::SA, randseed=0;
+function mc!(lm::LossyModel, algo::SA, randseed=0,
+    distortions::Vector{Float64}=fill(Inf, algo.nsamples),
+    acceptance_ratio::Vector{Float64} = zeros(algo.nsamples);
     verbose::Bool=false, to_display::String="Running Monte Carlo...", 
     showprogress::Bool=verbose)
 
-    distortions = fill(+Inf, algo.nsamples)
-    acceptance_ratio = zeros(algo.nsamples)
     wait_time = showprogress ? 1 : Inf   # trick not to display progess
-    prog = Progress(algo.nsamples, wait_time, to_display)
+    prog = ProgressMeter.Progress(algo.nsamples, wait_time, to_display)
     for n in 1:algo.nsamples
         for it in 1:algo.sample_every
+            rng = Random.MersenneTwister(randseed)
             acc, dE = onemcstep!(lm , algo.mc_move, 
-                randseed+n*algo.sample_every+it)
+                rng)
             acceptance_ratio[n] += acc
         end
         acceptance_ratio[n] = acceptance_ratio[n]/algo.sample_every
@@ -140,68 +139,81 @@ function mc!(lm::LossyModel, algo::SA, randseed=0;
     return distortions, acceptance_ratio
 end
 
-function onemcstep!(lm::LossyModel, mc_move::MCMove, randseed::Int=0)
-    xnew = propose(mc_move, lm, randseed)
-    acc, dE = accept(mc_move, lm, xnew, randseed)
-    if acc
-        lm.x = xnew
-    end
+function onemcstep!(lm::LossyModel, mc_move::MCMove, 
+        rng::AbstractRNG=Random.MersenneTwister(0))
+    to_flip, newvals = propose(mc_move, lm, rng)
+    acc, dE = accept(mc_move, lm, to_flip, newvals, rng)
     return acc, dE
 end
 
 # In general, accept by computing the full energy
 # For particular choices of proposed new state, this method can be overridden for
 #  something faster that exploits the fact that only a few terms in the energy change
-function accept(mc_move::MCMove, lm::LossyModel, xnew::Vector{Int},
-        randseed::Int=0)
+function accept(mc_move::MCMove, lm::LossyModel, to_flip::Vector{Int},
+        newvals::Vector{Int}, rng::AbstractRNG)
+    xnew = copy(lm.x)
+    xnew[to_flip] .= newvals
     dE = energy(lm, xnew) - energy(lm, lm.x)
-    return metrop_accept(dE, randseed), dE
+    acc = metrop_accept(dE, rng)
+    acc && (lm.x = xnew)
+    return acc, dE
+end
+
+function accept(mc_move::Union{MetropBasisCoeffs,MetropSmallJumps}, 
+        lm::LossyModel, to_flip::Vector{Int},
+        newvals::Vector{Int}, rng::AbstractRNG)
+    # Compare energy shift only wrt those variables `to_flip`
+    dE = energy_overlap(lm, newvals, sites=to_flip) - 
+        energy_overlap(lm, lm.x[to_flip], sites=to_flip)
+    acc = metrop_accept(dE, rng)
+    acc && (lm.x[to_flip] = newvals)
+    return acc, dE
 end
 
 # Changes value to 1 spin taken uniform random to a uniform random value in {0,...,q-1}
-function propose(mc_move::Metrop1, lm::LossyModel, randseed::Int=0)
-    q = lm.fg.q
-    n = lm.fg.n
-    # current state
-    x = lm.x
+function propose(mc_move::Metrop1, lm::LossyModel, rng::AbstractRNG)
     # Pick a site at random
-    site = rand(MersenneTwister(randseed), 1:n)
-    # Pick a new value for x[site]
-    xnew = copy(x)
-    xnew[site] = rand(MersenneTwister(randseed), [k for k=0:q-1 if k!=x[site]])
-    return xnew, site
+    to_flip = rand(rng, 1:lm.fg.n)
+    # Pick a new value 
+    newval = rand(rng, [k for k=0:lm.fg.q-1 if k!=x[to_flip]])
+    return to_flip, [newval]
 end
 
-function propose(mc_move::MetropBasisCoeffs, lm::LossyModel, randseed::Int=0)
+# Flips one basis coefficient at every move
+function propose(mc_move::MetropBasisCoeffs, lm::LossyModel, rng::AbstractRNG)
     k = size(mc_move.basis,2)
     # Pick one coefficient to be flipped
-    to_be_flipped = rand(1:k)
-    coeffs_new = copy(mc_move.basis_coeffs)
-    # Flip
-    coeffs_new[to_be_flipped] = rand(MersenneTwister(randseed),
-        [k for k=0:lm.fg.q-1 if k!=coeffs_new[to_be_flipped]])
-    # Project on basis to get the new state
-    x_new = gfmatrixmult(mc_move.basis,coeffs_new, lm.fg.q, lm.fg.mult)
-    @assert parity(lm, x_new) == 0 "DEBUG: something's wrong, infinite ΔE in MC move"
-    return x_new
+    coeff_to_flip = rand(1:k)
+    # Pick its new value in {1,2,...,q-1}
+    coeff = rand(rng, 1:lm.fg.q-1)
+    # Indices of variables appearing in the chosen basis vector
+    basis_vector = mc_move.basis[:, coeff_to_flip]
+    to_flip = findall(!iszero, basis_vector)
+    # New values
+    newvals = xor.(lm.x[to_flip], basis_vector[to_flip])
+    return to_flip, newvals
 end
 
-function propose(mc_move::MetropSmallJumps, lm::LossyModel, randseed::Int=0)
+# Flips a seaweed at every move. Only works for q = 2
+function propose(mc_move::MetropSmallJumps, lm::LossyModel, rng::AbstractRNG)
     xnew = copy(lm.x)
+    @assert lm.fg.q == 2 "Seaweed only doable for GF(q=2)"
     # Pick a site at random that is not in the core and start a seaweed from there
     not_in_core = (1:lm.fg.n)[.!mc_move.isincore]
-    site = rand(MersenneTwister(randseed), not_in_core)
-    sw = seaweed(lm.fg, site)
-    # Add seaweed (which is a valid solution) to the old state
-    xnew = xor.(xnew, sw)
-    return xnew
+    site = rand(rng, not_in_core)
+
+    to_flip_bool=falses(lm.fg.n)
+    seaweed(lm.fg, site, to_flip=to_flip_bool)
+    to_flip = (1:lm.fg.n)[to_flip_bool]
+    newvals = xor.(1, lm.x[to_flip])
+    return to_flip, newvals
 end
 
-function metrop_accept(dE::Real, randseed::Int)::Bool
+function metrop_accept(dE::Real, rng::AbstractRNG)::Bool
     if dE < 0
         return true
     else
-        r = rand(MersenneTwister(randseed))
+        r = rand(rng)
         return r < exp(-dE)
     end
 end
@@ -210,7 +222,7 @@ end
 ### Build a seaweed as described in https://arxiv.org/pdf/cond-mat/0207140.pdf
 
 function seaweed(fg::FactorGraph, seed::Int, depths::Vector{Int}=lr(fg)[1], 
-        isincore::BitArray{1} = (depths .== 0),
+        isincore::BitArray{1} = (depths .== 0);
         to_flip::BitArray{1}=falses(fg.n))
     # Check that there is at least 1 leaf
     @assert nvarleaves(fg) > 0 "Graph must contain at least 1 leaf"

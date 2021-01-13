@@ -72,7 +72,13 @@ function ut2diag!(T::Array{Int,2}, q::Int=2,
         
     (m,n) = size(T)
     # Check that the left part of T is unit upper triangular
-    @assert isunituppertriangular(T[:,1:m])
+    @assert isuppertriangular(T[:,1:m])
+    # If not only 1's on the diagonal -> do row operations
+    if !isunituppertriangular(T[:,1:m])
+        for k in 1:m
+            T[k,:] .= gfdiv[T[k,:], T[k,k]]
+        end
+    end
     # Loop over diagonal elements
     for c in m:-1:1
         # Find non-zero elements above T[c,c] and perform row operations to 

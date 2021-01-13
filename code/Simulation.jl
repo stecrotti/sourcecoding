@@ -121,6 +121,8 @@ end
 
 rdb(D::Real) = 1-H2(D)
 rdbinv(R::Real) = H2inv(1-R)
+naive_compression_inv(R::Real) = 0.5*(1-R)
+naive_compression(D::Real) = 1 - 2*D
 
 
 #### PLOTTING
@@ -167,8 +169,7 @@ function plot(sims::Union{Simulation{T},Vector{Simulation{T}}};
     d = LinRange(0,0.5,100)
     r = LinRange(0, 1, 100)
     pl = Plots.plot(rdb.(d), d, label="RDB")
-    Plots.plot!(pl, r, 0.5*(-r.+1), label="Naive compression")
-    
+    Plots.plot!(pl, r, naive_compression_inv.(r), label="Naive compression")
     return plot!(pl, sims; kwargs...)
 end
 

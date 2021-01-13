@@ -99,8 +99,9 @@ function energy_checks(lm::LossyModel, x::Union{Vector{Int},Array{Int,2}}=lm.x;
     ener_checks = hw_checks == 0 ? 0 : lm.beta1*hw_checks
 end
 
-function energy_overlap(lm::LossyModel, x::Union{Vector{Int},Array{Int,2}}=lm.x)
-    return lm.beta2*hd(x, lm.y)
+function energy_overlap(lm::LossyModel, x::Union{Vector{Int},Array{Int,2}}=lm.x;
+        sites::Union{Vector{Int},BitArray{1}}=trues(length(lm.x)))
+    return lm.beta2*hd(x, lm.y[sites])
 end
 
 function refresh!(lm::LossyModel, args...; kwargs...)

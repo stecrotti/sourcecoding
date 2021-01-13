@@ -226,9 +226,9 @@ function permute_to_triangular(fg::FactorGraph,
     return H_permutedrows, column_perm
 end
 
-function lightbasis(H_trian::Array{Int,2}, column_perm::Vector{Int})
+function lightbasis(H_trian::Array{Int,2}, column_perm::Vector{Int}, q::Int=2)
     # Turn upper-triangular matrix into diagonal
-    ut2diag!(H_trian)
+    ut2diag!(H_trian, q)
     nrows = size(H_trian,1)
     H_indep = H_trian[:,nrows+1:end]
     nb = [H_indep; I]
@@ -237,7 +237,7 @@ function lightbasis(H_trian::Array{Int,2}, column_perm::Vector{Int})
     return nb
 end
 function lightbasis(fg::FactorGraph, independent::BitArray{1}=falses(fg.n))
-    return lightbasis(permute_to_triangular(fg, independent)...)
+    return lightbasis(permute_to_triangular(fg, independent)..., fg.q)
 end
 
 # Leaf removal but starting from leaf factors!

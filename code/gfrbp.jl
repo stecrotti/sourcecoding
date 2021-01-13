@@ -333,7 +333,6 @@ end
 
 #### Distortion for non-converged instances
 naive_compression_distortion(fg::FactorGraph,args...;kw...) = 0.5*(nfacts(fg)/nvars(fg))
-naive_compression_distortion(R::Real) = 0.5*(1-R)
 
 # Fix the independent variables to their value in the source vector
 function fix_indep_from_src(fg::FactorGraph, y::Vector{Int}, 

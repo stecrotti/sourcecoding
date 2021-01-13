@@ -15,7 +15,7 @@ Tmax = 5
 # Three algorithms
 maxsum = MS(maxiter=maxiter, gamma=gamma, Tmax=Tmax)
 simanneal = SA(mc_move=MetropSmallJumps(), nsamples=200, 
-    betas=[Inf 0.1; Inf 1.0; Inf 10.0;]);
+    betas=[Inf 0.1; Inf 1.0; Inf 10.0]);
 optimalcycle = OptimalCycle();
 
 sims_cycles = Vector{Simulation{OptimalCycle}}(undef, length(m))

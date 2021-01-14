@@ -55,24 +55,38 @@ function one_loop_flip(lm::LossyModel)
     op_, w = optimal_cycle(H)
     op = variables_from_cycle(op_, lm.fg.m)
     to_flip = unique!([tup[2] for tup in op])
+    # @show parity(lm)
     lm.x[to_flip] .⊻= 1
+    if parity(lm) != 0
+        only_the_flipped = zeros(Int, length(lm.x))
+        only_the_flipped[to_flip] .= 1
+        # @show only_the_flipped
+        # @show parity(lm, only_the_flipped)
+        # g = SimpleGraph(full_adjmat(lm.fg))
+        # @show length(connected_components(g))
+        error("Error: parity non zero")
+    end
     return op, to_flip, w
 end
 
 # If there are leaves, add a (redundant) factor so that all solutions are loops
 function neutralize_leaves!(lm::LossyModel)
-    lm.fg = add_factor(lm.fg)
+    if nvarleaves(lm.fg) > 0
+        lm.fg = add_factor(lm.fg)
+    end
     return lm
 end
 
 
-##### SOLVE LOSSY COMPRESSION
-struct OptimalCycle <: LossyAlgo; end
+@with_kw struct OptimalCycle <: LossyAlgo
+    # Function to initialize internal state x
+    init_state::Function = (zero_codeword(lm::LossyModel)=zeros(Int, lm.fg.n))       
+end
 
 @with_kw struct OptimalCycleResults <: LossyResults
-    converged::Bool
     parity::Int
     distortion::Float64
+    converged::Bool=true     # Doesn't mean anything, here just for consistency with the other Results types
 end
 
 function solve!(lm::LossyModel, algo::OptimalCycle;
@@ -80,7 +94,9 @@ function solve!(lm::LossyModel, algo::OptimalCycle;
     randseed::Int=abs(rand(Int)), verbose::Bool=true, 
     showprogress::Bool=verbose)
 
-    # Close leaves in a loops
+    lm.x = algo.init_state(lm)
+
+    # Close leaves in a loop
     neutralize_leaves!(lm)
 
     dist = Float64[]
@@ -91,17 +107,29 @@ function solve!(lm::LossyModel, algo::OptimalCycle;
     for it in 1:maxiter
         op,to_flip, w = one_loop_flip(lm)
         push!(dist, distortion(lm))
+
+        Echecks = energy_checks(lm)
+        Eoverlap = energy_overlap(lm)
         Enew = energy(lm)
         deltaE = Enew - E
+        if isinf(Enew)
+            @show Echecks, Eoverlap
+            error("Inf found in energy")
+        end
+        if isnan(deltaE)
+            @show Enew, E
+           error("NaN found in energy shift")
+        end
         showprogress && println("Iter ", length(dist), ". Distortion ", 
             round(dist[end], digits=4), ". Cycle weight ", round(w,digits=4),
             ". Energy shift ", deltaE)
         
-        if Enew - E == 0
-            return OptimalCycleResults(true, parity(lm), distortion(lm))
+        if deltaE == 0
+            return OptimalCycleResults(parity=parity(lm), 
+                distortion=distortion(lm))
         else
             E = Enew
         end
     end
-    return OptimalCycleResults(false, parity(lm), distortion(lm))
+    return OptimalCycleResults(parity=parity(lm), distortion=distortion(lm))
 end

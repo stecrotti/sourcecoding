@@ -207,7 +207,7 @@ end
 function permute_to_triangular(fg::FactorGraph, 
         independent::BitArray{1}=falses(fg.n))
     if nvarleaves(fg) < 1
-        breduction!(fg)
+        breduction!(fg, 1)
     end
     H = adjmat(fg)
     # Apply leaf-removal
@@ -237,7 +237,13 @@ function lightbasis(H_trian::Array{Int,2}, column_perm::Vector{Int}, q::Int=2)
     return nb
 end
 function lightbasis(fg::FactorGraph, independent::BitArray{1}=falses(fg.n))
-    return lightbasis(permute_to_triangular(fg, independent)..., fg.q)
+    H_permuted, column_perm = permute_to_triangular(fg, independent)
+    lb = lightbasis(H_permuted, column_perm, fg.q)
+    # Check that graph is full-rank
+    if size(lb,2) != nvars(fg) - nfacts(fg)
+        # error("Graph is not full-rank")
+    end
+    return lb
 end
 
 # Leaf removal but starting from leaf factors!

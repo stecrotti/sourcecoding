@@ -35,22 +35,20 @@ end
 
 
 @with_kw struct SAResults <: LossyResults
-    outcome::Symbol
-    @assert outcome in [:stopped, :finished]
     parity::Int
     distortion::Float64
     acceptance_ratio::Vector{Float64}
     beta_argmin::Vector{Float64}                # Temperatures for which the min was achieved
-    converged::Bool     # Doesn't mean anything, here just for consistency with the other Results types
+    converged::Bool=true     # Doesn't mean anything, here just for consistency with the other Results types
 end
 
 function output_str(res::SAResults)
     out_str = "Parity " * string(res.parity) * ". " *
               "Distortion " * @sprintf("%.3f ", res.distortion) *
               "at β₁=" * string(res.beta_argmin[1]) * ", β₂=" * 
-                string(res.beta_argmin[2]) * ". " *
-              "Acceptance: " * 
-                string(res.acceptance_ratio) *
+                string(round(res.beta_argmin[2],digits=3)) * 
+            #   ". Acceptance: " * 
+            #     string(res.acceptance_ratio) *
                 "."
     return out_str
 end
@@ -61,82 +59,71 @@ end
     mc_move::MCMove = MetropBasisCoeffs()                                   # Single MC move
     betas:: Array{Float64,2} = [1.0 1.0]                                    # Cooling schedule
     nsamples::Int = Int(1e2)                                                # Number of samples
-    sample_every::Int = Int(1e0)                                            # Frequency of sampling
-    stop_crit::Function = (crit(varargs...) = false)                        # Stopping criterion callback
-    init_state::Function = (init(lm::LossyModel)=zeros(Int, lm.fg.n))       # Function to initialize internal state
+    init_state::Function = (zero_codeword(lm::LossyModel)=zeros(Int, lm.fg.n))       # Function to initialize internal state
+end
+function SA(mc_move::MCMove, beta2::Vector{Float64}; kw...)
+    betas = hcat(fill(Inf, length(beta2)), beta2)
+    return SA(mc_move=mc_move, betas=betas; kw...)
 end
 
 function solve!(lm::LossyModel, algo::SA,
-        distortions::Vector{Vector{Float64}}=[fill(0.5, algo.nsamples) 
-            for _ in 1:size(algo.betas,1)],
-        acceptance_ratio::Vector{Vector{Float64}}=[zeros(algo.nsamples) 
-            for _ in 1:size(algo.betas,1)];
-        verbose::Bool=false, randseed::Int=0, showprogress::Bool=verbose)    
+    distortions::Vector{Vector{Float64}}=[fill(0.5, algo.nsamples) 
+        for _ in 1:size(algo.betas,1)],
+    accepted::Vector{BitArray{1}}=[falses(algo.nsamples) 
+        for _ in 1:size(algo.betas,1)];          
+    to_display::String="Running Monte Carlo...",
+    verbose::Bool=false, randseed::Int=0, showprogress::Bool=verbose)  
+
+    # g = SimpleGraph(full_adjmat(lm.fg));@show length(connected_components(g))
     # Initialize to the requested initial state
     lm.x = algo.init_state(lm)
+    # g = SimpleGraph(full_adjmat(lm.fg));@show length(connected_components(g))
     # Adapt mc_move parameters to the current model
     adapt_to_model!(algo.mc_move, lm)
+
+    # g = SimpleGraph(full_adjmat(lm.fg));@show length(connected_components(g))
+
     nbetas = size(algo.betas,1)
-    min_dist = Inf
-    argmin_beta = nbetas+1
-    par = parity(lm)
-    for b in 1:nbetas
+    mindist = zeros(nbetas)
+    rng = Random.MersenneTwister(randseed)
+
+    wait_time = showprogress ? 1 : Inf   # trick not to display progess
+    prog = ProgressMeter.Progress(algo.nsamples, wait_time, to_display)
+    @inbounds for b in 1:nbetas
         # Update temperature
         lm.beta1, lm.beta2 = algo.betas[b,1], algo.betas[b,2]
         # Run MC
-        mc!(lm, algo, randseed, distortions[b], acceptance_ratio[b],
-        verbose=verbose, to_display="MC running β₁=$(lm.beta1), "*
-            "β₂=$(lm.beta2) ", showprogress=showprogress)
-        # Store the beta at which the min distortion was obtained
-        (m,i) = findmin(distortions[b])
-        if m < min_dist
-            min_dist, argmin_beta = m, b
-        end
-        par = parity(lm)
-        # Check stopping criterion
-        if algo.stop_crit(lm, distortions[b], acceptance_ratio[b])
-            return SAResults(outcome=:stopped, parity=par, distortion=min_dist,
-                beta_argmin=algo.betas[argmin_beta,:], 
-                acceptance_ratio=mean.(acceptance_ratio), converged=true)
-        end
-        if verbose
-            println("Temperature $b of $nbetas:",
-            "(β₁=$(algo.betas[b,1]),β₂=$(algo.betas[b,2])).",
-            " Distortion $(min_dist). ", 
-            "Acceptance ", @sprintf("%.0f",mean(acceptance_ratio[b])*100), "%")
-        end
+        mc!(lm, algo, rng, accepted[b], distortions[b])
+        # Compute minimum distortion
+        mindist[b] = minimum(distortions[b])
+        # if verbose
+        #     println("\nTemperature $b of $nbetas:",
+        #     "(β₁=$(algo.betas[b,1]),β₂=$(round(algo.betas[b,2],digits=3))).",
+        #     " Dist $(round(mindist[b],digits=3)). ", 
+        #     "Accept ", @sprintf("%.0f",mean(accepted[b])*100), "%")
+        # end
+        next!(prog)
     end
-    return SAResults(outcome=:finished, parity=par, distortion=min_dist,
-        beta_argmin=algo.betas[argmin_beta,:], 
-        acceptance_ratio=mean.(acceptance_ratio),
-        converged=true)
+    (minimum_dist, beta_argmin) = findmin(mindist)
+    return SAResults(parity=parity(lm), distortion=minimum_dist,
+        beta_argmin=algo.betas[beta_argmin,:], 
+        acceptance_ratio=mean.(accepted))
 end
 
 
 #### Monte Carlo subroutines
 
-function mc!(lm::LossyModel, algo::SA, randseed=0,
-    distortions::Vector{Float64}=fill(Inf, algo.nsamples),
-    acceptance_ratio::Vector{Float64} = zeros(algo.nsamples);
-    verbose::Bool=false, to_display::String="Running Monte Carlo...", 
-    showprogress::Bool=verbose)
+function mc!(lm::LossyModel, algo::SA, rng::AbstractRNG,
+    accepted::BitArray{1} = zeros(algo.nsamples),
+    distortions::Vector{Float64} = zeros(algo.nsamples),
+    dE::Vector{Float64}=zeros(algo.nsamples);
+    showprogress::Bool=true)
 
-    wait_time = showprogress ? 1 : Inf   # trick not to display progess
-    prog = ProgressMeter.Progress(algo.nsamples, wait_time, to_display)
     for n in 1:algo.nsamples
-        for it in 1:algo.sample_every
-            rng = Random.MersenneTwister(randseed)
-            acc, dE = onemcstep!(lm , algo.mc_move, 
-                rng)
-            acceptance_ratio[n] += acc
-        end
-        acceptance_ratio[n] = acceptance_ratio[n]/algo.sample_every
-        # Store distortion only if parity is fulfilled because distortion from 
-        #  unconverged shouldn't compete for the minimum
-        parity(lm) == 0 && (distortions[n] = distortion(lm))
-        next!(prog)
+        accepted[n], dE[n] = onemcstep!(lm , algo.mc_move, rng)
+        distortions[n] = distortion(lm)
     end
-    return distortions, acceptance_ratio
+    return nothing
 end
 
 function onemcstep!(lm::LossyModel, mc_move::MCMove, 
@@ -183,7 +170,7 @@ end
 function propose(mc_move::MetropBasisCoeffs, lm::LossyModel, rng::AbstractRNG)
     k = size(mc_move.basis,2)
     # Pick one coefficient to be flipped
-    coeff_to_flip = rand(1:k)
+    coeff_to_flip = rand(rng, 1:k)
     # Pick its new value in {1,2,...,q-1}
     coeff = rand(rng, 1:lm.fg.q-1)
     # Indices of variables appearing in the chosen basis vector

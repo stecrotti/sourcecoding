@@ -196,8 +196,7 @@ end
 hw(v::Vector{Int})::Int = sum(hw.(v))
 hw(v::Array{Int,2})::Int = hw(vec(v))
 
-function paritycheck(fg::FactorGraph, x::Array{Int,2},
-    f::Int)
+function paritycheck(fg::FactorGraph, x::Array{Int,2}, f::Int)
     return gfmatrixmult(adjmat(fg)[[f],:], x, fg.q, fg.mult)
 end
 

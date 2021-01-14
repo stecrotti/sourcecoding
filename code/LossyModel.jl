@@ -79,12 +79,12 @@ function paritycheck(lm::LossyModel, x::Vector{Int}=lm.x, varargin...)
     return paritycheck(lm.fg, x[:,:], varargin...)
 end
 
-function parity(lm::LossyModel, args...)
-    return sum(paritycheck(lm, args...))
+function parity(lm::LossyModel, x::Vector{Int}=lm.x, args...)
+    return parity(lm.fg, x, args...)
 end
 
 function energy(lm::LossyModel, x::Vector{Int}=lm.x)
-    ener_checks = energy_checks(lm ,x)
+    ener_checks = energy_checks(lm, x)
     ener_overlap = energy_overlap(lm, x)
     return ener_checks + ener_overlap
 end
@@ -102,6 +102,12 @@ end
 function energy_overlap(lm::LossyModel, x::Union{Vector{Int},Array{Int,2}}=lm.x;
         sites::Union{Vector{Int},BitArray{1}}=trues(length(lm.x)))
     return lm.beta2*hd(x, lm.y[sites])
+end
+
+# Fix the independent variables to the decision variables outputted by max-sum
+function fix_indep_from_current_state!(lm::LossyModel)
+    lm.x .= _fix_indep(lm.fg, lm.x)
+    return distortion(lm)
 end
 
 function refresh!(lm::LossyModel, args...; kwargs...)
@@ -138,7 +144,9 @@ function decompress(x_compressed::Vector{Int}, lm::LossyModel,
     return decompress(x_compressed, lm.fg, getbasis)
 end
 
-
+# Full adjacency matrix with weights:
+#  +1: edges corresponding to variables which have the same value as in the src
+#  -1: otherwise
 function weighted_full_adjmat(lm::LossyModel)
     @assert lm.fg.q == 2
     H = full_adjmat(lm.fg)
@@ -150,6 +158,8 @@ function weighted_full_adjmat(lm::LossyModel)
     end
     return H
 end
+
+
 
 ########
 function lightweight_nullspace(lm::LossyModel; cutoff::Real=Inf, 

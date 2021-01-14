@@ -49,9 +49,8 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
             it_str = @sprintf("%3d", it)
             println(it_str*" of $niter: ", output_str(results[it]))
         end
-        refresh!(lm)
     end
-    arbitrary_mult = (lm.fg.mult == gftables(lm.fg.q))
+    arbitrary_mult = (lm.fg.mult != gftables(lm.fg.q)[1])
     return Simulation{typeof(algo)}(q,n,m,algo,niter,b,arbitrary_mult,results,
         runtimes)
 end

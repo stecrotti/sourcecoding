@@ -32,6 +32,7 @@ function ldpc_graph(q::Int, n::Int, m::Int,
     mfv = [OffsetArray{Float64,1,Array{Float64,1}}[] for f in 1:m]
 
     too_many_trials = 1000
+    multi_edge_found = false
     for t in 1:too_many_trials
 
         multi_edge_found = false
@@ -85,12 +86,23 @@ function ldpc_graph(q::Int, n::Int, m::Int,
         if !multi_edge_found
             # Get multiplication and iverse table for GF(q)
             mult, gfinv, gfdiv = gftables(q, arbitrary_mult)
-            return FactorGraph(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, 
+            # Build FactorGraph object
+            fg = FactorGraph(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, 
                 fields, hfv, mfv)
+            # Check that the number of connected components is 1
+            fg_ = deepcopy(fg)
+            breduction!(fg_,1)
+            depths,_,_ = lr!(fg_)
+            all(depths .!= 0) && return fg 
         end
     end
     # If you got here, multi-edges made it impossible to build a graph
-    error("Could not build factor graph. Too many multi-edges were popping up")    
+    if multi_edge_found
+        error("Could not build factor graph. Too many multi-edges were popping up") 
+    else
+        error("Could not build factor graph. Too many instances were coming up ",
+            "with more than one connected component")
+    end   
 end
 
 function generate_polyn(n::Int, m::Int; degree_type::Symbol=:edges)

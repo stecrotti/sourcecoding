@@ -42,29 +42,19 @@ end
     converged::Bool=true     # Doesn't mean anything, here just for consistency with the other Results types
 end
 
-function output_str(res::SAResults)
-    out_str = "Parity " * string(res.parity) * ". " *
-              "Distortion " * @sprintf("%.3f ", res.distortion) *
-              "at β₁=" * string(res.beta_argmin[1]) * ", β₂=" * 
-                string(round(res.beta_argmin[2],digits=3)) * 
-            #   ". Acceptance: " * 
-            #     string(res.acceptance_ratio) *
-                "."
-    return out_str
-end
-
 
 #### SIMULATED ANNEALING
 @with_kw struct SA <: LossyAlgo
     mc_move::MCMove = MetropBasisCoeffs()                                   # Single MC move
     betas:: Array{Float64,2} = [1.0 1.0]                                    # Cooling schedule
     nsamples::Int = Int(1e2)                                                # Number of samples
-    init_state::Function = (zero_codeword(lm::LossyModel)=zeros(Int, lm.fg.n))       # Function to initialize internal state
+    init_state::Function = zero_codeword       # Function to initialize internal state
 end
 function SA(mc_move::MCMove, beta2::Vector{Float64}; kw...)
     betas = hcat(fill(Inf, length(beta2)), beta2)
     return SA(mc_move=mc_move, betas=betas; kw...)
 end
+function zero_codeword(lm::LossyModel); zeros(Int, lm.fg.n); end
 
 function solve!(lm::LossyModel, algo::SA,
     distortions::Vector{Vector{Float64}}=[fill(0.5, algo.nsamples) 
@@ -74,14 +64,10 @@ function solve!(lm::LossyModel, algo::SA,
     to_display::String="Running Monte Carlo...",
     verbose::Bool=false, randseed::Int=0, showprogress::Bool=verbose)  
 
-    # g = SimpleGraph(full_adjmat(lm.fg));@show length(connected_components(g))
     # Initialize to the requested initial state
     lm.x = algo.init_state(lm)
-    # g = SimpleGraph(full_adjmat(lm.fg));@show length(connected_components(g))
     # Adapt mc_move parameters to the current model
     adapt_to_model!(algo.mc_move, lm)
-
-    # g = SimpleGraph(full_adjmat(lm.fg));@show length(connected_components(g))
 
     nbetas = size(algo.betas,1)
     mindist = zeros(nbetas)
@@ -96,16 +82,16 @@ function solve!(lm::LossyModel, algo::SA,
         mc!(lm, algo, rng, accepted[b], distortions[b])
         # Compute minimum distortion
         mindist[b] = minimum(distortions[b])
-        # if verbose
-        #     println("\nTemperature $b of $nbetas:",
-        #     "(β₁=$(algo.betas[b,1]),β₂=$(round(algo.betas[b,2],digits=3))).",
-        #     " Dist $(round(mindist[b],digits=3)). ", 
-        #     "Accept ", @sprintf("%.0f",mean(accepted[b])*100), "%")
-        # end
         next!(prog)
     end
     (minimum_dist, beta_argmin) = findmin(mindist)
-    return SAResults(parity=parity(lm), distortion=minimum_dist,
+    # Check parity only for those MC moves that don't always stay on cw's
+    if !(typeof(algo.mc_move) in (MetropBasisCoeffs,MetropSmallJumps))
+        par = parity(lm)
+    else
+        par = 0
+    end
+    return SAResults(parity=par, distortion=minimum_dist,
         beta_argmin=algo.betas[beta_argmin,:], 
         acceptance_ratio=mean.(accepted))
 end
@@ -203,6 +189,17 @@ function metrop_accept(dE::Real, rng::AbstractRNG)::Bool
         r = rand(rng)
         return r < exp(-dE)
     end
+end
+
+function output_str(res::SAResults)
+    out_str = "Parity " * string(res.parity) * ". " *
+              "Distortion " * @sprintf("%.3f ", res.distortion) *
+              "at β₁=" * string(res.beta_argmin[1]) * ", β₂=" * 
+                string(round(res.beta_argmin[2],digits=3)) * 
+            #   ". Acceptance: " * 
+            #     string(res.acceptance_ratio) *
+                "."
+    return out_str
 end
 
 

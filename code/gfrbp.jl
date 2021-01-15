@@ -189,7 +189,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     oldguesses = guesses(fg)
     oldmessages = deepcopy(fg.mfv)
     newmessages = deepcopy(fg.mfv)
-    parity = sum(paritycheck(fg))
+    par = sum(paritycheck(fg))
     wait_time = showprogress ? 1 : Inf
     n = 0
     for trial in 1:algo.Tmax
@@ -198,7 +198,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
         @inbounds for t in 1:algo.maxiter
             newguesses,maxdiff[t] = onebpiter!(fg, algo)
             newmessages .= fg.mfv
-            parity = sum(paritycheck(fg))
+            par = parity(fg, newguesses)
             codeword[t] = (parity==0)
             if algo.convergence == :messages
                 for f in eachindex(newmessages)
@@ -210,18 +210,16 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                     end
                 end
                 if maxchange[t] < algo.tol
-                    return BPResults{typeof(algo)}(converged=true, parity=parity,
+                    return BPResults{typeof(algo)}(converged=true, parity=par,
                         distortion=distortion(fg, y), trials=trial, iterations=t,
                         maxdiff=maxdiff, codeword=codeword, maxchange=maxchange)
                 end
                 oldmessages .= deepcopy(newmessages)
-                performance_name = "max change"
-                performance_value = maxchange[t]
             elseif algo.convergence == :decvars
                 if newguesses == oldguesses
                     n += 1
                     if n >= algo.nmin
-                        return BPResults{typeof(algo)}(converged=true, parity=parity,
+                        return BPResults{typeof(algo)}(converged=true, parity=par,
                         distortion=distortion(fg, y), trials=trial, iterations=t,
                         maxdiff=maxdiff, codeword=codeword, maxchange=maxchange)
                     end
@@ -229,18 +227,13 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                     n=0
                 end
                 oldguesses .= newguesses
-                performance_name = "iters with same decision vars"
-                performance_value = n
             elseif algo.convergence == :parity
-                parity = sum(paritycheck(fg))
-                if parity == 0
+                if par == 0
                     showprogress && println()
-                    return BPResults{typeof(algo)}(converged=true, parity=parity,
+                    return BPResults{typeof(algo)}(converged=true, parity=par,
                         distortion=distortion(fg, y), trials=trial, iterations=t,
                         maxdiff=maxdiff, codeword=codeword, maxchange=maxchange)
                 end
-                performance_name = "parity"
-                performance_value = parity
             else
                 error("Field convergence must be one of :messages, :decvars, :parity")
             end
@@ -257,7 +250,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             n = 0
         end
     end
-    return BPResults{typeof(algo)}(converged=false, parity=parity,
+    return BPResults{typeof(algo)}(converged=false, parity=par,
                 distortion=algo.default_distortion(fg,y), trials=algo.Tmax, 
                 iterations=algo.maxiter, maxdiff=maxdiff, codeword=codeword, 
                 maxchange=maxchange)

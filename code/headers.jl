@@ -18,11 +18,12 @@ cd(@__DIR__)
 notifications_path = "../../telegram/notifications.jl"
 if isfile(notifications_path)
     include(notifications_path)
-    function send_notification(args...; kwargs...)
-        send_notif(args...; kwargs...)
+    function send_notification(text::String="Execution of "*
+            (@__FILE__)*" finished.", args...; kwargs...)
+        send_notif(text, args...)
     end
 else
-    function send_notification(args...; kwargs...)
+    function send_notification(args...)
         nothing
     end
 end

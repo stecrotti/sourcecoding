@@ -54,7 +54,9 @@ function SA(mc_move::MCMove, beta2::Vector{Float64}; kw...)
     betas = hcat(fill(Inf, length(beta2)), beta2)
     return SA(mc_move=mc_move, betas=betas; kw...)
 end
-function zero_codeword(lm::LossyModel); zeros(Int, lm.fg.n); end
+function zero_codeword(lm::LossyModel)
+    zeros(Int, lm.fg.n)
+end
 
 function solve!(lm::LossyModel, algo::SA,
     distortions::Vector{Vector{Float64}}=[fill(0.5, algo.nsamples) 

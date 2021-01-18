@@ -14,7 +14,7 @@ beta2_init(algo::LossyAlgo) = 1.0
     nmin::Int = 300                     # Min number of consecutive unchanged decision vars
     tol::Float64 = 1e-12                # Tol for messages convergence
     gamma::Float64 = 0.0                # Reinforcement
-    Tmax::Int = 5                       # Max number of restarts with new random init
+    Tmax::Int = 1                       # Max number of restarts with new random init
     beta2::Float64 = 1.0                # Inverse temperature for overlap energy
     sigma::Float64 = 1e-4               # Random noise on external fields
     default_distortion::Function=fix_indep_from_ms
@@ -342,16 +342,17 @@ function fix_indep_from_ms(fg::FactorGraph, y::Vector{Int},
 end
 
 function _fix_indep(fg::FactorGraph, z::Vector{Int})
+    fg_ = deepcopy(fg)
     # If graph has no leaves, remove one
-    nvarleaves(fg) == 0 && breduction!(fg)
+    nvarleaves(fg) == 0 && breduction!(fg_)
     # Retrieve permuted parity-check matrix in the form [T|U]
-    M, col_perm = permute_to_triangular(fg)
+    M, col_perm = permute_to_triangular(fg_)
     m,n = size(M)
     dependent = col_perm[1:m]
     independent = col_perm[m+1:end]
     x = zeros(Int,n)
     x[independent] = z[independent]
-    b = gfmatrixmult(M[:,m+1:end], z[independent], fg.q, fg.mult)
-    x[dependent] = gf_invert_ut(M[:,1:m], b, fg.q, fg.mult)
+    b = gfmatrixmult(M[:,m+1:end], z[independent], fg_.q, fg_.mult)
+    x[dependent] = gf_invert_ut(M[:,1:m], b, fg_.q, fg_.mult)
     return x
 end

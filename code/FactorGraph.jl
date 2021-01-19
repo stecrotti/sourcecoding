@@ -2,7 +2,8 @@
 using OffsetArrays, StatsBase, LightGraphs, GraphRecipes, Plots, Random, 
     LinearAlgebra
 
-struct FactorGraph
+abstract type FactorGraph end
+struct FactorGraphGFQ <: FactorGraph 
     q::Int                              # field order
     mult::OffsetArray{Int,2}            # multiplication matrix in GF(q)
     gfinv::Vector{Int}                  # inverses in GF(q). It has q-1 indices, since 0 has no inverse
@@ -23,10 +24,16 @@ function FactorGraph(q::Int, n::Int, m::Int)
     gfdiv = OffsetArray(zeros(Int, q,q-1), 0:q-1,1:q-1)
     Vneigs = [Int[] for v in 1:n]
     Fneigs = [Int[] for f in 1:m]
-    fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in 1:n]
     hfv = [Int[] for f in 1:m]
-    mfv = Vector{Vector{OffsetArray{Float64,1,Array{Float64,1}}}}()
-    return FactorGraph(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
+    if q > 2
+        fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in 1:n]
+        mfv = Vector{Vector{OffsetArray{Float64,1,Array{Float64,1}}}}()
+        return FactorGraphGFQ(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
+    else
+        fields = zeros(n)
+        mfv = [Vector{Float64}[] for f in 1:m]
+        return FactorGraphGF2(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
+    end
 end
 
 # Construct graph from adjacency matrix (for checks with simple examples)

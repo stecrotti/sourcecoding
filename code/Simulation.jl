@@ -148,7 +148,8 @@ function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}};
     else
         dist_avg = mean.(dist)
         if Plots.backend() == Plots.UnicodePlotsBackend()
-            Plots.scatter!(pl, r, dist_avg, label=label, size=(300,200); plotkw...)
+            Plots.scatter!(pl, r, dist_avg, label=label, size=(300,200); 
+                plotkw...)
         else
             dist_sd = std.(distortion.(sims)) ./ [sqrt(npoints[i]) for i in eachindex(sims)]
             Plots.scatter!(pl, r, dist_avg, label=label, yerror=dist_sd; 
@@ -163,7 +164,22 @@ function plot!(pl::Plots.Plot, sim::Simulation; kwargs...)
     plot!(pl, [sim]; kwargs...)
 end
 
-function plot(sims::Union{Simulation{T},Vector{Simulation{T}}}; 
+function plot!(pl::Plots.Plot, 
+    sims_vec::Vector{Vector{Simulation{T}}}; 
+    labels::Vector{String}=["GF($(s[1].q))" for s in sims_vec],
+    kw...) where {T<:LossyAlgo}
+
+    markers = [:circle, :diamond, :rect, :utriangle,:star6]
+
+    for i in eachindex(sims_vec)
+        plot!(pl, sims_vec[i]; label=labels[i], 
+            markershape=markers[mod1(i,length(markers))], kw...)
+    end
+    return pl
+end
+
+
+function plot(sims::Union{Simulation{T},Vector{Simulation{T}},Vector{Vector{Simulation{T}}}}; 
         kwargs...) where {T<:LossyAlgo}
     d = LinRange(0,0.5,100)
     r = LinRange(0, 1, 100)
@@ -171,7 +187,6 @@ function plot(sims::Union{Simulation{T},Vector{Simulation{T}}};
     Plots.plot!(pl, r, naive_compression_inv.(r), label="Naive compression")
     return plot!(pl, sims; kwargs...)
 end
-
 
 function iters_hist(sim::Simulation{<:LossyAlgo}; kwargs...)
     iters = iterations(sim; kwargs...)

@@ -29,7 +29,11 @@ function ldpc_graph(q::Int, n::Int, m::Int,
     Vneigs = [Int[] for v in 1:n]
     Fneigs = [Int[] for f in 1:m]
     hfv = [Int[] for f in 1:m]
-    mfv = [OffsetArray{Float64,1,Array{Float64,1}}[] for f in 1:m]
+    if q > 2
+        mfv = [OffsetArray{Float64,1,Array{Float64,1}}[] for f in 1:m]
+    else
+        mfv = [Vector{Float64}[] for f in 1:m]
+    end
 
     too_many_trials = 1000
     multi_edge_found = false
@@ -39,7 +43,11 @@ function ldpc_graph(q::Int, n::Int, m::Int,
         Vneigs = [Int[] for v in 1:n]
         Fneigs = [Int[] for f in 1:m]
         hfv = [Int[] for f in 1:m]
-        mfv = [OffsetArray{Float64,1,Array{Float64,1}}[] for f in 1:m]
+        if q > 2
+            mfv = [OffsetArray{Float64,1,Array{Float64,1}}[] for f in 1:m]
+        else
+            mfv = [Float64[] for f in 1:m]
+        end
 
         edgesleft = zeros(Int, nedges)
         edgesright = zeros(Int, nedges)
@@ -77,7 +85,11 @@ function ldpc_graph(q::Int, n::Int, m::Int,
                     # Initalize parity check matrix elements
                     push!(hfv[f], rand(1:q-1))
                     # While we're here, initialize messages factor->variable
-                    push!(mfv[f], OffsetArray(1/q*ones(q), 0:q-1))
+                    if q > 2   
+                        push!(mfv[f], OffsetArray(1/q*ones(q), 0:q-1))
+                    else
+                        push!(mfv[f], 0.0)
+                    end
                 end
                 s += j
                 f += 1
@@ -87,8 +99,14 @@ function ldpc_graph(q::Int, n::Int, m::Int,
             # Get multiplication and iverse table for GF(q)
             mult, gfinv, gfdiv = gftables(q, arbitrary_mult)
             # Build FactorGraph object
-            fg = FactorGraph(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, 
+            if q > 2
+            fg = FactorGraphGFQ(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, 
                 fields, hfv, mfv)
+            else
+                fields = zeros(n)
+                fg = FactorGraphGF2(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, 
+                    fields, hfv, mfv)
+            end
             # Check that the number of connected components is 1
             fg_ = deepcopy(fg)
             breduction!(fg_,1)

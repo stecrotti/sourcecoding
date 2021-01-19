@@ -3,13 +3,13 @@ using JLD2
 
 qq = 2 .^ [1 4 6 8]
 gamma = 5e-3
-nn = Int.(round.(420*3 ./log2.(qq)))
+nn = Int.(round.(420*2 ./log2.(qq)))
 R = collect(0.21:0.1:0.81) 
 mm = [Int.(round.(n*(1 .- R))) for n in nn]
-maxiter = Int(1e3)
-navg = 10
+maxiter = Int(2e3)
+navg = 20
 randseed = 100
-Tmax = 1
+Tmax = 2
 
 sims_vec = [Vector{Simulation{MS}}(undef, length(m)) for m in mm]
 algo = MS(maxiter=maxiter, Tmax=Tmax)
@@ -17,7 +17,7 @@ algo = MS(maxiter=maxiter, Tmax=Tmax)
 for (i,q) in enumerate(qq)
     println("#### q=$q. Order $i of $(length(qq)) ####")
     for j in eachindex(mm[i])
-        println("---------- Simulation $j of ", length(mm[i][j])," | R = ",R[j]," -----------")
+        println("---------- Simulation $j of ", length(mm[i])," | R = ",R[j]," -----------")
         sims_vec[i][j] = Simulation(q, nn[i], mm[i][j], algo, niter=navg)
     end
 end

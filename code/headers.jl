@@ -10,6 +10,7 @@ include("optimal_cycle.jl")
 include("Simulation.jl")
 include("./plotters/approx_entropy.jl")
 include("./plotters/plot_pgf.jl")
+include("FactorGraphGF2.jl")
 
 
 # Send notifications to telegram when program execution ends

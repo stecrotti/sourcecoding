@@ -140,13 +140,10 @@ function onebpiter!(fg::FactorGraph, algo::MS,
             for (vprime_idx, vprime) in enumerate(fg.Fneigs[f])
                 if vprime != v
                     func = fg.fields[vprime] - fg.mfv[f][vprime_idx]
-                    # adjust for weights
-                    # func .= func[fg.mult[fg.gfinv[fg.hfv[f][vprime_idx]], fg.mult[fg.hfv[f][v_idx],:]]]
                     push!(funclist, func)
                     push!(weightlist, fg.hfv[f][vprime_idx])
                 end
             end
-            # Try new way
             fg.mfv[f][v_idx] = gfmscw(funclist, fg.gfdiv, weightlist,
                 neutral)
             # Adjust final weight
@@ -154,7 +151,6 @@ function onebpiter!(fg::FactorGraph, algo::MS,
             # Normalize message
             fg.mfv[f][v_idx] .-= maximum(fg.mfv[f][v_idx])
             fg.mfv[f][v_idx][isnan.(fg.mfv[f][v_idx])] .= 0.0
-            # end
             # Send warning if messages are all NaN
             if sum(isnan.(fg.mfv[f][v_idx])) > 0
                 @show reduce(gfmsc, funclist, init=neutral)
@@ -281,13 +277,17 @@ neutralel(algo::MS, q::Int) = Fun(x == 0 ? 0.0 : -Inf for x=0:q-1)
 # The prior distr is given by exp(field)
 # A small noise with amplitude sigma is added to break the symmetry
 function extfields(q::Int, y::Vector{Int}, algo::Union{BP,MS}; randseed::Int=0)
-    randseed != 0 && Random.seed!(randseed)      # for reproducibility
-    fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in eachindex(y)]
-    for v in eachindex(fields)
-        for a in 0:q-1
-            fields[v][a] = -algo.beta2*hd(a,y[v]) + algo.sigma*randn()
-            typeof(algo)==BP && (fields[v][a] = exp.(fields[v][a]))
+    randseed != 0 && Random.seed!(randseed) 
+    if q > 2
+        fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in eachindex(y)]
+        for v in eachindex(fields)
+            for a in 0:q-1
+                fields[v][a] = -algo.beta2*hd(a,y[v]) + algo.sigma*randn()
+                typeof(algo)==BP && (fields[v][a] = exp.(fields[v][a]))
+            end
         end
+    else
+        fields = algo.beta2*(1 .- 2*y) + algo.sigma*randn(length(y))
     end
     return fields
 end
@@ -316,8 +316,7 @@ function solve!(lm::LossyModel, algo::Union{BP,MS}, args...; randseed::Int=0,
 end
 
 function extfields!(lm::LossyModel, algo::Union{BP,MS}; randseed::Int=0)
-    lm.fg.fields .= extfields(lm.fg.q,lm.y,algo,
-        randseed=randseed)
+    lm.fg.fields .= extfields(lm.fg.q,lm.y,algo, randseed=randseed)
 end
 
 function distortion(fg::FactorGraph, y::Vector{Int}, x::Vector{Int}=guesses(fg))
@@ -328,6 +327,7 @@ end
 naive_compression_distortion(fg::FactorGraph,args...;kw...) = 0.5*(nfacts(fg)/nvars(fg))
 
 # Fix the independent variables to their value in the source vector
+# Pass x as an argument to then be able to retrieve it
 function fix_indep_from_src(fg::FactorGraph, y::Vector{Int}, 
         x::Vector{Int}=zeros(Int, fg.n))
     x .= _fix_indep(fg,y)
@@ -335,6 +335,7 @@ function fix_indep_from_src(fg::FactorGraph, y::Vector{Int},
 end
 
 # Fix the independent variables to the decision variables outputted by max-sum
+# Pass x as an argument to then be able to retrieve it
 function fix_indep_from_ms(fg::FactorGraph, y::Vector{Int}, 
         x::Vector{Int}=zeros(Int, fg.n))
     x = _fix_indep(fg,guesses(fg))
@@ -344,7 +345,7 @@ end
 function _fix_indep(fg::FactorGraph, z::Vector{Int})
     fg_ = deepcopy(fg)
     # If graph has no leaves, remove one
-    nvarleaves(fg) == 0 && breduction!(fg_)
+    nvarleaves(fg_) == 0 && breduction!(fg_)
     # Retrieve permuted parity-check matrix in the form [T|U]
     M, col_perm = permute_to_triangular(fg_)
     m,n = size(M)

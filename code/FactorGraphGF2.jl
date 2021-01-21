@@ -41,22 +41,23 @@ end
 guesses(fg::FactorGraphGF2) = floor.(Int, 0.5*(1 .- sign.(fg.fields)))
 
 function onebpiter!(fg::FactorGraphGF2, algo::MS)
-
     maxdiff = diff = 0.0
     aux = Float64[]
-    for f in randperm(length(fg.Fneigs))
+    # Loop over factors
+    for f in randperm(fg.m)
+        # Loop over neighbors of `f`
         for (v_idx, v) in enumerate(fg.Fneigs[f])
             # Subtract message from belief
             fg.fields[v] -= fg.mfv[f][v_idx]          
-            # Update message
+            # Collect (var->fact) messages from the other neighbors of `f`
             aux = [fg.fields[vprime] - fg.mfv[f][vprime_idx] 
                 for (vprime_idx,vprime) in enumerate(fg.Fneigs[f]) 
                 if vprime_idx != v_idx]
-            # Apply formula
+            # Apply formula to update message
             fg.mfv[f][v_idx] = prod(sign, aux)*reduce(min, abs.(aux), init=Inf)
             # Update belief after updating the message
-            fg.fields[v] = fg.fields[v] + fg.mfv[f][v_idx]
-            # Look for maximum message (difference)
+            fg.fields[v] += fg.mfv[f][v_idx]
+            # Look for maximum message
             diff = abs(fg.mfv[f][v_idx])
             diff > maxdiff && (maxdiff = diff)
         end
@@ -85,4 +86,13 @@ function reinforce!(fg::FactorGraphGF2, algo::Union{BP,MS})
         end
     end
     return nothing
+end
+
+# Parity-check for the adjacency matrix of a factor graph.
+# f specifies which factors to consider (default: all 1:m)
+function paritycheck(fg::FactorGraphGF2, x::Vector{Int}=guesses(fg),
+    f::Vector{Int}=collect(1:fg.m))
+    B = adjmat(fg)[f,:]
+    z = B * x
+    return z
 end

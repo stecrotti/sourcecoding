@@ -195,7 +195,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             newguesses,maxdiff[t] = onebpiter!(fg, algo)
             newmessages .= fg.mfv
             par = parity(fg, newguesses)
-            codeword[t] = (parity==0)
+            codeword[t] = (par==0)
             if algo.convergence == :messages
                 for f in eachindex(newmessages)
                     for (v_idx,msg) in enumerate(newmessages[f])
@@ -205,7 +205,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                         end
                     end
                 end
-                if maxchange[t] < algo.tol
+                if maxchange[t] <= algo.tol
                     return BPResults{typeof(algo)}(converged=true, parity=par,
                         distortion=distortion(fg, y), trials=trial, iterations=t,
                         maxdiff=maxdiff, codeword=codeword, maxchange=maxchange)
@@ -242,7 +242,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             fg.fields .= extfields(fg.q,y,algo,randseed=randseed+trial)
             oldguesses .= guesses(fg)
             oldmessages .= deepcopy(fg.mfv)
-            maxchange .= fill(-Inf, algo.maxiter)
+            fill!(maxchange, -Inf)
             n = 0
         end
     end

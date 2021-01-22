@@ -130,44 +130,36 @@ function onebpiter!(fg::FactorGraph, algo::MS,
     maxdiff = diff = 0.0
     for f in randperm(length(fg.Fneigs))
         for (v_idx, v) in enumerate(fg.Fneigs[f])
-                # Subtract message from belief
-                fg.fields[v] .-= fg.mfv[f][v_idx]
-                # if "Inf-Inf=NaN" happened, restore 0.0
-                fg.fields[v][isnan.(fg.fields[v])] .= 0.0
+            # Subtract message from belief
+            fg.fields[v] .-= fg.mfv[f][v_idx]
+            # if "Inf-Inf=NaN" happened, restore 0.0
+            replace!(fg.fields[v], NaN=>0.0)
             # Define functions for weighted convolution
-            funclist = Fun[]
-            weightlist = Int[]
-            for (vprime_idx, vprime) in enumerate(fg.Fneigs[f])
-                if vprime != v
-                    func = fg.fields[vprime] - fg.mfv[f][vprime_idx]
-                    push!(funclist, func)
-                    push!(weightlist, fg.hfv[f][vprime_idx])
-                end
-            end
-            fg.mfv[f][v_idx] = gfmscw(funclist, fg.gfdiv, weightlist,
+            funclist = [fg.fields[vprime] - fg.mfv[f][vprime_idx] 
+                for (vprime_idx, vprime) in enumerate(fg.Fneigs[f])
+                if vprime != v]
+            weights = [fg.H[f,vprime] 
+                for (vprime_idx, vprime) in enumerate(fg.Fneigs[f])
+                if vprime != v]
+
+            fg.mfv[f][v_idx] .= gfmscw(funclist, fg.gfdiv, weights,
                 neutral)
             # Adjust final weight
-            fg.mfv[f][v_idx] .= fg.mfv[f][v_idx][ fg.mult[fg.hfv[f][v_idx],:] ]
+            fg.mfv[f][v_idx] .= fg.mfv[f][v_idx][ fg.mult[fg.H[f,v],:] ]
             # Normalize message
             fg.mfv[f][v_idx] .-= maximum(fg.mfv[f][v_idx])
-            fg.mfv[f][v_idx][isnan.(fg.mfv[f][v_idx])] .= 0.0
-            # Send warning if messages are all NaN
-            if sum(isnan.(fg.mfv[f][v_idx])) > 0
-                @show reduce(gfmsc, funclist, init=neutral)
-                error("Message ($f,$v) has a NaN")
-            end
+            replace!(fg.mfv[f][v_idx], NaN=>0.0)
             # Update belief after updating the message
             fg.fields[v] .+= fg.mfv[f][v_idx]
             # Normalize belief
             fg.fields[v] .-= maximum(fg.fields[v])
-            fg.fields[v][isnan.(fg.fields[v])] .= 0.0
-            sum(isnan.(fg.fields[v])) > 0 && error("Belief $v has a NaN")
+            replace!(fg.fields[v], NaN=>0.0)
             # Look for maximum message (difference)
             diff = abs(fg.mfv[f][v_idx][0]-fg.mfv[f][v_idx][1])
             diff > maxdiff && (maxdiff = diff)
         end
     end
-    return guesses(fg), maxdiff
+    return maxdiff
 end
 
 function guesses(beliefs::AbstractVector)
@@ -177,7 +169,7 @@ guesses(fg::FactorGraph) = guesses(fg.fields)
 
 function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     maxdiff=zeros(algo.maxiter), codeword=falses(algo.maxiter),
-    maxchange=zeros(algo.maxiter); randseed::Int=0, 
+    maxchange=zeros(algo.maxiter); randseed::Int=0, neutral=neutralel(algo,fg.q),
     verbose::Bool=false, showprogress::Bool=verbose)
 
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
@@ -185,21 +177,28 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     oldguesses = guesses(fg)
     oldmessages = deepcopy(fg.mfv)
     newmessages = deepcopy(fg.mfv)
-    par = sum(paritycheck(fg))
+    par = parity(fg)
     wait_time = showprogress ? 1 : Inf
     n = 0
+    ############
+    # weights = [[  [fg.H[f,vprime] 
+    #     for (vprime_idx, vprime) in enumerate(fg.Fneigs[f])
+    #     if vprime != v]
+    #     for v in fg.Fneigs[f]] for f in 1:fg.m]
+    ############
     for trial in 1:algo.Tmax
         prog = ProgressMeter.Progress(algo.maxiter, wait_time, 
             "Trial $trial/$(algo.Tmax) ")
-        @inbounds for t in 1:algo.maxiter
-            newguesses,maxdiff[t] = onebpiter!(fg, algo)
+        for t in 1:algo.maxiter
+            maxdiff[t] = onebpiter!(fg, algo, neutral)
+            newguesses .= guesses(fg)
             newmessages .= fg.mfv
             par = parity(fg, newguesses)
             codeword[t] = (par==0)
             if algo.convergence == :messages
                 for f in eachindex(newmessages)
                     for (v_idx,msg) in enumerate(newmessages[f])
-                        change = maximum(abs.(msg - oldmessages[f][v_idx]))
+                        change = maximum(abs,msg - oldmessages[f][v_idx])
                         if change > maxchange[t]
                             maxchange[t] = change
                         end
@@ -252,7 +251,6 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                 maxchange=maxchange)
 end
 
-
 function reinforce!(fg::FactorGraph, algo::Union{BP,MS})
     for (v,gv) in enumerate(fg.fields)
         if algo.gamma > 0
@@ -276,18 +274,20 @@ neutralel(algo::MS, q::Int) = Fun(x == 0 ? 0.0 : -Inf for x=0:q-1)
 # Creates fields for the priors: the closest to y, the stronger the field
 # The prior distr is given by exp(field)
 # A small noise with amplitude sigma is added to break the symmetry
-function extfields(q::Int, y::Vector{Int}, algo::Union{BP,MS}; randseed::Int=0)
+function extfields!(fg::FactorGraph, y::Vector{Int}, algo::Union{BP,MS}; randseed::Int=0)
     randseed != 0 && Random.seed!(randseed) 
-    if q > 2
+    if fg.q > 2
         fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in eachindex(y)]
         for v in eachindex(fields)
             for a in 0:q-1
                 fields[v][a] = -algo.beta2*hd(a,y[v]) + algo.sigma*randn()
                 typeof(algo)==BP && (fields[v][a] = exp.(fields[v][a]))
+                fg.fields .= fields
             end
         end
     else
         fields = algo.beta2*(1 .- 2*y) + algo.sigma*randn(length(y))
+        fg.fields .= fields
     end
     return fields
 end
@@ -316,7 +316,7 @@ function solve!(lm::LossyModel, algo::Union{BP,MS}, args...; randseed::Int=0,
 end
 
 function extfields!(lm::LossyModel, algo::Union{BP,MS}; randseed::Int=0)
-    lm.fg.fields .= extfields(lm.fg.q,lm.y,algo, randseed=randseed)
+    extfields!(lm.fg, lm.y, algo, randseed=randseed)
 end
 
 function distortion(fg::FactorGraph, y::Vector{Int}, x::Vector{Int}=guesses(fg))
@@ -330,7 +330,7 @@ naive_compression_distortion(fg::FactorGraph,args...;kw...) = 0.5*(nfacts(fg)/nv
 # Pass x as an argument to then be able to retrieve it
 function fix_indep_from_src(fg::FactorGraph, y::Vector{Int}, 
         x::Vector{Int}=zeros(Int, fg.n))
-    x .= _fix_indep(fg,y)
+    x .= _fix_indep(fg,y,x)
     return distortion(fg, y, x)
 end
 
@@ -338,11 +338,11 @@ end
 # Pass x as an argument to then be able to retrieve it
 function fix_indep_from_ms(fg::FactorGraph, y::Vector{Int}, 
         x::Vector{Int}=zeros(Int, fg.n))
-    x = _fix_indep(fg,guesses(fg))
+    x = _fix_indep(fg,guesses(fg), x)
     return distortion(fg, y, x)
 end
 
-function _fix_indep(fg::FactorGraph, z::Vector{Int})
+function _fix_indep(fg::FactorGraph, z::Vector{Int}, x::Vector{Int})
     fg_ = deepcopy(fg)
     # If graph has no leaves, remove one
     nvarleaves(fg_) == 0 && breduction!(fg_)

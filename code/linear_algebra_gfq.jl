@@ -3,7 +3,7 @@ using LinearAlgebra, LightGraphs, SimpleWeightedGraphs, SparseArrays
 
 
 """Reduce matrix over GF(q) to reduced row echelon form"""
-function gfrref!(H::Array{Int,2},
+function gfrref!(H::AbstractArray{Int,2},
                 q::Int=2,
                 gfmult::OffsetArray{Int,2}=gftables(q)[1],
                 gfdiv::OffsetArray{Int,2}=gftables(q)[3])
@@ -39,14 +39,14 @@ function gfrref!(H::Array{Int,2},
     return H
 end
 
-function gfrcef!(H::Array{Int,2},
+function gfrcef!(H::AbstractArray{Int,2},
                 q::Int=2,
                 gfmult::OffsetArray{Int,2}=gftables(q)[1],
                 gfdiv::OffsetArray{Int,2}=gftables(q)[3])
     H .= permutedims(gfrref(permutedims(H), q, gfmult, gfdiv))
 end
 
-function gfrref(H::Array{Int,2},
+function gfrref(H::AbstractArray{Int,2},
                 q::Int=2,
                 gfmult::OffsetArray{Int,2}=gftables(q)[1],
                 gfdiv::OffsetArray{Int,2}=gftables(q)[3])
@@ -55,7 +55,7 @@ function gfrref(H::Array{Int,2},
     return tmp
 end
 
-function gfrcef(H::Array{Int,2},
+function gfrcef(H::AbstractArray{Int,2},
                 q::Int=2,
                 gfmult::OffsetArray{Int,2}=gftables(q)[1],
                 gfdiv::OffsetArray{Int,2}=gftables(q)[3])
@@ -66,7 +66,7 @@ end
 
 # Convert upper triangular matrix into diagonal
 #  [T|X] -> [D|Y] 
-function ut2diag!(T::Array{Int,2}, q::Int=2,
+function ut2diag!(T::AbstractArray{Int,2}, q::Int=2,
         gfmult::OffsetArray{Int,2}=gftables(q)[1],
         gfdiv::OffsetArray{Int,2}=gftables(q)[3])
         
@@ -91,11 +91,11 @@ function ut2diag!(T::Array{Int,2}, q::Int=2,
     end
     return T
 end
-ut2diag(H::Array{Int,2}, args...) = ut2diag!(copy(H), args...)
+ut2diag(H::AbstractArray{Int,2}, args...) = ut2diag!(copy(H), args...)
 
-n_nonzerorows(H::Array{Int,2}) = sum([!all(H[r,:] .== 0) for r in 1:size(H,1)])
+n_nonzerorows(H::AbstractArray{Int,2}) = sum([!all(H[r,:] .== 0) for r in 1:size(H,1)])
 
-function gfrank(H::Array{Int,2}, q::Int=2,
+function gfrank(H::AbstractArray{Int,2}, q::Int=2,
                 gfmult::OffsetArray{Int,2}=gftables(q)[1],
                 gfdiv::OffsetArray{Int,2}=gftables(q)[3])
     # Reduce to row echelon form
@@ -103,7 +103,7 @@ function gfrank(H::Array{Int,2}, q::Int=2,
     return n_nonzerorows(Href)
 end
 
-function gfnullspace(H::Array{Int,2}, q::Int=2,
+function gfnullspace(H::AbstractArray{Int,2}, q::Int=2,
                 gfmult::OffsetArray{Int,2}=gftables(q)[1],
                 gfdiv::OffsetArray{Int,2}=gftables(q)[3])
     nrows,ncols = size(H)
@@ -116,7 +116,7 @@ function gfnullspace(H::Array{Int,2}, q::Int=2,
 end
 
 # Works only for GF(2^k)
-function gfdot(x::Vector{Int}, y::Vector{Int}, q::Int,
+function gfdot(x::AbstractVector{Int}, y::AbstractVector{Int}, q::Int,
     mult::OffsetArray{Int,2,Array{Int,2}}=gftables(q)[1])
     L = length(x)
     @assert length(y) == L
@@ -124,8 +124,8 @@ function gfdot(x::Vector{Int}, y::Vector{Int}, q::Int,
 end
 
 # Works only for GF(2^k)
-function gfmatrixmult(A::Array{Int,2}, B::Array{Int,2}, q::Int=2,
-    mult::OffsetArray{Int,2,Array{Int,2}}=gftables(q)[1])
+function gfmatrixmult(A::AbstractArray{Int,2}, B::AbstractArray{Int,2}, q::Int=2,
+        mult::OffsetArray{Int,2,Array{Int,2}}=gftables(q)[1])
     m,n = size(A)
     r,p = size(B)
     q,s = size(mult)
@@ -137,15 +137,24 @@ function gfmatrixmult(A::Array{Int,2}, B::Array{Int,2}, q::Int=2,
             C[i,j] = gfdot(A[i,:], B[:,j], q, mult)
         end
     end
-    # If C is a column vector, just return it as a 1D Array
-    p==1 && (C = vec(C))
     return C
 end
-function gfmatrixmult(A::Array{Int,2}, V::Vector{Int}, args...)
-    return gfmatrixmult(A, hcat(V), args...)
+
+function gfmatrixmult(A::AbstractArray{Int,2}, b::AbstractVector{Int}, q::Int=2,
+        gfmult::OffsetArray{Int,2,Array{Int,2}}=gftables(q)[1])
+    m,n = size(A)
+    r = length(b)
+    @assert r == n  # check compatibility of dimensions for matrix product
+    if q > 2
+        C = [gfdot(A[i,:], b, q, gfmult) for i in 1:m]
+    else
+        C = (A * b) .% 2
+    end
+    return C
 end
 
-function gfmatrixinv(H::Array{Int,2},
+
+function gfmatrixinv(H::AbstractArray{Int,2},
         q::Int=2,
         gfmult::OffsetArray{Int,2}=gftables(q)[1],
         gfdiv::OffsetArray{Int,2}=gftables(q)[3])
@@ -159,7 +168,7 @@ function gfmatrixinv(H::Array{Int,2},
     end
 end
 
-function gf_invert_ut(T::Array{Int,2}, y::Vector{Int},
+function gf_invert_ut(T::AbstractArray{Int,2}, y::AbstractVector{Int},
     q::Int=2,
     gfmult::OffsetArray{Int,2}=gftables(q)[1],
     gfdiv::OffsetArray{Int,2}=gftables(q)[3])
@@ -176,9 +185,9 @@ function gf_invert_ut(T::Array{Int,2}, y::Vector{Int},
     end
     return x
 end
-function gf_invert_ut(T::Array{Int,2}, y::Array{Int,2}, args...)
+function gf_invert_ut(T::AbstractArray{Int,2}, y::AbstractArray{Int,2}, args...)
     @assert size(T,1)==size(y,1)
-    x = hcat([gf_invert_ut(T,y[:,c],args...) for c in 1:size(y,2)]...)
+    x = reduce(hcat, [gf_invert_ut(T,y[:,c],args...) for c in 1:size(y,2)])
     return x
 end
 
@@ -199,7 +208,7 @@ function isgfq(X, q::Int)
     end
     return true
 end
-function isinspan(A::Array{Int,2}, v::Vector{Int}; q::Int=2)
+function isinspan(A::AbstractArray{Int,2}, v::AbstractVector{Int}; q::Int=2)
     if isempty(A)
         return true
     else
@@ -210,13 +219,13 @@ function isinspan(A::Array{Int,2}, v::Vector{Int}; q::Int=2)
         return rkA == rkAv
     end
 end
-function isuppertriangular(A::Array{Int,2})
+function isuppertriangular(A::AbstractArray{Int,2})
     return A == UpperTriangular(A)
 end
-function isunituppertriangular(A::Array{Int,2})
+function isunituppertriangular(A::AbstractArray{Int,2})
     return isuppertriangular(A) && all(diag(A).==1)
 end
-function issquare(A::Array{Int,2})
+function issquare(A::AbstractArray{Int,2})
     (m,n) = size(A)
     return m==n
 end

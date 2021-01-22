@@ -1,7 +1,14 @@
 #### Build and handle LDPC graphs, Hamming distances and more, on 𝔾𝔽(2ᵏ) ####
 using GaloisFields, Random
 
-function ldpc_graph(q::Int, n::Int, m::Int,
+function ldpc_graph(::Val{2}, args...; kw...)
+    return ldpc_graphGF2(args...; kw...)
+end
+function ldpc_graph(::Val{q}, args...; kw...) where {q} 
+    return ldpc_graphGFQ(q, args...; kw...)
+end
+
+function ldpc_graphGFQ(q::Int, n::Int, m::Int,
     nedges::Int=generate_polyn(n,m)[1], lambda::Vector{T}=generate_polyn(n,m)[2],
     rho::Vector{T}=generate_polyn(n,m)[3],
     fields = [Fun(1e-3*randn(q)) for v in 1:n]; verbose=false,
@@ -13,13 +20,7 @@ function ldpc_graph(q::Int, n::Int, m::Int,
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
 
     ### Argument validation ###
-    if sum(lambda) != 1 || sum(rho) != 1
-        error("Vector lambda and rho must sum to 1")
-    elseif n != round(nedges*sum(lambda[i]/i for i in eachindex(lambda)))
-        error("n, lambda and nedges incompatible")
-    elseif m != round(nedges*(sum(rho[j]/j for j in eachindex(rho))))
-        error("m, rho and nedges incompatible")
-    end
+    _check_consistency_polynomials(lambda, rho, nedges, n, m)
 
     if verbose
         println("Building factor graph...")
@@ -28,52 +29,37 @@ function ldpc_graph(q::Int, n::Int, m::Int,
 
     Vneigs = [Int[] for v in 1:n]
     Fneigs = [Int[] for f in 1:m]
-    hfv = [Int[] for f in 1:m]
-    if q > 2
-        mfv = [OffsetArray{Float64,1,Array{Float64,1}}[] for f in 1:m]
-    else
-        mfv = [Vector{Float64}[] for f in 1:m]
-    end
+    H = SparseArrays.spzeros(m,n)
+    edgesleft = edgesright = zeros(Int, nedges)
 
     too_many_trials = 1000
     multi_edge_found = false
     for t in 1:too_many_trials
-
         multi_edge_found = false
-        Vneigs = [Int[] for v in 1:n]
-        Fneigs = [Int[] for f in 1:m]
-        hfv = [Int[] for f in 1:m]
-        if q > 2
-            mfv = [OffsetArray{Float64,1,Array{Float64,1}}[] for f in 1:m]
-        else
-            mfv = [Float64[] for f in 1:m]
-        end
-
-        edgesleft = zeros(Int, nedges)
-        edgesright = zeros(Int, nedges)
+        Vneigs .= [Int[] for v in 1:n]
+        Fneigs .= [Int[] for f in 1:m]
+        H .= SparseArrays.spzeros(m,n)
+        edgesleft .= edgesright .= zeros(Int, nedges)
 
         ### Irregular Tanner Graph construction and FactorGraph object initialization ###
         # Assign each edge "on the left" to a variable node
-        v = 1
-        r = 1
+        v = 1; r = 1
         for i in 1:length(lambda)
             deg = Int(round(lambda[i]/i*nedges,digits=10))   # number of edges incident on variable v
             for _ in 1:deg
-                edgesleft[r:r+i-1] = v*ones(Int,i)
-                r += i
-                v += 1
+                edgesleft[r:r+i-1] .= v
+                r += i; v += 1
             end
         end
 
-        perm = edgesleft[randperm(length(edgesleft))]   # Permute nodes on the left
+        shuffle!(edgesleft)   # Permute nodes on the left
 
         # Assign each edge "on the right" to a factor node
-        f = 1
-        s = 1
+        f = s = 1
         for j in 1:length(rho)
             deg = Int(round(rho[j]/j*nedges,digits=10))
             for _ in 1:deg
-                for v in perm[s:s+j-1]
+                for v in edgesleft[s:s+j-1]
                     if findall(isequal(v), Fneigs[f])!=[]
                         verbose && println("Multi-edge discarded")
                         multi_edge_found = true
@@ -83,30 +69,27 @@ function ldpc_graph(q::Int, n::Int, m::Int,
                     push!(Fneigs[f], v)
                     push!(Vneigs[v], f)
                     # Initalize parity check matrix elements
-                    push!(hfv[f], rand(1:q-1))
+                    H[f,v] = rand(1:q-1)
                     # While we're here, initialize messages factor->variable
-                    if q > 2   
-                        push!(mfv[f], OffsetArray(1/q*ones(q), 0:q-1))
-                    else
-                        push!(mfv[f], 0.0)
-                    end
                 end
                 s += j
                 f += 1
             end
         end
         if !multi_edge_found
+            # Initialize messages
+            mfv = [fill(OffsetArray(1/q*ones(q), 0:q-1), length(neigs)) for neigs in Fneigs]
             # Get multiplication and iverse table for GF(q)
             mult, gfinv, gfdiv = gftables(q, arbitrary_mult)
             # Build FactorGraph object
-            if q > 2
+            # if q > 2
             fg = FactorGraphGFQ(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, 
-                fields, hfv, mfv)
-            else
-                fields = zeros(n)
-                fg = FactorGraphGF2(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, 
-                    fields, hfv, mfv)
-            end
+                fields, H, mfv)
+            # else
+            #     fields = zeros(n)
+            #     fg = FactorGraphGF2(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, 
+            #         fields, hfv, mfv)
+            # end
             # Check that the number of connected components is 1
             fg_ = deepcopy(fg)
             breduction!(fg_,1)
@@ -223,33 +206,25 @@ function hw(x::Int)::Int
     return sum(int2bits(x))
 end
 
-hw(v::Vector{Int})::Int = sum(hw.(v))
+hw(v::Vector{Int})::Int = sum(hw, v)
 hw(v::Array{Int,2})::Int = hw(vec(v))
-
-function paritycheck(fg::FactorGraph, x::Array{Int,2}, f::Int)
-    return gfmatrixmult(adjmat(fg)[[f],:], x, fg.q, fg.mult)
-end
-
-function paritycheck(fg::FactorGraph, x::Array{Int,2},
-    f::Vector{Int}=collect(1:fg.m))
-    return gfmatrixmult(adjmat(fg)[f,:], x, fg.q, fg.mult)
-end
-
-parity(fg::FactorGraph, args...) = hw(paritycheck(fg, args...))
 
 # Parity-check for the adjacency matrix of a factor graph.
 # f specifies which factors to consider (default: all 1:m)
-function paritycheck(fg::FactorGraph, x::Vector{Int}=guesses(fg),
-    f::Vector{Int}=collect(1:fg.m))
-    return gfmatrixmult(adjmat(fg)[f,:], x[:,:], fg.q, fg.mult)
+function paritycheck(fg::FactorGraph, x::Vector{Int}=guesses(fg))
+    return gfmatrixmult(fg.H, x, fg.q, fg.mult)
 end
-# Support f as a single index, not forcefully a vector
-function paritycheck(fg::FactorGraph, x::Vector{Int}, f::Int)
-    return paritycheck(fg, x, [f])
+function paritycheck(fg::FactorGraph, x::Array{Int,2})
+    return gfmatrixmult(fg.H, vec(x), fg.q, fg.mult)
 end
+# function paritycheck_quick(fg::FactorGraph, x::Vector{Int}=guesses(fg))
+
+# end
+
+parity(fg::FactorGraph, args...) = hw(paritycheck(fg, args...))
 
 # Groups bits together to transform GF(2)->GF(2^k)
-function gf2toq(H::Array{Int,2}, k::Int=1)
+function gf2toq(H::AbstractArray{Int,2}, k::Int=1)
     m,n = size(H)
     nnew = div(n,k)
     Hnew = zeros(Int, m, nnew)
@@ -284,7 +259,7 @@ function gfqto2(y::Vector{Int}, k::Int)
     return z
 end
 
-function gfqto2(H::Array{Int,2}, k::Int=1)
+function gfqto2(H::AbstractArray{Int,2}, k::Int=1)
     m,n = size(H)
     nnew = n*k
     Hnew = zeros(Int, m, nnew)
@@ -303,7 +278,16 @@ function int2gfq(y::Vector{Int}, k::Int=1, pad::Int=ndigits(maximum(y),base=2^k)
     return [int2gfq(x, k, pad) for x in y]
 end
 
-
+####### SUBROUTINES
+function _check_consistency_polynomials(lambda, rho, nedges, n, m)
+    if sum(lambda) != 1 || sum(rho) != 1
+        error("Vector lambda and rho must sum to 1")
+    elseif n != round(nedges*sum(lambda[i]/i for i in eachindex(lambda)))
+        error("n, lambda and nedges incompatible")
+    elseif m != round(nedges*(sum(rho[j]/j for j in eachindex(rho))))
+        error("m, rho and nedges incompatible")
+    end
+end
 
 #### Not used
 # function ldpc_adjmat(q::Int, n::Int, m::Int,

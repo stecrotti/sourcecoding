@@ -1,3 +1,5 @@
+using SparseArrays
+
 struct FactorGraphGF2 <: FactorGraph
     q::Int                              # field order
     mult::OffsetArray{Int,2}            # multiplication matrix in GF(q)
@@ -8,39 +10,129 @@ struct FactorGraphGF2 <: FactorGraph
     Vneigs::Vector{Vector{Int}}         # neighbors of variable nodes.
     Fneigs::Vector{Vector{Int}}         # neighbors of factor nodes (containing only factor nodes)
     fields::Vector{Float64}             # Prior probabilities in the form of external fields
-    hfv::Vector{Vector{Int}}            # Non-zero elements of the parity check matrix
+    H::SparseMatrixCSC{Int64,Int64}     # Adjacency matrix
     mfv::Vector{Vector{Float64}}        # Messages from factor to variable with index starting at 0
 end
 
 # Construct graph from adjacency matrix (for checks with simple examples)
-function FactorGraphGF2(A::Array{Int,2}, q::Int=nextpow(2,maximum(A)+0.5),
-    fields = [Fun(1e-3*randn(q)) for v in 1:size(A,2)])
+function FactorGraphGF2(A::AbstractArray{Int,2}, 
+        fields::Vector{Float64} = zeros(size(A,2)))  
     m,n = size(A)
     Vneigs = [Int[] for v in 1:n]
     Fneigs = [Int[] for f in 1:m]
-    hfv = [Int[] for f in 1:m]
-    mfv = [Vector{Float64}[] for f in 1:m]
+    mfv = [Float64[] for f in 1:m]
 
     for f in 1:m
         for v in 1:n
-            if A[f,v]<0 || A[f,v]>q-1
+            if A[f,v]<0 || A[f,v]>1
                 error("Entry of the adjacency matrix must be 0≤h_ij<q")
             elseif A[f,v] > 0
                 push!(Fneigs[f], v)
                 push!(Vneigs[v], f)
-                push!(hfv[f], A[f,v])
                 push!(mfv[f], 0.0)
             end
         end
     end
-    mult, gfinv, gfdiv = gftables(q)
-    return FactorGraphGF2(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
+    mult, gfinv, gfdiv = gftables(2)
+    H = issparse(A) ? A : sparse(A)
+    return FactorGraphGF2(2, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, H, mfv)
 end
 
+function ldpc_graphGF2(n::Int, m::Int,
+    nedges::Int=generate_polyn(n,m)[1], lambda::Vector{T}=generate_polyn(n,m)[2],
+    rho::Vector{T}=generate_polyn(n,m)[3],
+    fields::Vector{Float64} = zeros(n); verbose=false,
+    arbitrary_mult = false,
+    randseed::Int=0) where {T<:AbstractFloat}
+
+    m < 2 && error("Cannot build a graph with m≤1 factors")
+
+    randseed != 0 && Random.seed!(randseed)      # for reproducibility
+
+    ### Argument validation ###
+    _check_consistency_polynomials(lambda, rho, nedges, n, m)
+    
+    if verbose
+        println("Building factor graph...")
+        println("lambda = ", lambda, "\nrho = ", rho)
+    end
+
+    Vneigs = [Int[] for v in 1:n]
+    Fneigs = [Int[] for f in 1:m]
+    H = SparseArrays.spzeros(m,n)
+    edgesleft = edgesright = zeros(Int, nedges)
+
+    too_many_trials = 1000
+    multi_edge_found = false
+    for t in 1:too_many_trials
+        multi_edge_found = false
+        Vneigs .= [Int[] for v in 1:n]
+        Fneigs .= [Int[] for f in 1:m]
+        H .= SparseArrays.spzeros(m,n)
+        edgesleft .= edgesright .= zeros(Int, nedges)
+
+        ### Irregular Tanner Graph construction and FactorGraph object initialization ###
+        # Assign each edge "on the left" to a variable node
+        v = 1; r = 1
+        for i in 1:length(lambda)
+            deg = Int(round(lambda[i]/i*nedges,digits=10))   # number of edges incident on variable v
+            for _ in 1:deg
+                edgesleft[r:r+i-1] .= v
+                r += i; v += 1
+            end
+        end
+
+        shuffle!(edgesleft)   # Permute nodes on the left
+
+        # Assign each edge "on the right" to a factor node
+        f = s = 1
+        for j in 1:length(rho)
+            deg = Int(round(rho[j]/j*nedges,digits=10))
+            for _ in 1:deg
+                for v in edgesleft[s:s+j-1]
+                    if findall(isequal(v), Fneigs[f])!=[]
+                        verbose && println("Multi-edge discarded")
+                        multi_edge_found = true
+                        break
+                    end
+                    # Initialize neighbors
+                    push!(Fneigs[f], v)
+                    push!(Vneigs[v], f)
+                    # Initalize parity check matrix elements
+                    H[f,v] = 1
+                end
+                s += j
+                f += 1
+            end
+        end
+        if !multi_edge_found
+            # Initialize messages
+            mfv = [zeros(length(neigs)) for neigs in Fneigs]
+            # Get multiplication and iverse table for GF(q)
+            mult, gfinv, gfdiv = gftables(2, arbitrary_mult)
+            # Build FactorGraph object
+            fg = FactorGraphGF2(2, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, 
+                fields, H, mfv)
+            # Check that the number of connected components is 1
+            fg_ = deepcopy(fg)
+            breduction!(fg_,1)
+            depths,_,_ = lr!(fg_)
+            all(depths .!= 0) && return fg 
+        end
+    end
+    # If you got here, multi-edges made it impossible to build a graph
+    if multi_edge_found
+        error("Could not build factor graph. Too many multi-edges were popping up") 
+    else
+        error("Could not build factor graph. Too many instances were coming up ",
+            "with more than one connected component")
+    end   
+end
 
 guesses(fg::FactorGraphGF2) = floor.(Int, 0.5*(1 .- sign.(fg.fields)))
 
-function onebpiter!(fg::FactorGraphGF2, algo::MS)
+function onebpiter!(fg::FactorGraphGF2, algo::MS,
+    neutral=neutralel(algo,fg.q))
     maxdiff = diff = 0.0
     aux = Float64[]
     # Loop over factors
@@ -62,7 +154,7 @@ function onebpiter!(fg::FactorGraphGF2, algo::MS)
             diff > maxdiff && (maxdiff = diff)
         end
     end
-    return guesses(fg), maxdiff
+    return maxdiff
 end
 
 
@@ -90,9 +182,9 @@ end
 
 # Parity-check for the adjacency matrix of a factor graph.
 # f specifies which factors to consider (default: all 1:m)
-function paritycheck(fg::FactorGraphGF2, x::Vector{Int}=guesses(fg),
-    f::Vector{Int}=collect(1:fg.m))
-    B = adjmat(fg)[f,:]
-    z = B * x
+function paritycheck(fg::FactorGraphGF2, x::Vector{Int}=guesses(fg))
+    z = (fg.H * x) .% 2
     return z
 end
+
+

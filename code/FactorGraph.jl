@@ -1,6 +1,6 @@
 #### A factor graph type thought for GF(q) belief propagation ####
 using OffsetArrays, StatsBase, LightGraphs, GraphRecipes, Plots, Random, 
-    LinearAlgebra
+    LinearAlgebra, SparseArrays
 
 abstract type FactorGraph end
 struct FactorGraphGFQ <: FactorGraph 
@@ -13,7 +13,7 @@ struct FactorGraphGFQ <: FactorGraph
     Vneigs::Vector{Vector{Int}}         # neighbors of variable nodes.
     Fneigs::Vector{Vector{Int}}         # neighbors of factor nodes (containing only factor nodes)
     fields::Vector{OffsetArray{Float64,1,Array{Float64,1}}}             # Prior probabilities in the form of external fields
-    hfv::Vector{Vector{Int}}          # Non-zero elements of the parity check matrix
+    H::SparseMatrixCSC{Int,Int}         # Adjacency matrix
     mfv::Vector{Vector{OffsetArray{Float64,1,Array{Float64,1}}}}          # Messages from factor to variable with index starting at 0
 end
 
@@ -24,25 +24,23 @@ function FactorGraph(q::Int, n::Int, m::Int)
     gfdiv = OffsetArray(zeros(Int, q,q-1), 0:q-1,1:q-1)
     Vneigs = [Int[] for v in 1:n]
     Fneigs = [Int[] for f in 1:m]
-    hfv = [Int[] for f in 1:m]
-    if q > 2
+    # if q > 2
         fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in 1:n]
         mfv = Vector{Vector{OffsetArray{Float64,1,Array{Float64,1}}}}()
         return FactorGraphGFQ(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
-    else
-        fields = zeros(n)
-        mfv = [Vector{Float64}[] for f in 1:m]
-        return FactorGraphGF2(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
-    end
+    # else
+    #     fields = zeros(n)
+    #     mfv = [Vector{Float64}[] for f in 1:m]
+    #     return FactorGraphGF2(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
+    # end
 end
 
 # Construct graph from adjacency matrix (for checks with simple examples)
-function FactorGraph(A::Array{Int,2}, q::Int=nextpow(2,maximum(A)+0.5),
-    fields = [Fun(1e-3*randn(q)) for v in 1:size(A,2)])
+function FactorGraph(A::AbstractArray{Int,2}, q::Int=nextpow(2,maximum(A)+0.5),
+        fields = [Fun(1e-3*randn(q)) for v in 1:size(A,2)])
     m,n = size(A)
     Vneigs = [Int[] for v in 1:n]
     Fneigs = [Int[] for f in 1:m]
-    hfv = [Int[] for f in 1:m]
     mfv = [OffsetArray{Float64,1,Array{Float64,1}}[] for f in 1:m]
 
     for f in 1:m
@@ -52,13 +50,13 @@ function FactorGraph(A::Array{Int,2}, q::Int=nextpow(2,maximum(A)+0.5),
             elseif A[f,v] > 0
                 push!(Fneigs[f], v)
                 push!(Vneigs[v], f)
-                push!(hfv[f], A[f,v])
                 push!(mfv[f], OffsetArray(1/q*ones(q), 0:q-1))
             end
         end
     end
     mult, gfinv, gfdiv = gftables(q)
-    return FactorGraph(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
+    H = issparse(A) ? A : sparse(A)
+    return FactorGraphGFQ(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, H, mfv)
 end
 
 # Add a factor and return a copy of the original one. This is because the struct
@@ -74,22 +72,21 @@ function add_factor(fg::FactorGraph, fneigs::Vector{Int}=varleaves(fg),
     return FactorGraph(Hnew, q, fields)
 end
 
-function adjmat(fg::FactorGraph)
-    A = zeros(Int,fg.m, fg.n)
-    for f in 1:fg.m
-        for (v_idx,v) in enumerate(fg.Fneigs[f])
-            A[f,v] = fg.hfv[f][v_idx]
-        end
-    end
-    return A
-end
+# function adjmat(fg::FactorGraph)
+#     A = zeros(Int,fg.m, fg.n)
+#     for f in 1:fg.m
+#         for (v_idx,v) in enumerate(fg.Fneigs[f])
+#             A[f,v] = fg.hfv[f][v_idx]
+#         end
+#     end
+#     return A
+# end
 
 # Returns the proper square adjacency matrix
 function full_adjmat(fg::FactorGraph)
-    H = adjmat(fg)
     (m,n) = (fg.m, fg.n)
-    A = [zeros(Int,m,m) H;
-         permutedims(H) zeros(Int,n,n)]
+    A = @views [zeros(Int,m,m) fg.H;
+         permutedims(fg.H) zeros(Int,n,n)]
     return A
 end
 
@@ -216,7 +213,6 @@ function permute_to_triangular(fg::FactorGraph,
     if nvarleaves(fg) < 1
         breduction!(fg, 1)
     end
-    H = adjmat(fg)
     # Apply leaf-removal
     nvarleaves(fg) < 1 && error("Cannot convert to triangular form if factor"* 
         " graph doesn't have at least 1 leaf")
@@ -228,12 +224,13 @@ function permute_to_triangular(fg::FactorGraph,
     vars_perm = dep[invperm(v)]
     fact_perm = var2fact[vars_perm]
     column_perm = vcat(vars_perm, (1:fg.n)[independent])
-    H_permutedcols = hcat(H[:,column_perm])
+    H_permutedcols = hcat(fg.H[:,column_perm])
     H_permutedrows = H_permutedcols[fact_perm,:]
     return H_permutedrows, column_perm
 end
 
-function lightbasis(H_trian::Array{Int,2}, column_perm::Vector{Int}, q::Int=2)
+function lightbasis(H_trian::AbstractArray{Int,2}, column_perm::Vector{Int}, 
+        q::Int=2)
     # Turn upper-triangular matrix into diagonal
     ut2diag!(H_trian, q)
     nrows = size(H_trian,1)
@@ -278,10 +275,9 @@ function only_factors_graph(fg::FactorGraph)
     # Start
     g = SimpleWeightedGraph(fg2.m)
 
-    H = adjmat(fg2)
-    (m,n) = size(H)
+    m,n = fg.m,fg.m
     for j in 1:n
-        involved = findall(Bool.(H[:,j]))
+        involved = findall(Bool.(fg.H[:,j]))
         involved == [] && continue
         if has_edge(g, (involved...))
             g.weights[involved...] += 1
@@ -385,7 +381,7 @@ function animate_nodes(fg::FactorGraph, nodes::Vector{Vector{Int}};
 end
 
 function animate_basis(fg::FactorGraph, 
-    basis::Array{Int,2}=newbasis(fg); kwargs...)
+    basis::AbstractArray{Int,2}=lightbasis(fg); kwargs...)
     nodes = [(1:fg.n)[Bool.(basis[:,i])] for i in 1:size(basis,2)]
     animate_nodes(fg, nodes; kwargs...)
     return nothing

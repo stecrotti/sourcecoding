@@ -195,3 +195,17 @@ function free_energy(fg::FactorGraphGF2)
      end
      O -= sum(abs.(fg.fields))
  end
+
+#  function _fix_indep(fg::FactorGraphGF2, z::Vector{Int}, x::Vector{Int}; 
+#     triang_form=permute_to_triangular(fg))
+    
+#     # Retrieve permuted parity-check matrix in the form [T|U]
+#     M, col_perm = triang_form
+#     m,n = size(M)
+#     dependent = col_perm[1:m]
+#     independent = col_perm[m+1:end]
+#     x[independent] = z[independent]
+#     b = M[:,m+1:end] * z[independent] .% 2
+#     x[dependent] .= gf_invert_ut(M[:,1:m], b, fg.q, fg.mult, fg.gfdiv, x[dependent])
+#     return x
+# end

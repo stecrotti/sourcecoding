@@ -171,7 +171,7 @@ end
 function gf_invert_ut(T::AbstractArray{Int,2}, y::AbstractVector{Int},
     q::Int=2,
     gfmult::OffsetArray{Int,2}=gftables(q)[1],
-    gfdiv::OffsetArray{Int,2}=gftables(q)[3])
+    gfdiv::OffsetArray{Int,2}=gftables(q)[3], x = zeros(Int, n))
 
     @assert issquare(T)
     @assert isuppertriangular(T)
@@ -179,7 +179,6 @@ function gf_invert_ut(T::AbstractArray{Int,2}, y::AbstractVector{Int},
     @assert n==length(y)
     @assert isgfq(T,q) && isgfq(y,q)
 
-    x = zeros(Int, n)
     for k in n:-1:1
         x[k] = gfdiv[xor(y[k], reduce(xor, gfmult[T[k,i],x[i]] for i=k:n)), T[k,k]]
     end

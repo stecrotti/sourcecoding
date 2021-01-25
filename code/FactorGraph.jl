@@ -208,8 +208,9 @@ end
 
 # Permutes rows and columns (no multiplications!) to re-organize the graph
 #  adjacency matrix as H=[T|U] where T is square and upper triangular
-function permute_to_triangular(fg::FactorGraph, 
+function permute_to_triangular!(fg::FactorGraph, 
         independent::BitArray{1}=falses(fg.n))
+    
     if nvarleaves(fg) < 1
         breduction!(fg, 1)
     end
@@ -227,6 +228,11 @@ function permute_to_triangular(fg::FactorGraph,
     H_permutedcols = hcat(fg.H[:,column_perm])
     H_permutedrows = H_permutedcols[fact_perm,:]
     return H_permutedrows, column_perm
+end
+function permute_to_triangular(fg::FactorGraph, 
+    independent::BitArray{1}=falses(fg.n))
+    fg_ = deepcopy(fg)
+    return permute_to_triangular!(fg_, independent)
 end
 
 function lightbasis(H_trian::AbstractArray{Int,2}, column_perm::Vector{Int}, 

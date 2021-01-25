@@ -329,31 +329,30 @@ naive_compression_distortion(fg::FactorGraph,args...;kw...) = 0.5*(nfacts(fg)/nv
 # Fix the independent variables to their value in the source vector
 # Pass x as an argument to then be able to retrieve it
 function fix_indep_from_src(fg::FactorGraph, y::Vector{Int}, 
-        x::Vector{Int}=zeros(Int, fg.n))
-    x .= _fix_indep(fg,y,x)
+        x::Vector{Int}=zeros(Int, fg.n); triang_form=permute_to_triangular(fg))
+    x .= _fix_indep(fg,y,x, triang_form=triang_form)
     return distortion(fg, y, x)
 end
 
 # Fix the independent variables to the decision variables outputted by max-sum
 # Pass x as an argument to then be able to retrieve it
 function fix_indep_from_ms(fg::FactorGraph, y::Vector{Int}, 
-        x::Vector{Int}=zeros(Int, fg.n))
-    x = _fix_indep(fg,guesses(fg), x)
+        x::Vector{Int}=zeros(Int, fg.n); triang_form=permute_to_triangular(fg))
+    x .= _fix_indep(fg, guesses(fg), x, triang_form=triang_form)
     return distortion(fg, y, x)
 end
 
-function _fix_indep(fg::FactorGraph, z::Vector{Int}, x::Vector{Int})
-    fg_ = deepcopy(fg)
-    # If graph has no leaves, remove one
-    nvarleaves(fg_) == 0 && breduction!(fg_)
+function _fix_indep(fg::FactorGraph, z::Vector{Int}, x::Vector{Int}; 
+    triang_form=permute_to_triangular(fg))
+    
     # Retrieve permuted parity-check matrix in the form [T|U]
-    M, col_perm = permute_to_triangular(fg_)
+    M, col_perm = triang_form
     m,n = size(M)
     dependent = col_perm[1:m]
     independent = col_perm[m+1:end]
-    x = zeros(Int,n)
     x[independent] = z[independent]
-    b = gfmatrixmult(M[:,m+1:end], z[independent], fg_.q, fg_.mult)
-    x[dependent] = gf_invert_ut(M[:,1:m], b, fg_.q, fg_.mult)
+    b = gfmatrixmult(M[:,m+1:end], z[independent], fg.q, fg.mult)
+    x[dependent] .= gf_invert_ut(M[:,1:m], b, fg.q, fg.mult, fg.gfdiv, 
+        view(x,dependent))
     return x
 end

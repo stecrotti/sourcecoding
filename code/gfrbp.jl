@@ -232,13 +232,13 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             else
                 error("Field convergence must be one of :messages, :decvars, :parity")
             end
-            reinforce!(fg, algo)
+            algo.gamma != 0 && reinforce!(fg, algo)
             ProgressMeter.next!(prog)
         end
         if trial != algo.Tmax
             # If convergence not reached, re-initialize random fields and start again
             refresh!(fg)
-            fg.fields .= extfields(fg.q,y,algo,randseed=randseed+trial)
+            extfields!(fg,y,algo,randseed=randseed+trial)
             oldguesses .= guesses(fg)
             oldmessages .= deepcopy(fg.mfv)
             fill!(maxchange, -Inf)

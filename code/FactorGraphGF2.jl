@@ -187,4 +187,11 @@ function paritycheck(fg::FactorGraphGF2, x::Vector{Int}=guesses(fg))
     return z
 end
 
-
+function free_energy(fg::FactorGraphGF2)
+    O = 0.0
+     for (a_idx,a) in enumerate(fg.Fneigs)
+        F = [fg.fields[i] - fg.mfv[a_idx][i_idx] for (i_idx,i) in enumerate(a)]
+        O += sum(abs.(F)) - (prod(F)<0)*2*minimum(abs.(F)) 
+     end
+     O -= sum(abs.(fg.fields))
+ end

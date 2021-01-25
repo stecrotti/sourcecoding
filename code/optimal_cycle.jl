@@ -12,7 +12,7 @@ function optimal_cycle(G)
     match(i) = get_match(E, i - 1) + 1
     n = size(G,1);
     m = Int(length(rows)/2)
-    E = BlossomV.Matching(Float64, 2n+2m)
+    E = BlossomV.Matching(Float64, 2n+2m, 5m+n)
     D = Tuple{Int,Int}[]
     k = 2n+1
     for i=1:n
@@ -52,7 +52,7 @@ end
 
 function one_loop_flip(lm::LossyModel)
     H = weighted_full_adjmat(lm)
-    op_, w = optimal_cycle(H)
+    op_, w = optimal_cycle(float.(H))
     op = variables_from_cycle(op_, lm.fg.m)
     to_flip = unique!([tup[2] for tup in op])
     # @show parity(lm)

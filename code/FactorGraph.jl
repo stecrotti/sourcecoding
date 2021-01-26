@@ -215,8 +215,6 @@ function permute_to_triangular!(fg::FactorGraph,
         breduction!(fg, 1)
     end
     # Apply leaf-removal
-    nvarleaves(fg) < 1 && error("Cannot convert to triangular form if factor"* 
-        " graph doesn't have at least 1 leaf")
     _, var2fact, vars_order = lr(fg)
     # Re-organize column indices with dependent variables first
     independent .= (vars_order .== 0)
@@ -235,24 +233,27 @@ function permute_to_triangular(fg::FactorGraph,
     return permute_to_triangular!(fg_, independent)
 end
 
-function lightbasis(H_trian::AbstractArray{Int,2}, column_perm::Vector{Int}, 
-        q::Int=2)
-    # Turn upper-triangular matrix into diagonal
-    ut2diag!(H_trian, q)
-    nrows = size(H_trian,1)
-    H_indep = H_trian[:,nrows+1:end]
-    nb = [H_indep; I]
-    # Invert the permutation that was done previoulsy on the columns
-    nb .= nb[invperm(column_perm),:]
-    return nb
-end
-function lightbasis(fg::FactorGraph, independent::BitArray{1}=falses(fg.n))
+# Compute a low-Hamming weight basis for the set of codewords
+function lightbasis(fg::FactorGraph, independent::BitArray{1}=falses(fg.n);
+        column_perm::Vector{Int}=zeros(Int, fg.n))
     H_permuted, column_perm = permute_to_triangular(fg, independent)
     lb = lightbasis(H_permuted, column_perm, fg.q)
     # Check that graph is full-rank
     if size(lb,2) != nvars(fg) - nfacts(fg)
         # error("Graph is not full-rank")
     end
+    return lb
+end
+
+function lightbasis(H_trian::AbstractArray{Int,2}, column_perm::Vector{Int}, 
+    q::Int=2)
+    # Turn upper-triangular matrix into diagonal
+    ut2diag!(H_trian, q)
+    nrows = size(H_trian,1)
+    H_indep = H_trian[:,nrows+1:end]
+    lb = [H_indep; I]
+    # Invert the permutation that was done previoulsy on the columns
+    lb .= lb[invperm(column_perm),:]
     return lb
 end
 

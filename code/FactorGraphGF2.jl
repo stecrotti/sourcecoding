@@ -157,7 +157,6 @@ function onebpiter!(fg::FactorGraphGF2, algo::MS,
     return maxdiff
 end
 
-
 # Re-initialize messages
 function refresh!(fg::FactorGraphGF2)
     for f in eachindex(fg.mfv)

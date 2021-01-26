@@ -180,12 +180,9 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     par = parity(fg)
     wait_time = showprogress ? 1 : Inf
     n = 0
-    ############
-    # weights = [[  [fg.H[f,vprime] 
-    #     for (vprime_idx, vprime) in enumerate(fg.Fneigs[f])
-    #     if vprime != v]
-    #     for v in fg.Fneigs[f]] for f in 1:fg.m]
-    ############
+    
+    extfields!(fg,y,algo,randseed=randseed)
+
     for trial in 1:algo.Tmax
         prog = ProgressMeter.Progress(algo.maxiter, wait_time, 
             "Trial $trial/$(algo.Tmax) ")
@@ -329,30 +326,25 @@ naive_compression_distortion(fg::FactorGraph,args...;kw...) = 0.5*(nfacts(fg)/nv
 # Fix the independent variables to their value in the source vector
 # Pass x as an argument to then be able to retrieve it
 function fix_indep_from_src(fg::FactorGraph, y::Vector{Int}, 
-        x::Vector{Int}=zeros(Int, fg.n); triang_form=permute_to_triangular(fg))
-    x .= _fix_indep(fg,y,x, triang_form=triang_form)
+        x::Vector{Int}=zeros(Int, fg.n); 
+        independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent))
+    x .= _fix_indep(fg,y,x, basis=basis, independent=independent)
     return distortion(fg, y, x)
 end
 
 # Fix the independent variables to the decision variables outputted by max-sum
 # Pass x as an argument to then be able to retrieve it
 function fix_indep_from_ms(fg::FactorGraph, y::Vector{Int}, 
-        x::Vector{Int}=zeros(Int, fg.n); triang_form=permute_to_triangular(fg))
-    x .= _fix_indep(fg, guesses(fg), x, triang_form=triang_form)
+        x::Vector{Int}=zeros(Int, fg.n); 
+        independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent))
+    x .= _fix_indep(fg, guesses(fg), x, basis=basis, independent=independent)
     return distortion(fg, y, x)
 end
 
-function _fix_indep(fg::FactorGraph, z::Vector{Int}, x::Vector{Int}; 
-    triang_form=permute_to_triangular(fg))
-    
-    # Retrieve permuted parity-check matrix in the form [T|U]
-    M, col_perm = triang_form
-    m,n = size(M)
-    dependent = col_perm[1:m]
-    independent = col_perm[m+1:end]
-    x[independent] = z[independent]
-    b = gfmatrixmult(M[:,m+1:end], z[independent], fg.q, fg.mult)
-    x[dependent] .= gf_invert_ut(M[:,1:m], b, fg.q, fg.mult, fg.gfdiv, 
-        view(x,dependent))
+function _fix_indep(fg::FactorGraph, z::Vector{Int}, x::Vector{Int};
+    basis::AbstractArray{Int,2}, independent::BitArray{1})
+
+    x[independent] .= z[independent]
+    x[.!independent] .= gfmatrixmult(basis[.!independent,:],  x[independent], fg.q)
     return x
 end

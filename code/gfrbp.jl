@@ -206,7 +206,7 @@ function onebpiter_fast!(fg::FactorGraphGF2, algo::MS, neutral=neutralel(algo,fg
             if fmin > m
                 fmin = m
                 imin = i
-            else fmin2 > m
+            elseif fmin2 > m
                 fmin2 = m
             end
         end

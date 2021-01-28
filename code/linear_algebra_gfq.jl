@@ -6,7 +6,8 @@ using LinearAlgebra, LightGraphs, SimpleWeightedGraphs, SparseArrays
 function gfrref!(H::AbstractArray{Int,2},
                 q::Int=2,
                 gfmult::OffsetArray{Int,2}=gftables(q)[1],
-                gfdiv::OffsetArray{Int,2}=gftables(q)[3])
+                gfdiv::OffsetArray{Int,2}=gftables(q)[3];
+                column_perm::AbstractVector=zeros(Int, size(H,2)))
 
     !ispow(q, 2) && error("q must be a power of 2")
     !isgfq(H, q) && error("Matrix H has values outside GF(q) with q=$q")
@@ -25,11 +26,10 @@ function gfrref!(H::AbstractArray{Int,2},
             # Normalize row of the pivot to make it 1
             H[p,:] .= gfdiv[H[p,:], H[p,c]]
             # Apply row-wise xor to rows below the pivot
-            for r = vcat([1:p-1, p+1:m]...)
+            for r = [1:p-1; p+1:m]
                 if H[r,c] != 0
-                    # Adjust to make pivot 1
-                    f = gfdiv[H[p,c], H[r,c]]
-                    H[r,:] .= xor.(gfmult[f, H[r,:]], H[p,:])
+                    f = gfdiv[H[r,c], H[p,c]]
+                    H[r,:] .= xor.(gfmult[f, H[p,:]], H[r,:])
                 # else
                 #     # From now on only zeros in column c
                 #     break
@@ -41,33 +41,33 @@ function gfrref!(H::AbstractArray{Int,2},
         end
     end
     # Permute columns to get an identity matrix on the left
-    non_pivot_column_indices = setdiff(1:n, pivot_column_indices[1:p])
-    H .= H[:,vcat(pivot_column_indices[1:p], non_pivot_column_indices)]
+    column_perm .= [pivot_column_indices[1:p]; setdiff(1:n, pivot_column_indices[1:p])]
     return H
 end
 
 function gfrcef!(H::AbstractArray{Int,2},
                 q::Int=2,
                 gfmult::OffsetArray{Int,2}=gftables(q)[1],
-                gfdiv::OffsetArray{Int,2}=gftables(q)[3])
-    H .= permutedims(gfrref(permutedims(H), q, gfmult, gfdiv))
+                gfdiv::OffsetArray{Int,2}=gftables(q)[3];
+                row_perm::AbstractVector=zeros(Int,size(H,1)))
+    H .= permutedims(gfrref(permutedims(H), q, gfmult, gfdiv, column_perm=row_perm))
 end
 
 function gfrref(H::AbstractArray{Int,2},
                 q::Int=2,
                 gfmult::OffsetArray{Int,2}=gftables(q)[1],
-                gfdiv::OffsetArray{Int,2}=gftables(q)[3])
+                gfdiv::OffsetArray{Int,2}=gftables(q)[3]; kw...)
     tmp = copy(H)
-    gfrref!(tmp, q, gfmult, gfdiv)
+    gfrref!(tmp, q, gfmult, gfdiv; kw...)
     return tmp
 end
 
 function gfrcef(H::AbstractArray{Int,2},
                 q::Int=2,
                 gfmult::OffsetArray{Int,2}=gftables(q)[1],
-                gfdiv::OffsetArray{Int,2}=gftables(q)[3])
+                gfdiv::OffsetArray{Int,2}=gftables(q)[3]; kw...)
     tmp = copy(H)
-    gfrcef!(tmp, q, gfmult, gfdiv)
+    gfrcef!(tmp, q, gfmult, gfdiv; kw...)
     return tmp
 end
 
@@ -100,7 +100,7 @@ function ut2diag!(T::AbstractArray{Int,2}, q::Int=2,
 end
 ut2diag(H::AbstractArray{Int,2}, args...) = ut2diag!(copy(H), args...)
 
-n_nonzerorows(H::AbstractArray{Int,2}) = sum([!all(H[r,:] .== 0) for r in 1:size(H,1)])
+n_nonzerorows(H::AbstractArray{Int,2}) = sum(!all(H[r,:] .== 0) for r in 1:size(H,1))
 
 function gfrank(H::AbstractArray{Int,2}, q::Int=2,
                 gfmult::OffsetArray{Int,2}=gftables(q)[1],
@@ -112,14 +112,19 @@ end
 
 function gfnullspace(H::AbstractArray{Int,2}, q::Int=2,
                 gfmult::OffsetArray{Int,2}=gftables(q)[1],
-                gfdiv::OffsetArray{Int,2}=gftables(q)[3])
+                gfdiv::OffsetArray{Int,2}=gftables(q)[3];
+                column_perm::AbstractVector=zeros(Int,size(H,2)))
     nrows,ncols = size(H)
-    dimker = ncols - gfrank(H, q, gfmult, gfdiv)
-    # As in https://en.wikipedia.org/wiki/Kernel_(linear_algebra)#Computation_by_Gaussian_elimination
-    HI = [H; I]
-    gfrcef!(HI, q, gfmult, gfdiv)
-    ns = HI[nrows+1:end, end-dimker+1:end]
-    return ns
+    # Reduce to rref
+    Hrref = gfrref(H, q, gfmult, gfdiv; column_perm=column_perm)
+    # Re-arrange columns to get a form [I | U]
+    Hrref .= Hrref[:,column_perm]
+    # Build basis
+    rk = n_nonzerorows(Hrref)
+    B = [Hrref[1:rk,rk+1:end]; I]
+    # Restore original column order
+    B .= B[invperm(column_perm),:]
+    return B
 end
 
 # Works only for GF(2^k)
@@ -198,31 +203,34 @@ function gf_invert_ut(T::AbstractArray{Int,2}, y::AbstractArray{Int,2}, args...)
 end
 
 # Move between GF(2) and GF(2^k)
-function system_gfqto2(H::AbstractArray{Int,2}; 
-    q::Int=2, getbasis::Function=gfnullspace,
+function system_gfqto2(H::AbstractArray{Int,2},
+    q_and_tables...; getbasis::Function=gfnullspace,
     H2::SparseMatrixCSC{Int,Int}=spzeros(Int, ))
     # Find a basis for the solutions of H
-    B = getbasis(H, q)
+    q = q_and_tables[1]
+    B = getbasis(H, q_and_tables...)
+    # Check that #rows of H is an integer multiple of k
+    @assert mod(size(H,1), Int(log2(q)))==0
     # Convert each column of B (each basis vector) to GF(2)
-    #  B2 is now a GF(2) basis
     B2 = hcat([gfqto2(B[:,j],Int(log2(q))) for j in 1:size(B,2)]...)
+    #  B2 is now a GF(2) basis
     # Build a corresponding parity-check matrix
-    H2 = basis2matrix(B2, q=2, H=H2)
-    return H2
+    Hgf2 = basis2matrix(B2, q_and_tables..., H=H2)
+    return Hgf2
 end
 
 # Given a basis for the space of solutions stored as columns of `B`,
 #  build a parity-check matrix whose kernel is the space of solutions
 # H is passed as argument to avoid allocating
-function basis2matrix(B::AbstractArray{Int,2};
-    H::SparseMatrixCSC{Int,Int}=spzeros(Int, size(B,1)-size(B,2), size(B,1)),
-    q::Int=2)
+function basis2matrix(B::AbstractArray{Int,2},
+    q_and_tables...;
+    H::SparseMatrixCSC{Int,Int}=spzeros(Int, size(B,1)-size(B,2), size(B,1)))
     # Reduce B to reduced column echelon form [I;A]
-    gfrcef!(B, q)
+    Brcef = gfrcef(B, q_and_tables...)
     # Build H as [A I]
     m,n = size(H)
     H[diagind(H,n-m)] .= 1
-    H[:,1:n-m] = B[m+1:end,:]
+    H[:,1:n-m] = Brcef[n-m+1:end,:]
     return H
 end
 

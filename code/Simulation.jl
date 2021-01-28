@@ -127,7 +127,7 @@ naive_compression(D::Real) = 1 - 2*D
 #### PLOTTING
 import Plots: plot!, plot, histogram, bar
 
-function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}}; 
+function Plots.plot!(pl::Plots.Plot, sims::Vector{Simulation{T}}; 
         allpoints::Bool=false,
         label::String="Experimental data", 
         convergedonly::Bool=false, msw::Number=0.5, plotkw...) where {T<:LossyAlgo}
@@ -160,11 +160,11 @@ function plot!(pl::Plots.Plot, sims::Vector{Simulation{T}};
     ylabel!(pl, "D")
     return pl
 end
-function plot!(pl::Plots.Plot, sim::Simulation; kwargs...)
+function Plots.plot!(pl::Plots.Plot, sim::Simulation; kwargs...)
     plot!(pl, [sim]; kwargs...)
 end
 
-function plot!(pl::Plots.Plot, 
+function Plots.plot!(pl::Plots.Plot, 
     sims_vec::Vector{Vector{Simulation{T}}}; 
     labels::Vector{String}=["GF($(s[1].q))" for s in sims_vec],
     kw...) where {T<:LossyAlgo}
@@ -179,13 +179,13 @@ function plot!(pl::Plots.Plot,
 end
 
 
-function plot(sims::Union{Simulation{T},Vector{Simulation{T}},Vector{Vector{Simulation{T}}}}; 
+function Plots.plot(sims::Union{Simulation{T},Vector{Simulation{T}},Vector{Vector{Simulation{T}}}}; 
         size=(500,500), kwargs...) where {T<:LossyAlgo}
     d = LinRange(0,0.5,100)
     r = LinRange(0, 1, 100)
     pl = Plots.plot(rdb.(d), d, label="RDB")
     Plots.plot!(pl, r, naive_compression_inv.(r), label="Naive compression")
-    return plot!(pl, sims; kwargs...)
+    return plot!(pl, sims; size=size, kwargs...)
 end
 
 function iters_hist(sim::Simulation{<:LossyAlgo}; kwargs...)

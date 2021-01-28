@@ -169,6 +169,8 @@ function deletefactor!(fg::FactorGraph, f::Int=rand(filter(ff -> factdegree(fg,f
     for v in fg.Fneigs[f]
         # delete factor from its neighbors' lists
         deleteval!(fg.Vneigs[v],f)
+        # Delete adjacency matrix elements
+        fg.H[f,v] = 0
     end
     # delete messages from f
     fg.mfv[f] = OffsetArray{Float64,1,Array{Float64,1}}[]
@@ -207,6 +209,7 @@ function lr!(fg::FactorGraph, depth::Int=1, depths::Vector{Int}=zeros(Int,fg.n),
         vars_order::Vector{Int}=zeros(Int, fg.n))
     # Initalize vector to be filled with leaves that will be exposed
     to_be_visited_new = Int[]
+    newleaves = Int[]
     # Assign depth to newly found leaves
     depths[to_be_visited] .= depth
     # Loop over leaves
@@ -373,7 +376,7 @@ function polyn(fg::FactorGraph)
 end
 
 import Plots.plot
-function plot(fg::FactorGraph; varnames=1:fg.n, factnames=1:fg.m,
+function Plots.plot(fg::FactorGraph; varnames=1:fg.n, factnames=1:fg.m,
     highlighted_nodes=Int[], highlighted_factors=Int[], 
     highlighted_edges::Vector{Tuple{Int,Int}}=Tuple{Int,Int}[], method=:spring,
     randseed::Int=abs(rand(Int)), plt_kw...)
@@ -427,6 +430,8 @@ function animate_basis(fg::FactorGraph,
 end
 
 import LinearAlgebra.nullspace, LinearAlgebra.rank
-nullspace(fg::FactorGraph) = gfnullspace(adjmat(fg), fg.q)
-rank(fg::FactorGraph)::Int = gfrank(fg.H, fg.q, fg.mult, fg.gfdiv)
+nullspace(fg::FactorGraph) = gfnullspace(fg.H, fg.q, fg.mult, fg.gfdiv)
+function rank(fg::FactorGraph; kw...)::Int
+    return gfrank(fg.H, fg.q, fg.mult, fg.gfdiv; kw...)
+end
 isfullrank(fg::FactorGraph)::Bool = rank(fg) == fg.m

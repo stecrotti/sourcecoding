@@ -126,8 +126,6 @@ function solve!(lm::LossyModel, algo::OptimalCycle;
         
         if deltaE == 0
             dist = distortion(lm)
-            verbose && println("Converged in ", it, " iters. Dist ", 
-                round(dist,digits=3))
             return OptimalCycleResults(parity=parity(lm), 
                 distortion=dist)
         else

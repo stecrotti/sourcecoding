@@ -40,7 +40,7 @@ abstract type LossyResults end
 
 function output_str(res::LossyResults)
     out_str = "Parity " * string(res.parity) * ". " *
-              "Dist " * @sprintf("%.3f ", res.distortion) * "."
+              "Dist " * @sprintf("%.4f ", res.distortion) * "."
     return out_str
 end
 
@@ -58,10 +58,10 @@ end
 function output_str(res::BPResults{<:Union{BP,MS}})
     outcome_str = res.converged ? "C" : "U"
     out_str = outcome_str * " after " * 
-            @sprintf("%3d", res.iterations) * " iters, " *
+            @sprintf("%4d", res.iterations) * " iters, " *
             @sprintf("%1d", res.trials) * " trials. " *
             "Parity " * @sprintf("%3d", res.parity) * ". " *
-            "Dist " * @sprintf("%.2f", res.distortion) *
+            "Dist " * @sprintf("%.3f", res.distortion) *
             "."
     return out_str
 end
@@ -280,7 +280,6 @@ function solve!(lm::LossyModel, algo::Union{BP,MS}, args...; randseed::Int=0,
     verbose::Bool=false, kwargs...)
     output = bp!(lm.fg, algo, lm.y, args...; randseed=randseed, kwargs...)
     lm.x = guesses(lm.fg)
-    verbose && println(output_str(output))
     return output
 end
 

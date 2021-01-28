@@ -3,11 +3,11 @@ using JLD2
 
 qq = 2 .^ [1 4 6 8]
 gamma = 1e-3
-nn = Int.(round.(420*6 ./log2.(qq)))
+nn = Int.(round.(420*4 ./log2.(qq)))
 R = collect(0.21:0.1:0.81) 
 mm = [Int.(round.(n*(1 .- R))) for n in nn]
-maxiter = Int(2e3)
-navg = 20
+maxiter = Int(1e3)
+navg = 10
 randseed = 100
 Tmax = 1
 

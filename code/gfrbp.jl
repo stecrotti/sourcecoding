@@ -162,10 +162,37 @@ function onebpiter!(fg::FactorGraph, algo::MS,
     return maxdiff
 end
 
+function onebpiter!(fg::FactorGraphGF2, algo::MS,
+    neutral=neutralel(algo,fg.q))
+    maxdiff = diff = 0.0
+    aux = Float64[]
+    # Loop over factors
+    for f in randperm(fg.m)
+        # Loop over neighbors of `f`
+        for (v_idx, v) in enumerate(fg.Fneigs[f])
+            # Subtract message from belief
+            fg.fields[v] -= fg.mfv[f][v_idx]          
+            # Collect (var->fact) messages from the other neighbors of `f`
+            aux = [fg.fields[vprime] - fg.mfv[f][vprime_idx] 
+                for (vprime_idx,vprime) in enumerate(fg.Fneigs[f]) 
+                if vprime_idx != v_idx]
+            # Apply formula to update message
+            fg.mfv[f][v_idx] = prod(sign, aux)*reduce(min, abs.(aux), init=Inf)
+            # Update belief after updating the message
+            fg.fields[v] += fg.mfv[f][v_idx]
+            # Look for maximum message
+            diff = abs(fg.mfv[f][v_idx])
+            diff > maxdiff && (maxdiff = diff)
+        end
+    end
+    return maxdiff
+end
+
 function guesses(beliefs::AbstractVector)
     return [findmax(b)[2] for b in beliefs]
 end
 guesses(fg::FactorGraph) = guesses(fg.fields)
+guesses(fg::FactorGraphGF2) = floor.(Int, 0.5*(1 .- sign.(fg.fields)))
 
 function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     maxdiff=zeros(algo.maxiter), codeword=falses(algo.maxiter),
@@ -181,6 +208,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     wait_time = showprogress ? 1 : Inf
     n = 0
     
+    refresh!(fg)
     extfields!(fg,y,algo,randseed=randseed)
 
     for trial in 1:algo.Tmax
@@ -248,6 +276,14 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                 maxchange=maxchange)
 end
 
+function solve!(lm::LossyModel, algo::Union{BP,MS}, args...; randseed::Int=0,
+    verbose::Bool=false, kwargs...)
+    output = bp!(lm.fg, algo, lm.y, args...; randseed=randseed, kwargs...)
+    lm.x = guesses(lm.fg)
+    verbose && println(output_str(output))
+    return output
+end
+
 function reinforce!(fg::FactorGraph, algo::Union{BP,MS})
     for (v,gv) in enumerate(fg.fields)
         if algo.gamma > 0
@@ -264,6 +300,18 @@ function reinforce!(fg::FactorGraph, algo::Union{BP,MS})
     end
     return nothing
 end
+function reinforce!(fg::FactorGraphGF2, algo::Union{BP,MS})
+    for (v,gv) in enumerate(fg.fields)
+        if algo.gamma > 0
+            if typeof(algo)==BP
+                fg.fields[v] *= gv.^algo.gamma
+            elseif typeof(algo)==MS
+                fg.fields[v] += gv*algo.gamma
+            end
+        end
+    end
+    return nothing
+end
 
 neutralel(algo::BP, q::Int) = Fun(x == 0 ? 1.0 : 0.0 for x=0:q-1)
 neutralel(algo::MS, q::Int) = Fun(x == 0 ? 0.0 : -Inf for x=0:q-1)
@@ -273,7 +321,8 @@ neutralel(algo::MS, q::Int) = Fun(x == 0 ? 0.0 : -Inf for x=0:q-1)
 # A small noise with amplitude sigma is added to break the symmetry
 function extfields!(fg::FactorGraph, y::Vector{Int}, algo::Union{BP,MS}; randseed::Int=0)
     randseed != 0 && Random.seed!(randseed) 
-    if fg.q > 2
+    q = fg.q
+    if q > 2
         fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in eachindex(y)]
         for v in eachindex(fields)
             for a in 0:q-1
@@ -286,13 +335,20 @@ function extfields!(fg::FactorGraph, y::Vector{Int}, algo::Union{BP,MS}; randsee
         fields = algo.beta2*(1 .- 2*y) + algo.sigma*randn(length(y))
         fg.fields .= fields
     end
-    return fields
+    return nothing
 end
 
 # Re-initialize messages
 function refresh!(fg::FactorGraph)
     for f in eachindex(fg.mfv)
-        fg.mfv[f] .= [OffsetArray(1/fg.q*ones(fg.q), 0:fg.q-1) for v in eachindex(fg.mfv[f])]
+        fg.mfv[f] .= [OffsetArray(1/fg.q*ones(fg.q), 0:fg.q-1) 
+            for v in eachindex(fg.mfv[f])]
+    end
+    return nothing
+end
+function refresh!(fg::FactorGraphGF2)
+    for f in eachindex(fg.mfv)
+        fg.mfv[f] .= 0.0
     end
     return nothing
 end
@@ -300,17 +356,10 @@ end
 function refresh!(fg::FactorGraph, y::Vector{Int},
     algo::Union{BP,MS}=MS(); randseed::Int=0)
     refresh!(fg)
-    fg.fields .= extfields(fg.q, y, algo, randseed=randseed)
+    extfields!(fg, y, algo, randseed=randseed)
     return nothing
 end
 
-function solve!(lm::LossyModel, algo::Union{BP,MS}, args...; randseed::Int=0,
-        kwargs...)
-    extfields!(lm, algo, randseed=randseed)
-    output = bp!(lm.fg, algo, lm.y, args...; randseed=randseed, kwargs...)
-    lm.x = guesses(lm.fg)
-    return output
-end
 
 function extfields!(lm::LossyModel, algo::Union{BP,MS}; randseed::Int=0)
     extfields!(lm.fg, lm.y, algo, randseed=randseed)
@@ -345,6 +394,7 @@ function _fix_indep(fg::FactorGraph, z::Vector{Int}, x::Vector{Int};
     basis::AbstractArray{Int,2}, independent::BitArray{1})
 
     x[independent] .= z[independent]
-    x[.!independent] .= gfmatrixmult(basis[.!independent,:],  x[independent], fg.q)
+    x[.!independent] .= gfmatrixmult(basis[.!independent,:],  x[independent], 
+        fg.q, fg.mult)
     return x
 end

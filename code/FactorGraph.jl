@@ -17,22 +17,54 @@ struct FactorGraphGFQ <: FactorGraph
     mfv::Vector{Vector{OffsetArray{Float64,1,Array{Float64,1}}}}          # Messages from factor to variable with index starting at 0
 end
 
+struct FactorGraphGF2 <: FactorGraph
+    q::Int                              # field order
+    mult::OffsetArray{Int,2}            # multiplication matrix in GF(q)
+    gfinv::Vector{Int}                  # inverses in GF(q). It has q-1 indices, since 0 has no inverse
+    gfdiv::OffsetArray{Int,2}
+    n::Int                              # number of variable nodes
+    m::Int                              # number of factor nodes
+    Vneigs::Vector{Vector{Int}}         # neighbors of variable nodes.
+    Fneigs::Vector{Vector{Int}}         # neighbors of factor nodes (containing only factor nodes)
+    fields::Vector{Float64}             # Prior probabilities in the form of external fields
+    H::SparseMatrixCSC{Int64,Int64}     # Adjacency matrix
+    mfv::Vector{Vector{Float64}}        # Messages from factor to variable with index starting at 0
+end
+
 # Basic constructor for empty object
-function FactorGraph(q::Int, n::Int, m::Int)
+function FactorGraphGFQ(q::Int, n::Int, m::Int)
     mult = OffsetArray(zeros(Int,q,q), 0:q-1, 0:q-1)
     gfinv = zeros(Int, q-1)
     gfdiv = OffsetArray(zeros(Int, q,q-1), 0:q-1,1:q-1)
     Vneigs = [Int[] for v in 1:n]
     Fneigs = [Int[] for f in 1:m]
-    # if q > 2
-        fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in 1:n]
-        mfv = Vector{Vector{OffsetArray{Float64,1,Array{Float64,1}}}}()
-        return FactorGraphGFQ(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
-    # else
-    #     fields = zeros(n)
-    #     mfv = [Vector{Float64}[] for f in 1:m]
-    #     return FactorGraphGF2(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
-    # end
+    fields = [OffsetArray(fill(0.0, q), 0:q-1) for v in 1:n]
+    mfv = Vector{Vector{OffsetArray{Float64,1,Array{Float64,1}}}}()
+    return FactorGraphGFQ(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, hfv, mfv)
+end
+
+# Construct graph from adjacency matrix (for checks with simple examples)
+function FactorGraphGF2(A::AbstractArray{Int,2}, 
+    fields::Vector{Float64} = zeros(size(A,2)))  
+m,n = size(A)
+Vneigs = [Int[] for v in 1:n]
+Fneigs = [Int[] for f in 1:m]
+mfv = [Float64[] for f in 1:m]
+
+for f in 1:m
+    for v in 1:n
+        if A[f,v]<0 || A[f,v]>1
+            error("Entry of the adjacency matrix must be 0≤h_ij<q")
+        elseif A[f,v] > 0
+            push!(Fneigs[f], v)
+            push!(Vneigs[v], f)
+            push!(mfv[f], 0.0)
+        end
+    end
+end
+mult, gfinv, gfdiv = gftables(2)
+H = issparse(A) ? A : sparse(A)
+return FactorGraphGF2(2, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, H, mfv)
 end
 
 # Construct graph from adjacency matrix (for checks with simple examples)
@@ -237,18 +269,18 @@ end
 function lightbasis(fg::FactorGraph, independent::BitArray{1}=falses(fg.n);
         column_perm::Vector{Int}=zeros(Int, fg.n))
     H_permuted, column_perm = permute_to_triangular(fg, independent)
-    lb = lightbasis(H_permuted, column_perm, fg.q)
+    lb = lightbasis(H_permuted, column_perm, fg.q, fg.mult, fg.gfdiv)
     # Check that graph is full-rank
-    if size(lb,2) != nvars(fg) - nfacts(fg)
-        # error("Graph is not full-rank")
-    end
+    # if size(lb,2) != nvars(fg) - nfacts(fg)
+    #     # error("Graph is not full-rank")
+    # end
     return lb
 end
 
 function lightbasis(H_trian::AbstractArray{Int,2}, column_perm::Vector{Int}, 
-    q::Int=2)
+    q::Int=2, args...)
     # Turn upper-triangular matrix into diagonal
-    ut2diag!(H_trian, q)
+    ut2diag!(H_trian, q, args...)
     nrows = size(H_trian,1)
     H_indep = H_trian[:,nrows+1:end]
     lb = [H_indep; I]
@@ -396,5 +428,5 @@ end
 
 import LinearAlgebra.nullspace, LinearAlgebra.rank
 nullspace(fg::FactorGraph) = gfnullspace(adjmat(fg), fg.q)
-rank(fg::FactorGraph)::Int = gfrank(adjmat(fg), fg.q)
+rank(fg::FactorGraph)::Int = gfrank(fg.H, fg.q, fg.mult, fg.gfdiv)
 isfullrank(fg::FactorGraph)::Bool = rank(fg) == fg.m

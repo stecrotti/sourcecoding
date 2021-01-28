@@ -12,12 +12,14 @@ function gfrref!(H::AbstractArray{Int,2},
     !isgfq(H, q) && error("Matrix H has values outside GF(q) with q=$q")
     (m,n) = size(H)
     # Initialize pivot to zero
+    pivot_column_indices = zeros(Int, m)
     p = 0
     for c = 1:n
         if iszero(H[p+1:end,c])
             continue
         else
             p += 1
+            pivot_column_indices[p] = c
             # sort rows of H so that all zeros in the c-th column are at the bottom
             H[p:end,:] .= sortslices(H[p:end,:], dims=1, rev=true)
             # Normalize row of the pivot to make it 1
@@ -33,9 +35,14 @@ function gfrref!(H::AbstractArray{Int,2},
                 #     break
                 end
             end
-            p == m && break
+            if p == m 
+                break
+            end
         end
     end
+    # Permute columns to get an identity matrix on the left
+    non_pivot_column_indices = setdiff(1:n, pivot_column_indices[1:p])
+    H .= H[:,vcat(pivot_column_indices[1:p], non_pivot_column_indices)]
     return H
 end
 
@@ -80,7 +87,7 @@ function ut2diag!(T::AbstractArray{Int,2}, q::Int=2,
         end
     end
     # Loop over diagonal elements
-    for c in m:-1:1
+    for c in m:-1:2
         # Find non-zero elements above T[c,c] and perform row operations to 
         #  cancel them out
         nz = (T[1:c-1,c] .!= 0)
@@ -110,7 +117,7 @@ function gfnullspace(H::AbstractArray{Int,2}, q::Int=2,
     dimker = ncols - gfrank(H, q, gfmult, gfdiv)
     # As in https://en.wikipedia.org/wiki/Kernel_(linear_algebra)#Computation_by_Gaussian_elimination
     HI = [H; I]
-    gfrcef!(HI, q)
+    gfrcef!(HI, q, gfmult, gfdiv)
     ns = HI[nrows+1:end, end-dimker+1:end]
     return ns
 end
@@ -189,6 +196,36 @@ function gf_invert_ut(T::AbstractArray{Int,2}, y::AbstractArray{Int,2}, args...)
     x = reduce(hcat, [gf_invert_ut(T,y[:,c],args...) for c in 1:size(y,2)])
     return x
 end
+
+# Move between GF(2) and GF(2^k)
+function system_gfqto2(H::AbstractArray{Int,2}; 
+    q::Int=2, getbasis::Function=gfnullspace,
+    H2::SparseMatrixCSC{Int,Int}=spzeros(Int, ))
+    # Find a basis for the solutions of H
+    B = getbasis(H, q)
+    # Convert each column of B (each basis vector) to GF(2)
+    #  B2 is now a GF(2) basis
+    B2 = hcat([gfqto2(B[:,j],Int(log2(q))) for j in 1:size(B,2)]...)
+    # Build a corresponding parity-check matrix
+    H2 = basis2matrix(B2, q=2, H=H2)
+    return H2
+end
+
+# Given a basis for the space of solutions stored as columns of `B`,
+#  build a parity-check matrix whose kernel is the space of solutions
+# H is passed as argument to avoid allocating
+function basis2matrix(B::AbstractArray{Int,2};
+    H::SparseMatrixCSC{Int,Int}=spzeros(Int, size(B,1)-size(B,2), size(B,1)),
+    q::Int=2)
+    # Reduce B to reduced column echelon form [I;A]
+    gfrcef!(B, q)
+    # Build H as [A I]
+    m,n = size(H)
+    H[diagind(H,n-m)] .= 1
+    H[:,1:n-m] = B[m+1:end,:]
+    return H
+end
+
 
 ###### UTILS ######
 

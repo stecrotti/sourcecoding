@@ -2,17 +2,17 @@ include("./../headers.jl")
 using JLD2
 
 qq = 2 .^ [1 4 6 8]
-gamma = 5e-3
-nn = Int.(round.(420*2 ./log2.(qq)))
+gamma = 1e-3
+nn = Int.(round.(420*6 ./log2.(qq)))
 R = collect(0.21:0.1:0.81) 
 mm = [Int.(round.(n*(1 .- R))) for n in nn]
 maxiter = Int(2e3)
 navg = 20
 randseed = 100
-Tmax = 2
+Tmax = 1
 
 sims_vec = [Vector{Simulation{MS}}(undef, length(m)) for m in mm]
-algo = MS(maxiter=maxiter, Tmax=Tmax)
+algo = MS(maxiter=maxiter, Tmax=Tmax, gamma=gamma)
 
 for (i,q) in enumerate(qq)
     println("#### q=$q. Order $i of $(length(qq)) ####")

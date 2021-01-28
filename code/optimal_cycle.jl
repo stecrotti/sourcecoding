@@ -125,8 +125,11 @@ function solve!(lm::LossyModel, algo::OptimalCycle;
             ". Energy shift ", deltaE)
         
         if deltaE == 0
+            dist = distortion(lm)
+            verbose && println("Converged in ", it, " iters. Dist ", 
+                round(dist,digits=3))
             return OptimalCycleResults(parity=parity(lm), 
-                distortion=distortion(lm))
+                distortion=dist)
         else
             E = Enew
         end

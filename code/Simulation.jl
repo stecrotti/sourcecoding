@@ -5,7 +5,7 @@ using Parameters, Lazy, StatsBase, Dates, Printf
     q::Int
     n::Int
     m::Int
-    algo::LossyAlgo
+    algo::T
     niter::Int
     b::Int = 0
     arbitrary_mult::Bool = false
@@ -28,7 +28,7 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
     results = Vector{LossyResults}(undef, niter)
     runtimes = zeros(niter)
 
-    lm = LossyModel(q, n, m+b, beta2=beta2_init(algo), verbose=verbose, 
+    lm = LossyModel(Val(q), n, m+b, beta2=beta2_init(algo), verbose=false, 
         arbitrary_mult=arbitrary_mult, randseed=randseed)
     breduction!(lm.fg, b, randseed=randseed)
 
@@ -39,7 +39,7 @@ function Simulation(q::Int, n::Int, m::Int, algo::LossyAlgo;
             lm.y .= rand(MersenneTwister(randseed+it), 0:q-1, n)
         end
         if !samegraph
-            lm.fg = ldpc_graph(q, n, m+b, verbose=false,
+            lm.fg = ldpc_graph(Val(q), n, m+b, verbose=false,
                 randseed=randseed+it, arbitrary_mult=arbitrary_mult)
             breduction!(lm.fg, b, randseed=randseed+it)
         end
@@ -83,7 +83,7 @@ end
 function convergence_ratio(sim::Simulation)
     return nconverged(sim)/sim.niter
 end
-function distortion(results::Vector{LossyResults}, convergedonly::Bool=false)
+function distortion(results::Vector{<:LossyResults}, convergedonly::Bool=false)
     D = [r.distortion for r in results if (r.converged || !convergedonly)]
 end
 @forward Simulation.results distortion
@@ -180,7 +180,7 @@ end
 
 
 function plot(sims::Union{Simulation{T},Vector{Simulation{T}},Vector{Vector{Simulation{T}}}}; 
-        kwargs...) where {T<:LossyAlgo}
+        size=(500,500), kwargs...) where {T<:LossyAlgo}
     d = LinRange(0,0.5,100)
     r = LinRange(0, 1, 100)
     pl = Plots.plot(rdb.(d), d, label="RDB")

@@ -1,8 +1,17 @@
 #### A wrapper for a FactorGraph object with temperature(s), current guess for the solution, source vector ####
 using LinearAlgebra, Lazy
 
-mutable struct LossyModel
-    fg::FactorGraph     # Factor graph instance
+abstract type LossyModel end
+mutable struct LossyModelGFQ <: LossyModel 
+    fg::FactorGraphGFQ     # Factor graph instance
+    x::Vector{Int}      # Current state
+    beta1::Real         # Inverse temperature for checks
+    beta2::Real         # Inverse temperature for overlap with input vector y
+    y::Vector{Int}      # Vector to be compressed
+end
+
+mutable struct LossyModelGF2 <: LossyModel 
+    fg::FactorGraphGF2    # Factor graph instance
     x::Vector{Int}      # Current state
     beta1::Real         # Inverse temperature for checks
     beta2::Real         # Inverse temperature for overlap with input vector y
@@ -20,23 +29,27 @@ function fix_indep_from_src(lm::LossyModel, x::AbstractVector{Int}=lm.x)
 end
 
 # Constructor for lossy model with LDPC matrix
-function LossyModel(q::Int, n::Int, m::Int; beta1::Real=Inf, beta2::Real=1.0, 
+function LossyModel(::Val{q}, n::Int, m::Int; beta1::Real=Inf, beta2::Real=1.0, 
         randseed::Int=0,
-        y::Vector{Int}=rand(MersenneTwister(randseed), 0:q-1,n), kw...)
+        y::Vector{Int}=rand(MersenneTwister(randseed), 0:q-1,n), kw...) where{q}
 
     !ispow2(q) && warning("The value of q you inserted (q=$q) is not a power of 2")
     fg = ldpc_graph(Val(q), n, m; kw...)
     x = zeros(Int, n)
-    return LossyModel(fg, x, beta1, beta2, y)
+    if q==2
+        return LossyModelGF2(fg, x, beta2, beta2, y)
+    else
+        return LossyModelGFQ(fg, x, beta2, beta2, y)
+    end
 end
 
-function LossyModel(fg::FactorGraph)
-    x = zeros(Int, fg.n)
-    beta1 = Inf
-    beta2 = 1.0
-    y = rand(0:fg.q-1, fg.n)
-    return LossyModel(fg, x, beta1, beta2, y)
-end
+# function LossyModel(fg::FactorGraph)
+#     x = zeros(Int, fg.n)
+#     beta1 = Inf
+#     beta2 = 1.0
+#     y = rand(0:fg.q-1, fg.n)
+#     return LossyModel(fg, x, beta1, beta2, y)
+# end
 
 function Base.show(io::IO, lm::LossyModel)
     println(io, "Lossy compression model:")

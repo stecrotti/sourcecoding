@@ -106,6 +106,97 @@ function ldpc_graphGFQ(q::Int, n::Int, m::Int,
     end   
 end
 
+function ldpc_graphGF2(n::Int, m::Int,
+    nedges::Int=generate_polyn(n,m)[1], lambda::Vector{T}=generate_polyn(n,m)[2],
+    rho::Vector{T}=generate_polyn(n,m)[3],
+    fields::Vector{Float64} = zeros(n); verbose=false,
+    arbitrary_mult = false,
+    randseed::Int=0) where {T<:AbstractFloat}
+
+    m < 2 && error("Cannot build a graph with m≤1 factors")
+
+    randseed != 0 && Random.seed!(randseed)      # for reproducibility
+
+    ### Argument validation ###
+    _check_consistency_polynomials(lambda, rho, nedges, n, m)
+    
+    if verbose
+        println("Building factor graph...")
+        println("lambda = ", lambda, "\nrho = ", rho)
+    end
+
+    Vneigs = [Int[] for v in 1:n]
+    Fneigs = [Int[] for f in 1:m]
+    H = SparseArrays.spzeros(m,n)
+    edgesleft = edgesright = zeros(Int, nedges)
+
+    too_many_trials = 1000
+    multi_edge_found = false
+    for t in 1:too_many_trials
+        multi_edge_found = false
+        Vneigs .= [Int[] for v in 1:n]
+        Fneigs .= [Int[] for f in 1:m]
+        H .= SparseArrays.spzeros(m,n)
+        edgesleft .= edgesright .= zeros(Int, nedges)
+
+        ### Irregular Tanner Graph construction and FactorGraph object initialization ###
+        # Assign each edge "on the left" to a variable node
+        v = 1; r = 1
+        for i in 1:length(lambda)
+            deg = Int(round(lambda[i]/i*nedges,digits=10))   # number of edges incident on variable v
+            for _ in 1:deg
+                edgesleft[r:r+i-1] .= v
+                r += i; v += 1
+            end
+        end
+
+        shuffle!(edgesleft)   # Permute nodes on the left
+
+        # Assign each edge "on the right" to a factor node
+        f = s = 1
+        for j in 1:length(rho)
+            deg = Int(round(rho[j]/j*nedges,digits=10))
+            for _ in 1:deg
+                for v in edgesleft[s:s+j-1]
+                    if findall(isequal(v), Fneigs[f])!=[]
+                        verbose && println("Multi-edge discarded")
+                        multi_edge_found = true
+                        break
+                    end
+                    # Initialize neighbors
+                    push!(Fneigs[f], v)
+                    push!(Vneigs[v], f)
+                    # Initalize parity check matrix elements
+                    H[f,v] = 1
+                end
+                s += j
+                f += 1
+            end
+        end
+        if !multi_edge_found
+            # Initialize messages
+            mfv = [zeros(length(neigs)) for neigs in Fneigs]
+            # Get multiplication and iverse table for GF(q)
+            mult, gfinv, gfdiv = gftables(2, arbitrary_mult)
+            # Build FactorGraph object
+            fg = FactorGraphGF2(2, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, 
+                fields, H, mfv)
+            # Check that the number of connected components is 1
+            fg_ = deepcopy(fg)
+            breduction!(fg_,1)
+            depths,_,_ = lr!(fg_)
+            all(depths .!= 0) && return fg 
+        end
+    end
+    # If you got here, multi-edges made it impossible to build a graph
+    if multi_edge_found
+        error("Could not build factor graph. Too many multi-edges were popping up") 
+    else
+        error("Could not build factor graph. Too many instances were coming up ",
+            "with more than one connected component")
+    end   
+end
+
 function generate_polyn(n::Int, m::Int; degree_type::Symbol=:edges)
     @assert degree_type in [:edges, :nodes]
     # This part is fixed
@@ -157,7 +248,7 @@ function gftables(q::Int, arbitrary_mult::Bool=false)
     # What if q = p^1 ?
     #########
     M = [findfirst(isequal(x*y),elems)-1 for x in elems, y in elems]
-    mult = OffsetArray(M, 0:q-1, 0:q-1)
+    gfmult = OffsetArray(M, 0:q-1, 0:q-1)
     if arbitrary_mult
         gfinv = zeros(Int, q-1)
         # gfinv[1] = 1
@@ -174,21 +265,23 @@ function gftables(q::Int, arbitrary_mult::Bool=false)
         #     mult[r, [2:gfinv[r]-1; gfinv[r]+1:q-1] ] = shuffle(others)
         # end
         for r in 1:q-1
-            mult[r, 1:q-1] .= shuffle(mult[r, 1:q-1])
+        # for c in 2:q-1
+            gfmult[r, [1:r-1; r+1:q-1]] .= shuffle(gfmult[r, [1:r-1; r+1:q-1]])
+            # gfmult[1:q-1,c] .= shuffle(gfmult[1:q-1,c])
         end
 
     else
-        gfinv = [findfirst(isequal(1), mult[r,1:end]) for r in 1:q-1]
+        gfinv = [findfirst(isequal(1), gfmult[r,1:end]) for r in 1:q-1]
     end
 
-    div = OffsetArray(zeros(Int, q,q-1), 0:q-1,1:q-1)
+    gfdiv = OffsetArray(zeros(Int, q,q-1), 0:q-1,1:q-1)
     for r in 1:q-1
         for c in 1:q-1
-            div[r,c] = findfirst(isequal(r), [mult[c,k] for k in 1:q-1])
+            gfdiv[r,c] = findfirst(isequal(r), [gfmult[c,k] for k in 1:q-1])
         end
     end
 
-    return mult, gfinv, div
+    return gfmult, gfinv, gfdiv
 end
 
 # Hamming distance, works when q is a power of 2
@@ -209,19 +302,30 @@ end
 hw(v::Vector{Int})::Int = sum(hw, v)
 hw(v::Array{Int,2})::Int = hw(vec(v))
 
-# Parity-check for the adjacency matrix of a factor graph.
-# f specifies which factors to consider (default: all 1:m)
-function paritycheck(fg::FactorGraph, x::Vector{Int}=guesses(fg))
+# Parity-check for the adjacency matrix of a factor graph
+function paritycheck(fg::FactorGraph, x::AbstractVector{Int}=guesses(fg))
     return gfmatrixmult(fg.H, x, fg.q, fg.mult)
 end
-function paritycheck(fg::FactorGraph, x::Array{Int,2})
-    return gfmatrixmult(fg.H, vec(x), fg.q, fg.mult)
-end
-# function paritycheck_quick(fg::FactorGraph, x::Vector{Int}=guesses(fg))
-
+# function paritycheck(fg::FactorGraph, x::AbstractArray{Int,2})
+#     return gfmatrixmult(fg.H, vec(x), fg.q, fg.mult)
 # end
+function paritycheck(fg::FactorGraphGF2, x::AbstractVector{Int}=guesses(fg))
+    z = (fg.H * x) .% 2
+    return z
+end
 
 parity(fg::FactorGraph, args...) = hw(paritycheck(fg, args...))
+
+function free_energy(fg::FactorGraphGF2)
+    O = 0.0
+     for (a_idx,a) in enumerate(fg.Fneigs)
+        F = [fg.fields[i] - fg.mfv[a_idx][i_idx] for (i_idx,i) in enumerate(a)]
+        O += sum(abs,F) - (prod(F)<0)*2*minimum(abs,F) 
+     end
+     O -= sum(abs,fg.fields)
+     F = 0.5*(fg.n-O)
+     return F
+ end
 
 # Groups bits together to transform GF(2)->GF(2^k)
 function gf2toq(H::AbstractArray{Int,2}, k::Int=1)

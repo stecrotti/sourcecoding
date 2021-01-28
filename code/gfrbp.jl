@@ -188,6 +188,41 @@ function onebpiter!(fg::FactorGraphGF2, algo::MS,
     return maxdiff
 end
 
+function onebpiter_fast!(fg::FactorGraphGF2, algo::MS, neutral=neutralel(algo,fg.q))
+    maxdiff = 0.0
+    # Loop over factors
+    for f in randperm(fg.m)
+        fmin = fmin2 = Inf
+        imin = 1
+        s = 1.0
+        # Loop over neighbors of `f`, computing:
+        # - prod of signs `s`
+        # - first min (and index) and second min of abs values of messages
+        for (i, v) in enumerate(fg.Fneigs[f])
+            # Subtract message from belief
+            fg.fields[v] -= fg.mfv[f][i]
+            s *= sign(fg.fields[v])
+            m = abs(fg.fields[v])
+            if fmin > m
+                fmin = m
+                imin = i
+            else fmin2 > m
+                fmin2 = m
+            end
+        end
+        for (i, v) in enumerate(fg.Fneigs[f])
+            # Apply formula to update message
+            m = (i == imin ? fmin2 : fmin) * s * sign(fg.fields[v])
+            fg.mfv[f][i] = m
+            # Update belief after updating the message
+            fg.fields[v] += m
+            # Look for maximum message
+            maxdiff = max(maxdiff, abs(m))
+        end
+    end
+    maxdiff
+end
+
 function guesses(beliefs::AbstractVector)
     return [findmax(b)[2] for b in beliefs]
 end

@@ -287,7 +287,7 @@ end
 # Hamming distance, works when q is a power of 2
 function hd(x::Int,y::Int)::Int
     z = xor(x,y)
-    return hw(z)
+    return count_ones(z)
 end
 
 function hd(x::Vector{Int}, y::Vector{Int})::Int
@@ -306,14 +306,25 @@ end
 #     return gfmatrixmult(fg.H, vec(x), fg.q, fg.mult)
 # end
 function paritycheck(fg::FactorGraphGF2, x::AbstractVector{Int}=guesses(fg))
-    z = 0
+    z = zeros(Int, fg.m)
     for f in eachindex(fg.Fneigs)
-        z += reduce(+, x[v] for v in fg.Fneigs[f], init=0) % 2
+        if fg.Fneigs[f] != []
+            z[f] = sum(x[v] for v in fg.Fneigs[f]) % 2
+        end
     end
     return z
 end
 
 parity(fg::FactorGraph, args...) = hw(paritycheck(fg, args...))
+function parity(fg::FactorGraphGF2, x::Vector{Int}=guesses(fg))
+    z = 0
+    for f in eachindex(fg.Fneigs)
+        for v in fg.Fneigs[f]
+            z += x[v]
+        end
+    end
+    return z % 2
+end
 
 function free_energy(fg::FactorGraphGF2)
     O = 0.0

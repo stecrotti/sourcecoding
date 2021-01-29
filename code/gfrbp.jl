@@ -227,14 +227,14 @@ function onebpiter!(fg::FactorGraphGF2, algo::MS, neutral=neutralel(algo,fg.q);
 end
 
 function guesses(beliefs::AbstractVector)
-    return [findmax(b)[2] for b in beliefs]
+    return argmax.(beliefs)
 end
 guesses(fg::FactorGraph) = guesses(fg.fields)
-function guesses(fg::FactorGraphGF2, g::Vector{Int}=zeros(Intfg.n)) 
-    # g .= Int.(fg.fields .> 0)
+function guesses(fg::FactorGraphGF2, g::Vector{Int}=zeros(Int,fg.n)) 
     for i in eachindex(g)
-        g[i] = fg.fields[i] > 0 ? 1 : 0  
+        g[i] = fg.fields[i] < 0 ? 1 : 0  
     end
+    return g
 end
 
 function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
@@ -262,13 +262,13 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             maxchange[t] = oneiter!(fg, algo, neutral, fact_perm=fact_perm)
             shuffle!(fact_perm)
             newguesses,oldguesses = oldguesses,newguesses
-            newguesses .= guesses(fg)
+            newguesses .= guesses(fg, newguesses)
             par = parity(fg, newguesses)
             codeword[t] = (par==0)
             if algo.convergence == :messages
                 if maxchange[t] <= algo.tol
                     return BPResults{typeof(algo)}(converged=true, parity=par,
-                        distortion=distortion(fg, y), trials=trial, iterations=t,
+                        distortion=distortion(fg, y, newguesses), trials=trial, iterations=t,
                         codeword=codeword, maxchange=maxchange)
                 end
             elseif algo.convergence == :decvars
@@ -276,7 +276,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                     n += 1
                     if n >= algo.nmin
                         return BPResults{typeof(algo)}(converged=true, parity=par,
-                        distortion=distortion(fg, y), trials=trial, iterations=t,
+                        distortion=distortion(fg, y, newguesses), trials=trial, iterations=t,
                         codeword=codeword, maxchange=maxchange)
                     end
                 else
@@ -286,7 +286,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
                 if par == 0
                     showprogress && println()
                     return BPResults{typeof(algo)}(converged=true, parity=par,
-                        distortion=distortion(fg, y), trials=trial, iterations=t,
+                        distortion=distortion(fg, y, newguesses), trials=trial, iterations=t,
                         codeword=codeword, maxchange=maxchange)
                 end
             else

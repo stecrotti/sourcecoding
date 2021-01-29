@@ -162,12 +162,13 @@ function onebpiter!(fg::FactorGraph, algo::MS,
     return maxdiff
 end
 
-function onebpiter!(fg::FactorGraphGF2, algo::MS,
-    neutral=neutralel(algo,fg.q))
+function onebpiter_slow!(fg::FactorGraphGF2, algo::MS,
+    neutral=neutralel(algo,fg.q);
+    fact_perm = randperm(fg.m))
     maxdiff = diff = 0.0
     aux = Float64[]
     # Loop over factors
-    for f in randperm(fg.m)
+    for f in fact_perm
         # Loop over neighbors of `f`
         for (v_idx, v) in enumerate(fg.Fneigs[f])
             # Subtract message from belief
@@ -188,10 +189,11 @@ function onebpiter!(fg::FactorGraphGF2, algo::MS,
     return maxdiff
 end
 
-function onebpiter_fast!(fg::FactorGraphGF2, algo::MS, neutral=neutralel(algo,fg.q))
-    maxdiff = 0.0
+function onebpiter!(fg::FactorGraphGF2, algo::MS, neutral=neutralel(algo,fg.q);
+        fact_perm = randperm(fg.m))
+    maxchange = 0.0
     # Loop over factors
-    for f in randperm(fg.m)
+    for f in fact_perm
         fmin = fmin2 = Inf
         imin = 1
         s = 1.0
@@ -214,32 +216,31 @@ function onebpiter_fast!(fg::FactorGraphGF2, algo::MS, neutral=neutralel(algo,fg
         for (i, v) in enumerate(fg.Fneigs[f])
             # Apply formula to update message
             m = (i == imin ? fmin2 : fmin) * s * sign(fg.fields[v])
+            # Look for maximum change in message
+            maxchange = max(maxchange, abs(m-fg.mfv[f][i]))
             fg.mfv[f][i] = m
             # Update belief after updating the message
             fg.fields[v] += m
-            # Look for maximum message
-            maxdiff = max(maxdiff, abs(m))
         end
     end
-    maxdiff
+    maxchange
 end
 
 function guesses(beliefs::AbstractVector)
     return [findmax(b)[2] for b in beliefs]
 end
 guesses(fg::FactorGraph) = guesses(fg.fields)
-guesses(fg::FactorGraphGF2) = floor.(Int, 0.5*(1 .- sign.(fg.fields)))
+guesses(fg::FactorGraphGF2) = Int.(fg.fields .> 0)
 
 function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
-    maxdiff=zeros(algo.maxiter), codeword=falses(algo.maxiter),
-    maxchange=zeros(algo.maxiter); randseed::Int=0, neutral=neutralel(algo,fg.q),
-    verbose::Bool=false, showprogress::Bool=verbose)
+    codeword=falses(algo.maxiter),
+    maxchange=fill(NaN, algo.maxiter); randseed::Int=0, neutral=neutralel(algo,fg.q),
+    verbose::Bool=false, showprogress::Bool=verbose, oneiter!::Function=onebpiter!, 
+    independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent))
 
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
     newguesses = zeros(Int,fg.n)
     oldguesses = guesses(fg)
-    oldmessages = deepcopy(fg.mfv)
-    newmessages = deepcopy(fg.mfv)
     par = parity(fg)
     wait_time = showprogress ? 1 : Inf
     n = 0
@@ -247,48 +248,41 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     refresh!(fg)
     extfields!(fg,y,algo,randseed=randseed)
 
+    fact_perm = randperm(fg.m)
+
     for trial in 1:algo.Tmax
         prog = ProgressMeter.Progress(algo.maxiter, wait_time, 
             "Trial $trial/$(algo.Tmax) ")
         for t in 1:algo.maxiter
-            maxdiff[t] = onebpiter!(fg, algo, neutral)
+            maxchange[t] = oneiter!(fg, algo, neutral, fact_perm=fact_perm)
+            shuffle!(fact_perm)
+            newguesses,oldguesses = oldguesses,newguesses
             newguesses .= guesses(fg)
-            newmessages .= fg.mfv
             par = parity(fg, newguesses)
             codeword[t] = (par==0)
             if algo.convergence == :messages
-                for f in eachindex(newmessages)
-                    for (v_idx,msg) in enumerate(newmessages[f])
-                        change = maximum(abs,msg - oldmessages[f][v_idx])
-                        if change > maxchange[t]
-                            maxchange[t] = change
-                        end
-                    end
-                end
                 if maxchange[t] <= algo.tol
                     return BPResults{typeof(algo)}(converged=true, parity=par,
                         distortion=distortion(fg, y), trials=trial, iterations=t,
-                        maxdiff=maxdiff, codeword=codeword, maxchange=maxchange)
+                        codeword=codeword, maxchange=maxchange)
                 end
-                oldmessages .= deepcopy(newmessages)
             elseif algo.convergence == :decvars
                 if newguesses == oldguesses
                     n += 1
                     if n >= algo.nmin
                         return BPResults{typeof(algo)}(converged=true, parity=par,
                         distortion=distortion(fg, y), trials=trial, iterations=t,
-                        maxdiff=maxdiff, codeword=codeword, maxchange=maxchange)
+                        codeword=codeword, maxchange=maxchange)
                     end
                 else
                     n=0
                 end
-                oldguesses .= newguesses
             elseif algo.convergence == :parity
                 if par == 0
                     showprogress && println()
                     return BPResults{typeof(algo)}(converged=true, parity=par,
                         distortion=distortion(fg, y), trials=trial, iterations=t,
-                        maxdiff=maxdiff, codeword=codeword, maxchange=maxchange)
+                        codeword=codeword, maxchange=maxchange)
                 end
             else
                 error("Field convergence must be one of :messages, :decvars, :parity")
@@ -300,15 +294,14 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             # If convergence not reached, re-initialize random fields and start again
             refresh!(fg)
             extfields!(fg,y,algo,randseed=randseed+trial)
-            oldguesses .= guesses(fg)
-            oldmessages .= deepcopy(fg.mfv)
-            fill!(maxchange, -Inf)
+            fill!(maxchange, NaN)
             n = 0
         end
     end
     return BPResults{typeof(algo)}(converged=false, parity=par,
-                distortion=algo.default_distortion(fg,y), trials=algo.Tmax, 
-                iterations=algo.maxiter, maxdiff=maxdiff, codeword=codeword, 
+                distortion=algo.default_distortion(fg,y,independent=independent,
+                basis=basis), trials=algo.Tmax, 
+                iterations=algo.maxiter, codeword=codeword, 
                 maxchange=maxchange)
 end
 
@@ -367,8 +360,7 @@ function extfields!(fg::FactorGraph, y::Vector{Int}, algo::Union{BP,MS}; randsee
             end
         end
     else
-        fields = algo.beta2*(1 .- 2*y) + algo.sigma*randn(length(y))
-        fg.fields .= fields
+        fg.fields .= algo.beta2*(1 .- 2*y) + algo.sigma*randn(length(y))
     end
     return nothing
 end

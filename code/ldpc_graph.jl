@@ -294,12 +294,8 @@ function hd(x::Vector{Int}, y::Vector{Int})::Int
     sum(hd.(x,y))
 end
 
-# Hamming weight
-function hw(x::Int)::Int
-    return sum(int2bits(x))
-end
 
-hw(v::Vector{Int})::Int = sum(hw, v)
+hw(v::Vector{Int})::Int = sum(count_ones, v)
 hw(v::Array{Int,2})::Int = hw(vec(v))
 
 # Parity-check for the adjacency matrix of a factor graph
@@ -310,7 +306,10 @@ end
 #     return gfmatrixmult(fg.H, vec(x), fg.q, fg.mult)
 # end
 function paritycheck(fg::FactorGraphGF2, x::AbstractVector{Int}=guesses(fg))
-    z = (fg.H * x) .% 2
+    z = 0
+    for f in eachindex(fg.Fneigs)
+        z += reduce(+, x[v] for v in fg.Fneigs[f], init=0) % 2
+    end
     return z
 end
 

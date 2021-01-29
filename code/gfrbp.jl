@@ -204,6 +204,7 @@ function onebpiter_fast!(fg::FactorGraphGF2, algo::MS, neutral=neutralel(algo,fg
             s *= sign(fg.fields[v])
             m = abs(fg.fields[v])
             if fmin > m
+                fmin2 = fmin
                 fmin = m
                 imin = i
             elseif fmin2 > m

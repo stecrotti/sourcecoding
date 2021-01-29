@@ -45,7 +45,7 @@ end
 
 # Construct graph from adjacency matrix (for checks with simple examples)
 function FactorGraphGF2(A::AbstractArray{Int,2}, 
-    fields::Vector{Float64} = zeros(size(A,2)))  
+    fields::Vector{Float64} = zeros(size(A,2)), q::Int=2)  
 m,n = size(A)
 Vneigs = [Int[] for v in 1:n]
 Fneigs = [Int[] for f in 1:m]
@@ -68,8 +68,9 @@ return FactorGraphGF2(2, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, H, mf
 end
 
 # Construct graph from adjacency matrix (for checks with simple examples)
-function FactorGraph(A::AbstractArray{Int,2}, q::Int=nextpow(2,maximum(A)+0.5),
-        fields = [Fun(1e-3*randn(q)) for v in 1:size(A,2)])
+function FactorGraphGFQ(A::AbstractArray{Int,2}, 
+        fields = [Fun(1e-3*randn(q)) for v in 1:size(A,2)], 
+        q::Int=nextpow(2,maximum(A)+0.5))
     m,n = size(A)
     Vneigs = [Int[] for v in 1:n]
     Fneigs = [Int[] for f in 1:m]
@@ -90,18 +91,39 @@ function FactorGraph(A::AbstractArray{Int,2}, q::Int=nextpow(2,maximum(A)+0.5),
     H = issparse(A) ? A : sparse(A)
     return FactorGraphGFQ(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, H, mfv)
 end
+function FactorGraphGFQ(A::AbstractArray{Int,2}, q::Int=nextpow(2,maximum(A)+0.5),
+        fields = [Fun(1e-3*randn(q)) for v in 1:size(A,2)])
+    m,n = size(A)
+    Vneigs = [Int[] for v in 1:n]
+    Fneigs = [Int[] for f in 1:m]
+    mfv = [OffsetArray{Float64,1,Array{Float64,1}}[] for f in 1:m]
+
+    for f in 1:m
+        for v in 1:n
+            if A[f,v]<0 || A[f,v]>q-1
+                error("Entry of the adjacency matrix must be 0≤h_ij<q")
+            elseif A[f,v] > 0
+                push!(Fneigs[f], v)
+                push!(Vneigs[v], f)
+                push!(mfv[f], OffsetArray(1/q*ones(q), 0:q-1))
+            end
+        end
+    end
+    mult, gfinv, gfdiv = gftables(q)
+    H = issparse(A) ? A : sparse(A)
+    return FactorGraphGF2(q, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, H, mfv)
+end
 
 # Add a factor and return a copy of the original one. This is because the struct
 #  is kept immutable for performance reasons
 function add_factor(fg::FactorGraph, fneigs::Vector{Int}=varleaves(fg), 
         weights::Vector{Int}=ones(Int, length(fneigs)))
-    H = adjmat(fg)
+    H = fg.H
     fields = fg.fields
-    q = fg.q
     newrow = zeros(Int, fg.n)
     newrow[fneigs] .= weights 
     Hnew = vcat(H, newrow')
-    return FactorGraph(Hnew, q, fields)
+    return typeof(fg)(Hnew, fields, fg.q)
 end
 
 # function adjmat(fg::FactorGraph)

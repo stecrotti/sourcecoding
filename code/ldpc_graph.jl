@@ -318,13 +318,15 @@ parity(fg::FactorGraph, args...) = hw(paritycheck(fg, args...))
 
 function free_energy(fg::FactorGraphGF2)
     O = 0.0
+    # Loop only on factors with neighbors
      for (a_idx,a) in enumerate(fg.Fneigs)
+        a == [] && continue
         F = [fg.fields[i] - fg.mfv[a_idx][i_idx] for (i_idx,i) in enumerate(a)]
         O += sum(abs,F) - (prod(F)<0)*2*minimum(abs,F) 
      end
      O -= sum(abs,fg.fields)
-     F = 0.5*(fg.n-O)
-     return F
+     E = 0.5*(fg.n-O)
+     return E
  end
 
 # Groups bits together to transform GF(2)->GF(2^k)

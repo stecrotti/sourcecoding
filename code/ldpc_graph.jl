@@ -287,7 +287,7 @@ end
 # Hamming distance, works when q is a power of 2
 function hd(x::Int,y::Int)::Int
     z = xor(x,y)
-    return sum(int2bits(z))
+    return hw(z)
 end
 
 function hd(x::Vector{Int}, y::Vector{Int})::Int

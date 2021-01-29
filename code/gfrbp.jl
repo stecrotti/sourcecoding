@@ -230,7 +230,12 @@ function guesses(beliefs::AbstractVector)
     return [findmax(b)[2] for b in beliefs]
 end
 guesses(fg::FactorGraph) = guesses(fg.fields)
-guesses(fg::FactorGraphGF2) = Int.(fg.fields .> 0)
+function guesses(fg::FactorGraphGF2, g::Vector{Int}=zeros(Intfg.n)) 
+    # g .= Int.(fg.fields .> 0)
+    for i in eachindex(g)
+        g[i] = fg.fields[i] > 0 ? 1 : 0  
+    end
+end
 
 function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     codeword=falses(algo.maxiter),
@@ -347,7 +352,8 @@ neutralel(algo::MS, q::Int) = Fun(x == 0 ? 0.0 : -Inf for x=0:q-1)
 # Creates fields for the priors: the closest to y, the stronger the field
 # The prior distr is given by exp(field)
 # A small noise with amplitude sigma is added to break the symmetry
-function extfields!(fg::FactorGraph, y::Vector{Int}, algo::Union{BP,MS}; randseed::Int=0)
+function extfields!(fg::FactorGraph, y::Vector{Int}, algo::Union{BP,MS}; 
+        randseed::Int=0)
     randseed != 0 && Random.seed!(randseed) 
     q = fg.q
     if q > 2

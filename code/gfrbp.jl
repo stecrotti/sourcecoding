@@ -261,7 +261,6 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
         for t in 1:algo.maxiter
             maxchange[t] = oneiter!(fg, algo, neutral, fact_perm=fact_perm)
             shuffle!(fact_perm)
-            newguesses,oldguesses = oldguesses,newguesses
             newguesses .= guesses(fg, newguesses)
             par = parity(fg, newguesses)
             codeword[t] = (par==0)
@@ -292,6 +291,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             else
                 error("Field convergence must be one of :messages, :decvars, :parity")
             end
+            newguesses,oldguesses = oldguesses,newguesses
             algo.gamma != 0 && reinforce!(fg, algo)
             ProgressMeter.next!(prog)
         end

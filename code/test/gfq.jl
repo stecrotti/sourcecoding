@@ -18,7 +18,7 @@ for (i,q) in enumerate(qq)
     println("#### q=$q. Order $i of $(length(qq)) ####")
     for j in eachindex(mm[i])
         println("---------- Simulation $j of ", length(mm[i])," | R = ",R[j]," -----------")
-        sims_vec[i][j] = Simulation(q, nn[i], mm[i][j], algo, niter=navg)
+        sims_vec[i][j] = Simulation(q, nn[i], mm[i][j], algo, niter=navg, b=1)
     end
 end
 

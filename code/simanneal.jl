@@ -151,7 +151,7 @@ function propose(mc_move::Metrop1, lm::LossyModel, rng::AbstractRNG)
     to_flip = rand(rng, 1:lm.fg.n)
     # Pick a new value 
     newval = rand(rng, [k for k=0:lm.fg.q-1 if k!=x[to_flip]])
-    return to_flip, [newval]
+    return [to_flip], [newval]
 end
 
 # Flips one basis coefficient at every move

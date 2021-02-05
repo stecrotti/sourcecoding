@@ -46,25 +46,25 @@ end
 # Construct graph from adjacency matrix (for checks with simple examples)
 function FactorGraphGF2(A::AbstractArray{Int,2}, 
     fields::Vector{Float64} = zeros(size(A,2)), q::Int=2)  
-m,n = size(A)
-Vneigs = [Int[] for v in 1:n]
-Fneigs = [Int[] for f in 1:m]
-mfv = [Float64[] for f in 1:m]
+    m,n = size(A)
+    Vneigs = [Int[] for v in 1:n]
+    Fneigs = [Int[] for f in 1:m]
+    mfv = [Float64[] for f in 1:m]
 
-for f in 1:m
-    for v in 1:n
-        if A[f,v]<0 || A[f,v]>1
-            error("Entry of the adjacency matrix must be 0≤h_ij<q")
-        elseif A[f,v] > 0
-            push!(Fneigs[f], v)
-            push!(Vneigs[v], f)
-            push!(mfv[f], 0.0)
+    for f in 1:m
+        for v in 1:n
+            if A[f,v]<0 || A[f,v]>1
+                error("Entry of the adjacency matrix must be 0≤h_ij<q")
+            elseif A[f,v] > 0
+                push!(Fneigs[f], v)
+                push!(Vneigs[v], f)
+                push!(mfv[f], 0.0)
+            end
         end
     end
-end
-mult, gfinv, gfdiv = gftables(2)
-H = issparse(A) ? A : sparse(A)
-return FactorGraphGF2(2, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, H, mfv)
+    mult, gfinv, gfdiv = gftables(2)
+    H = issparse(A) ? A : sparse(A)
+    return FactorGraphGF2(2, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, H, mfv)
 end
 
 # Construct graph from adjacency matrix (for checks with simple examples)
@@ -125,16 +125,6 @@ function add_factor(fg::FactorGraph, fneigs::Vector{Int}=varleaves(fg),
     Hnew = vcat(H, newrow')
     return typeof(fg)(Hnew, fields, fg.q)
 end
-
-# function adjmat(fg::FactorGraph)
-#     A = zeros(Int,fg.m, fg.n)
-#     for f in 1:fg.m
-#         for (v_idx,v) in enumerate(fg.Fneigs[f])
-#             A[f,v] = fg.hfv[f][v_idx]
-#         end
-#     end
-#     return A
-# end
 
 # Returns the proper square adjacency matrix
 function full_adjmat(fg::FactorGraph)
@@ -379,23 +369,6 @@ function breduction!(fg::FactorGraph, b::Int=1; randseed::Int=0)
     return to_be_removed
 end
 
-function polyn(fg::FactorGraph)
-    fd = countmap(factdegrees(fg))    # degree => number of factors with that degree
-    rho = zeros(maximum(keys(fd)))
-    for j in keys(fd)
-        rho[j] = j*fd[j]
-    end
-    rho ./= sum(rho)
-
-    vd = countmap(vardegrees(fg))
-    lambda = zeros(maximum(keys(vd)))
-    for i in keys(vd)
-        lambda[i] = i*vd[i]
-    end
-    lambda ./= sum(lambda)
-
-    return lambda, rho
-end
 
 import Plots.plot
 function Plots.plot(fg::FactorGraph; varnames=1:fg.n, factnames=1:fg.m,

@@ -1,15 +1,15 @@
 include("./../headers.jl")
 using JLD2
 
-qq = 2 .^ [1 3 5]
+qq = 2 .^ [1 3 5 7]
 gamma = 1e-3
 nn = Int.(round.(420*6 ./log2.(qq)))
 R = collect(0.21:0.1:0.81) 
 mm = [Int.(round.(n*(1 .- R))) for n in nn]
-maxiter = [1000, 2000, 5000]
+maxiter = [1000, 2000, 5000, 10000]
 navg = 10
 randseed = 100
-Tmax = 2
+Tmax = 5
 
 sims_vec = [Vector{Simulation{MS}}(undef, length(m)) for m in mm]
 

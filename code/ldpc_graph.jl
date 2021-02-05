@@ -235,9 +235,34 @@ function edges2nodes(lambda::Vector{<:AbstractFloat},
 end
 function nodes2edges(lambda::Vector{<:AbstractFloat}, 
     rho::Vector{<:AbstractFloat})
-lambda_new = [lambda[i]*i for i in eachindex(lambda)]
-rho_new = [rho[j]*j for j in eachindex(rho)]
-return lambda_new./sum(lambda_new), rho_new./sum(rho_new)
+    lambda_new = [lambda[i]*i for i in eachindex(lambda)]
+    rho_new = [rho[j]*j for j in eachindex(rho)]
+    return lambda_new./sum(lambda_new), rho_new./sum(rho_new)
+end
+
+
+function polyn(fg::FactorGraph)
+    fd = countmap(factdegrees(fg))    # degree => number of factors with that degree
+    # rho = zeros(maximum(keys(fd)))
+    # for j in keys(fd)
+    #     rho[j] = j*fd[j]
+    # end
+    # rho ./= sum(rho)
+
+    vd = countmap(vardegrees(fg))
+    # lambda = zeros(maximum(keys(vd)))
+    # for i in keys(vd)
+    #     lambda[i] = i*vd[i]
+    # end
+    # lambda ./= sum(lambda)
+
+    fd = factdegrees(fg)
+    rho = proportions(fd, 1:maximum(fd))
+
+    vd = vardegrees(fg)
+    lambda = proportions(vd, 1:maximum(vd))
+
+    return lambda, rho
 end
 
 

@@ -43,13 +43,12 @@ function LossyModel(::Val{q}, n::Int, m::Int; beta1::Real=Inf, beta2::Real=1.0,
     end
 end
 
-# function LossyModel(fg::FactorGraph)
-#     x = zeros(Int, fg.n)
-#     beta1 = Inf
-#     beta2 = 1.0
-#     y = rand(0:fg.q-1, fg.n)
-#     return LossyModel(fg, x, beta1, beta2, y)
-# end
+function LossyModel(fg::FactorGraphGF2; x = zeros(Int, fg.n),
+        beta1 = Inf, beta2 = 1.0,
+        y = rand(0:1, fg.n))
+    
+    return LossyModelGF2(fg, x, beta2, beta2, y)
+end
 
 function Base.show(io::IO, lm::LossyModel)
     println(io, "Lossy compression model:")

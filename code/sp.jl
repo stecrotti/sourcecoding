@@ -63,7 +63,7 @@ function update_factor!(fg::SurveyPropagation, b; damp = 0.0)
             p[+f] = (a[+f]-a[+f+1])
             p[-f] = (a[-f]-a[-f-1])*exp(-2fg.y*f)
         end
-        p[0] = 1-a[0]
+        p[0] = 1 - a[0]
         p ./= sum(p)
         ε = max(ε, maximum(abs, fg.P[i] - p))
         fg.P[i] .= damp .* fg.P[i] .+ (1-damp) .* p
@@ -84,8 +84,8 @@ function update_var!(fg::SurveyPropagation, i; damp = 0.0)
     ε = 0.0
     J = fg.J
     ∂i = nzrange(fg.H, i)
-    P = push!([p .* exp.(-fg.y .* abs.(eachindex(p))) for p ∈ @view fg.P[∂i]], 
-            fill(1.0, fg.efield[i]:fg.efield[i]))
+    P = push!([p .* exp.(-fg.y .* abs.(eachindex(p))) for p ∈ @view fg.P[∂i]],
+              fill(1.0, fg.efield[i]:fg.efield[i]))
     init = fill(1.0, 0:0)
     Q = [fill(1.0, 0:0) for a ∈ 1:length(∂i)+1]
     qfull = cavity!(Q, P, ⊛, init)
@@ -95,16 +95,15 @@ function update_var!(fg::SurveyPropagation, i; damp = 0.0)
     fg.survey[i] ./= sum(fg.survey[i])
 
     q = fill(0.0, -J:J)
-    for (j,a) ∈ enumerate(∂i)
-        q1 = Q[j]
+    for (q1,qout) ∈ zip(Q, @view fg.Q[∂i])
         q1 .*= exp.(fg.y .* abs.(eachindex(q1)))
         q .= 0.0
         for f in eachindex(q1)
             q[clamp(f,-J,J)] += q1[f]
         end
         q ./= sum(q)
-        ε = max(ε, maximum(abs, fg.Q[a] - q))
-        fg.Q[a] .= damp .* fg.Q[a] .+ (1-damp).* q
+        ε = max(ε, maximum(abs, qout - q))
+        qout .= damp .* q .+ (1-damp).* q
     end
     ε
 end
@@ -113,10 +112,10 @@ function iteration!(fg::SurveyPropagation; maxiter = 1000, tol=1e-3, γ=0.0, dam
     errf = fill(0.0, size(H,1))
     errv = fill(0.0, size(H,2))
     @inbounds for t = 1:maxiter
-        Threads.@threads for a=rand(1:size(H,1), size(H,1)÷2)
+        Threads.@threads for a=size(H,1)
             errf[a] = update_factor!(fg, a, damp=damp)
         end
-        Threads.@threads for i=rand(1:size(H,2), size(H,2)÷2)
+        Threads.@threads for i=size(H,2)
             errv[i] = update_var!(fg, i, damp=damp)
         end
         ε = max(maximum(errf), maximum(errv))

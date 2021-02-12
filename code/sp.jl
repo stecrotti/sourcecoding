@@ -112,15 +112,15 @@ function iteration!(fg::SurveyPropagation; maxiter = 1000, tol=1e-3, γ=0.0, dam
     errf = fill(0.0, size(H,1))
     errv = fill(0.0, size(H,2))
     @inbounds for t = 1:maxiter
-        Threads.@threads for a=size(H,1)
+        Threads.@threads for a=1:size(H,1)
             errf[a] = update_factor!(fg, a, damp=damp)
         end
-        Threads.@threads for i=size(H,2)
+        Threads.@threads for i=1:size(H,2)
             errv[i] = update_var!(fg, i, damp=damp)
         end
         ε = max(maximum(errf), maximum(errv))
-        ε < tol && break
         callback(t, ε, fg) && break
+        ε < tol && break
     end
 end
 

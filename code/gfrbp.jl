@@ -125,10 +125,11 @@ function onebpiter!(fg::FactorGraph, algo::BP, neutral=neutralel(algo,fg.q))
 end
 
 function onebpiter!(fg::FactorGraph, algo::MS,
-    neutral=neutralel(algo,fg.q))
+    neutral=neutralel(algo,fg.q);
+    fact_perm = randperm(fg.m))
 
     maxdiff = diff = 0.0
-    for f in randperm(length(fg.Fneigs))
+    for f in fact_perm
         for (v_idx, v) in enumerate(fg.Fneigs[f])
             # Subtract message from belief
             fg.fields[v] .-= fg.mfv[f][v_idx]
@@ -229,7 +230,9 @@ end
 function guesses(beliefs::AbstractVector)
     return argmax.(beliefs)
 end
-guesses(fg::FactorGraph) = guesses(fg.fields)
+function guesses(fg::FactorGraph, g::Vector{Int}=zeros(Int,fg.n))     
+    g .= guesses(fg.fields)
+end
 function guesses(fg::FactorGraphGF2, g::Vector{Int}=zeros(Int,fg.n)) 
     for i in eachindex(g)
         g[i] = fg.fields[i] < 0 ? 1 : 0  
@@ -261,7 +264,6 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
         for t in 1:algo.maxiter
             maxchange[t] = oneiter!(fg, algo, neutral, fact_perm=fact_perm)
             shuffle!(fact_perm)
-            newguesses,oldguesses = oldguesses,newguesses
             newguesses .= guesses(fg, newguesses)
             par = parity(fg, newguesses)
             codeword[t] = (par==0)
@@ -292,6 +294,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
             else
                 error("Field convergence must be one of :messages, :decvars, :parity")
             end
+            newguesses,oldguesses = oldguesses,newguesses
             algo.gamma != 0 && reinforce!(fg, algo)
             ProgressMeter.next!(prog)
         end

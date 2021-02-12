@@ -12,7 +12,7 @@ function ldpc_graphGFQ(q::Int, n::Int, m::Int,
     nedges::Int=generate_polyn(n,m)[1], lambda::Vector{T}=generate_polyn(n,m)[2],
     rho::Vector{T}=generate_polyn(n,m)[3],
     fields = [Fun(1e-3*randn(q)) for v in 1:n]; verbose=false,
-    arbitrary_mult = false,
+    arbitrary_mult = false, accept_multiedges = true,
     randseed::Int=0) where {T<:AbstractFloat}
 
     m < 2 && error("Cannot build a graph with m≤1 factors")
@@ -62,8 +62,10 @@ function ldpc_graphGFQ(q::Int, n::Int, m::Int,
                 for v in edgesleft[s:s+j-1]
                     if findall(isequal(v), Fneigs[f])!=[]
                         verbose && println("Multi-edge discarded")
-                        multi_edge_found = true
-                        break
+                        if !accept_multiedges
+                            multi_edge_found = true
+                            break
+                        end
                     end
                     # Initialize neighbors
                     push!(Fneigs[f], v)
@@ -110,7 +112,7 @@ function ldpc_graphGF2(n::Int, m::Int,
     nedges::Int=generate_polyn(n,m)[1], lambda::Vector{T}=generate_polyn(n,m)[2],
     rho::Vector{T}=generate_polyn(n,m)[3],
     fields::Vector{Float64} = zeros(n); verbose=false,
-    arbitrary_mult = false,
+    arbitrary_mult = false, accept_multiedges = true,
     randseed::Int=0) where {T<:AbstractFloat}
 
     m < 2 && error("Cannot build a graph with m≤1 factors")
@@ -160,8 +162,10 @@ function ldpc_graphGF2(n::Int, m::Int,
                 for v in edgesleft[s:s+j-1]
                     if findall(isequal(v), Fneigs[f])!=[]
                         verbose && println("Multi-edge discarded")
-                        multi_edge_found = true
-                        break
+                        if !accept_multiedges
+                            multi_edge_found = true
+                            break
+                        end
                     end
                     # Initialize neighbors
                     push!(Fneigs[f], v)
@@ -231,9 +235,34 @@ function edges2nodes(lambda::Vector{<:AbstractFloat},
 end
 function nodes2edges(lambda::Vector{<:AbstractFloat}, 
     rho::Vector{<:AbstractFloat})
-lambda_new = [lambda[i]*i for i in eachindex(lambda)]
-rho_new = [rho[j]*j for j in eachindex(rho)]
-return lambda_new./sum(lambda_new), rho_new./sum(rho_new)
+    lambda_new = [lambda[i]*i for i in eachindex(lambda)]
+    rho_new = [rho[j]*j for j in eachindex(rho)]
+    return lambda_new./sum(lambda_new), rho_new./sum(rho_new)
+end
+
+
+function polyn(fg::FactorGraph)
+    fd = countmap(factdegrees(fg))    # degree => number of factors with that degree
+    # rho = zeros(maximum(keys(fd)))
+    # for j in keys(fd)
+    #     rho[j] = j*fd[j]
+    # end
+    # rho ./= sum(rho)
+
+    vd = countmap(vardegrees(fg))
+    # lambda = zeros(maximum(keys(vd)))
+    # for i in keys(vd)
+    #     lambda[i] = i*vd[i]
+    # end
+    # lambda ./= sum(lambda)
+
+    fd = factdegrees(fg)
+    rho = proportions(fd, 1:maximum(fd))
+
+    vd = vardegrees(fg)
+    lambda = proportions(vd, 1:maximum(vd))
+
+    return lambda, rho
 end
 
 
@@ -317,13 +346,16 @@ end
 
 parity(fg::FactorGraph, args...) = hw(paritycheck(fg, args...))
 function parity(fg::FactorGraphGF2, x::Vector{Int}=guesses(fg))
-    z = 0
+    z = p = 0
     for f in eachindex(fg.Fneigs)
         for v in fg.Fneigs[f]
-            z += x[v]
+            p += x[v]
         end
+        z += p % 2
+        p = 0
     end
-    return z % 2
+    return z 
+    # return sum(paritycheck(fg,x))
 end
 
 function free_energy(fg::FactorGraphGF2)

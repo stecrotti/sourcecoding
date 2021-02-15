@@ -54,9 +54,10 @@ function SA(mc_move::MCMove, beta2::Vector{Float64}; kw...)
     betas = hcat(fill(Inf, length(beta2)), beta2)
     return SA(mc_move=mc_move, betas=betas; kw...)
 end
-function zero_codeword(lm::LossyModel)
+function zero_codeword(lm::LossyModel, args...)
     zeros(Int, lm.fg.n)
 end
+random_state(lm::LossyModel, rng::AbstractRNG) = rand(rng, [0,1], length(lm.x))
 
 function solve!(lm::LossyModel, algo::SA,
     distortions::Vector{Vector{Float64}}=[fill(0.5, algo.nsamples) 
@@ -68,14 +69,15 @@ function solve!(lm::LossyModel, algo::SA,
     to_display::String="Running Monte Carlo...",
     verbose::Bool=false, randseed::Int=0, showprogress::Bool=verbose)  
 
+    
+    rng = Random.MersenneTwister(randseed)
     # Initialize to the requested initial state
-    lm.x = algo.init_state(lm)
+    lm.x = algo.init_state(lm, rng)
     # Adapt mc_move parameters to the current model
     adapt_to_model!(algo.mc_move, lm)
 
     nbetas = size(algo.betas,1)
     mindist = zeros(nbetas)
-    rng = Random.MersenneTwister(randseed)
 
     wait_time = showprogress ? 1 : Inf   # trick not to display progess
     prog = ProgressMeter.Progress(nbetas, wait_time, to_display)

@@ -38,6 +38,7 @@ end
     parities::Vector{Vector{Int}}
     distortion::Float64
     acceptance_ratio::Vector{Float64}
+    dE::Vector{Vector{Float64}}
     beta_argmin::Vector{Float64}                # Temperatures for which the min was achieved
     converged::Bool=true     # Doesn't mean anything, here just for consistency with the other Results types
 end
@@ -64,7 +65,9 @@ function solve!(lm::LossyModel, algo::SA,
         for _ in 1:size(algo.betas,1)],
     accepted::Vector{BitArray{1}}=[falses(algo.nsamples) 
         for _ in 1:size(algo.betas,1)],
-   parities::Vector{Vector{Int}}=[fill(typemax(Int), algo.nsamples) 
+    parities::Vector{Vector{Int}}=[fill(typemax(Int), algo.nsamples) 
+        for _ in 1:size(algo.betas,1)],
+    dE::Vector{Vector{Float64}}=[fill(0.5, algo.nsamples) 
         for _ in 1:size(algo.betas,1)];          
     to_display::String="Running Monte Carlo...",
     verbose::Bool=false, randseed::Int=0, showprogress::Bool=verbose)  
@@ -81,11 +84,13 @@ function solve!(lm::LossyModel, algo::SA,
 
     wait_time = showprogress ? 1 : Inf   # trick not to display progess
     prog = ProgressMeter.Progress(nbetas, wait_time, to_display)
+    en = energy(lm)
     @inbounds for b in 1:nbetas
         # Update temperature
         lm.beta1, lm.beta2 = algo.betas[b,1], algo.betas[b,2]
         # Run MC
-        mc!(lm, algo, rng, accepted[b], distortions[b], parities[b])
+        mc!(lm, algo, rng, accepted[b], distortions[b], parities[b], dE[b],
+            current_energy = en)
         # Compute minimum distortion
         mindist[b] = minimum(distortions[b])
         next!(prog)
@@ -94,23 +99,27 @@ function solve!(lm::LossyModel, algo::SA,
 
     return SAResults(parities=parities, distortion=minimum_dist,
         beta_argmin=algo.betas[beta_argmin,:], 
-        acceptance_ratio=mean.(accepted))
+        acceptance_ratio=mean.(accepted), dE=dE)
 end
 
 
 #### Monte Carlo subroutines
 function mc!(lm::LossyModel, algo::SA, rng::AbstractRNG,
-    accepted::BitArray{1} = zeros(algo.nsamples),
-    distortions::Vector{Float64} = fill(Inf, algo.nsamples),
-    parities::Vector{Int}=fill(typemax(Int),algo.nsamples);
+    accepted::BitArray{1} = falses(algo.nsamples),
+    distortions::Vector{Float64} = fill(NaN, algo.nsamples),
+    parities::Vector{Int}=fill(typemax(Int),algo.nsamples),
+    dE::Vector{Float64} = fill(NaN, algo.nsamples);
+    current_energy::Real = energy(lm), 
     showprogress::Bool=true)
 
-    energy_old = energy(lm)
-
     for n in 1:algo.nsamples
-        accepted[n], dE = onemcstep!(lm, algo.mc_move, energy_old, rng)
+        acc, deltaE = onemcstep!(lm, algo.mc_move, current_energy, rng)
+        acc && (current_energy += deltaE)
+        accepted[n] = acc
+        dE[n] = deltaE
         # Check parity only for those MC moves that don't always stay on cw's
-        par = typeof(algo.mc_move) in (MetropBasisCoeffs,MetropSmallJumps) ? 0 : parity(lm)
+        par = typeof(algo.mc_move) in (MetropBasisCoeffs,MetropSmallJumps) ? 0 :
+            parity(lm)
         # Save distortion only if parity is satisfied
         par == 0 && (distortions[n] = distortion(lm))
         parities[n] = par
@@ -118,10 +127,10 @@ function mc!(lm::LossyModel, algo::SA, rng::AbstractRNG,
     return nothing
 end
 
-function onemcstep!(lm::LossyModel, mc_move::MCMove, energy_old::Real,
+function onemcstep!(lm::LossyModel, mc_move::MCMove, current_energy::Real,
         rng::AbstractRNG=Random.MersenneTwister(0))
     to_flip, newvals = propose(mc_move, lm, rng)
-    acc, dE = accept(mc_move, lm, to_flip, newvals, energy_old, rng)
+    acc, dE = accept(mc_move, lm, to_flip, newvals, current_energy, rng)
     return acc, dE
 end
 
@@ -138,23 +147,24 @@ function accept(mc_move::MCMove, lm::LossyModel, to_flip::Vector{Int},
     return acc, dE
 end
 
-function accept(mc_move::Metrop1, lm::LossyModelGF2, to_flip::Vector{Int},
-    newvals::Vector{Int}, energy_old::Real, rng::AbstractRNG)
+function accept(mc_move::Metrop1, lm::LossyModelGF2, to_flip::Int,
+    newval::Int, energy_old::Real, rng::AbstractRNG)
 
     # COMPUTE ENERGY DIFFERENCE
     dE = 0.0
-    # Only one site to flip
-    @assert length(to_flip)==1
-    i = to_flip[1]
-    # Look for neighbors of i and compute delta energy for checks
-    for a in lm.fg.Vneigs[i]
-        dE += lm.beta1*(1-2*reduce(xor,lm.x[lm.fg.Fneigs[a]], init=0))
+    # Look for neighbors of `to_flip` and compute delta energy for checks
+    for a in lm.fg.Vneigs[to_flip]
+        z = 0
+        for w in lm.fg.Fneigs[a]    
+            z = xor(z, lm.x[w])    
+        end
+        dE += lm.beta1*(1-2*z)
     end
     # Delta energy for overlap
-    dE += lm.beta2*(1-2*xor(lm.x[i],lm.y[i]))
+    dE += lm.beta2*(1-2*xor(lm.x[to_flip],lm.y[to_flip]))
     # ACCEPT OR NOT
     acc = metrop_accept(dE, rng)
-    acc && (lm.x[i] = newvals[1])
+    acc && (lm.x[to_flip] = newval)
     return acc, dE
 end
 
@@ -174,12 +184,16 @@ function propose(mc_move::Metrop1, lm::LossyModel, rng::AbstractRNG)
     # Pick a site at random
     to_flip = rand(rng, 1:lm.fg.n)
     # Pick a new value 
-    if typeof(lm) == LossyModelGF2
-        newval = 1 - lm.x[to_flip]
-    else
-        newval = rand(rng, [k for k=0:lm.fg.q-1 if k!=lm.x[to_flip]])
-    end
-    return [to_flip], [newval]
+    newval = rand(rng, [k for k=0:lm.fg.q-1 if k!=lm.x[to_flip]])
+    return to_flip, newval
+end
+
+function propose(mc_move::Metrop1, lm::LossyModelGF2, rng::AbstractRNG)
+    # Pick a site at random
+    to_flip = rand(rng, 1:lm.fg.n)
+    # Pick a new value 
+    newval = 1 - lm.x[to_flip]
+    return to_flip, newval
 end
 
 # Flips one basis coefficient at every move
@@ -216,8 +230,7 @@ function metrop_accept(dE::Real, rng::AbstractRNG)::Bool
     if dE < 0
         return true
     else
-        r = rand(rng)
-        return r < exp(-dE)
+        return rand(rng) < exp(-dE)
     end
 end
 

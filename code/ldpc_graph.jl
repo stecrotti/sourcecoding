@@ -320,7 +320,11 @@ function hd(x::Int,y::Int)::Int
 end
 
 function hd(x::Vector{Int}, y::Vector{Int})::Int
-    sum(hd.(x,y))
+    d = 0
+    for (a,b) in zip(x,y)
+        d += xor(a,b)
+    end
+    return count_ones(d)
 end
 
 

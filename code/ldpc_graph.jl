@@ -319,12 +319,19 @@ function hd(x::Int,y::Int)::Int
     return count_ones(z)
 end
 
-function hd(x::Vector{Int}, y::Vector{Int})::Int
+function hd(x::BitArray{1}, y::BitArray{1})::Int
     d = 0
     for (a,b) in zip(x,y)
         d += xor(a,b)
     end
-    return count_ones(d)
+    return d
+end
+function hd(x::AbstractVector{Int}, y::AbstractVector{Int})::Int
+    d = 0
+    for (a,b) in zip(x,y)
+        d += count_ones(xor(a,b))
+    end
+    return d
 end
 
 
@@ -332,13 +339,13 @@ hw(v::Vector{Int})::Int = sum(count_ones, v)
 hw(v::Array{Int,2})::Int = hw(vec(v))
 
 # Parity-check for the adjacency matrix of a factor graph
-function paritycheck(fg::FactorGraph, x::AbstractVector{Int}=guesses(fg))
+function paritycheck(fg::FactorGraph, x::AbstractVector=guesses(fg))
     return gfmatrixmult(fg.H, x, fg.q, fg.mult)
 end
 # function paritycheck(fg::FactorGraph, x::AbstractArray{Int,2})
 #     return gfmatrixmult(fg.H, vec(x), fg.q, fg.mult)
 # end
-function paritycheck(fg::FactorGraphGF2, x::AbstractVector{Int}=guesses(fg))
+function paritycheck(fg::FactorGraphGF2, x::AbstractVector=guesses(fg))
     z = zeros(Int, fg.m)
     for f in eachindex(fg.Fneigs)
         if fg.Fneigs[f] != []
@@ -349,7 +356,7 @@ function paritycheck(fg::FactorGraphGF2, x::AbstractVector{Int}=guesses(fg))
 end
 
 parity(fg::FactorGraph, args...) = hw(paritycheck(fg, args...))
-function parity(fg::FactorGraphGF2, x::Vector{Int}=guesses(fg))
+function parity(fg::FactorGraphGF2, x::AbstractVector=guesses(fg))
     z = p = 0
     for f in eachindex(fg.Fneigs)
         for v in fg.Fneigs[f]

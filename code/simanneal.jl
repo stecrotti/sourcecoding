@@ -49,16 +49,21 @@ end
     mc_move::MCMove = MetropBasisCoeffs()                                   # Single MC move
     betas:: Array{Float64,2} = [1.0 1.0]                                    # Cooling schedule
     nsamples::Int = Int(1e2)                                                # Number of samples
-    init_state::Function = zero_codeword       # Function to initialize internal state
+    init_state!::Function = zero_codeword!       # Function to initialize internal state
 end
 function SA(mc_move::MCMove, beta2::Vector{Float64}; kw...)
     betas = hcat(fill(Inf, length(beta2)), beta2)
     return SA(mc_move=mc_move, betas=betas; kw...)
 end
-function zero_codeword(lm::LossyModel, args...)
-    zeros(Int, lm.fg.n)
+function zero_codeword!(lm::LossyModel, args...)
+    zeros(eltype(lm.x), lm.fg.n)
 end
-random_state(lm::LossyModel, rng::AbstractRNG) = rand(rng, [0,1], length(lm.x))
+function random_state!(lm::LossyModel, rng::AbstractRNG)
+    lm.x .= rand(rng, [0,1], length(lm.x))
+end
+function random_state!(lm::LossyModelGF2, rng::AbstractRNG)
+    lm.x .= bitrand(length(lm.x))
+end
 
 function solve!(lm::LossyModel, algo::SA,
     distortions::Vector{Vector{Float64}}=[fill(0.5, algo.nsamples) 
@@ -75,7 +80,7 @@ function solve!(lm::LossyModel, algo::SA,
     
     rng = Random.MersenneTwister(randseed)
     # Initialize to the requested initial state
-    lm.x = algo.init_state(lm, rng)
+    algo.init_state!(lm, rng)
     # Adapt mc_move parameters to the current model
     adapt_to_model!(algo.mc_move, lm)
 
@@ -138,7 +143,7 @@ end
 # For particular choices of proposed new state, this method can be overridden for
 #  something faster that exploits the fact that only a few terms in the energy change
 function accept(mc_move::MCMove, lm::LossyModel, to_flip::Vector{Int},
-        newvals::Vector{Int}, energy_old::Real, rng::AbstractRNG)
+        newvals::Vector, energy_old::Real, rng::AbstractRNG)
     xnew = copy(lm.x)
     xnew[to_flip] .= newvals
     dE = energy(lm, xnew) - energy_old
@@ -148,7 +153,7 @@ function accept(mc_move::MCMove, lm::LossyModel, to_flip::Vector{Int},
 end
 
 function accept(mc_move::Metrop1, lm::LossyModelGF2, to_flip::Int,
-    newval::Int, energy_old::Real, rng::AbstractRNG)
+    newval::Bool, energy_old::Real, rng::AbstractRNG)
 
     # COMPUTE ENERGY DIFFERENCE
     dE = 0.0
@@ -159,6 +164,7 @@ function accept(mc_move::Metrop1, lm::LossyModelGF2, to_flip::Int,
             z = xor(z, lm.x[w])    
         end
         dE += lm.beta1*(1-2*z)
+        @assert !isnan(dE)
     end
     # Delta energy for overlap
     dE += lm.beta2*(1-2*xor(lm.x[to_flip],lm.y[to_flip]))
@@ -170,7 +176,7 @@ end
 
 function accept(mc_move::Union{MetropBasisCoeffs,MetropSmallJumps}, 
         lm::LossyModel, to_flip::Vector{Int},
-        newvals::Vector{Int}, rng::AbstractRNG)
+        newvals::Vector, rng::AbstractRNG)
     # Compare energy shift only wrt those variables `to_flip`
     dE = energy_overlap(lm, newvals, sites=to_flip) - 
         energy_overlap(lm, lm.x[to_flip], sites=to_flip)
@@ -192,7 +198,7 @@ function propose(mc_move::Metrop1, lm::LossyModelGF2, rng::AbstractRNG)
     # Pick a site at random
     to_flip = rand(rng, 1:lm.fg.n)
     # Pick a new value 
-    newval = 1 - lm.x[to_flip]
+    newval = !lm.x[to_flip]
     return to_flip, newval
 end
 

@@ -12,17 +12,17 @@ end
 
 mutable struct LossyModelGF2 <: LossyModel 
     fg::FactorGraphGF2    # Factor graph instance
-    x::Vector{Int}      # Current state
+    x::BitArray{1}      # Current state
     beta1::Real         # Inverse temperature for checks
     beta2::Real         # Inverse temperature for overlap with input vector y
-    y::Vector{Int}      # Vector to be compressed
+    y::BitArray{1}       # Vector to be compressed
 end
 
 # 'Inherit' methods from inner property `fg`
 @forward LossyModel.fg  nullspace, rank, isfullrank, lightbasis, 
     permute_to_triangular
 
-function fix_indep_from_src(lm::LossyModel, x::AbstractVector{Int}=lm.x)
+function fix_indep_from_src(lm::LossyModel, x::AbstractVector=lm.x)
     fix_indep_from_src(lm.fg, lm.y, x)
     lm.x = x
     return x
@@ -31,21 +31,22 @@ end
 # Constructor for lossy model with LDPC matrix
 function LossyModel(::Val{q}, n::Int, m::Int; beta1::Real=Inf, beta2::Real=1.0, 
         randseed::Int=0,
-        y::Vector{Int}=rand(MersenneTwister(randseed), 0:q-1,n), kw...) where{q}
+        y::Vector=rand(MersenneTwister(randseed), 0:q-1,n), kw...) where{q}
 
     !ispow2(q) && warning("The value of q you inserted (q=$q) is not a power of 2")
     fg = ldpc_graph(Val(q), n, m; kw...)
-    x = zeros(Int, n)
     if q==2
-        return LossyModelGF2(fg, x, beta2, beta2, y)
-    else
+        x = falses(n)
+        return LossyModelGF2(fg, x, beta2, beta2, Bool.(y))
+    else  
+        x = zeros(Int, n)
         return LossyModelGFQ(fg, x, beta2, beta2, y)
     end
 end
 
-function LossyModel(fg::FactorGraphGF2; x = zeros(Int, fg.n),
+function LossyModel(fg::FactorGraphGF2; x = falses(fg.n),
         beta1 = Inf, beta2 = 1.0,
-        y = rand(0:1, fg.n))
+        y = bitrand(fg.n))
     
     return LossyModelGF2(fg, x, beta2, beta2, y)
 end
@@ -62,7 +63,7 @@ function rate(lm::LossyModel)
     r = 1 - n_indep_rows/lm.fg.n
     return r
 end
-function distortion(lm::LossyModel, x::AbstractVector{Int}=lm.x)
+function distortion(lm::LossyModel, x::AbstractVector=lm.x)
     # return hd(x,lm.y)/(lm.fg.n*log2(lm.fg.q))
     return distortion(lm.fg, lm.y, x)
 end
@@ -77,26 +78,26 @@ function breduction!(lm::LossyModel, args...; kwargs...)
 end
 
 # Support for general input x (can also be a matrix)
-function paritycheck(lm::LossyModel, x::AbstractArray{Int,2}, varargin...)
+function paritycheck(lm::LossyModel, x::AbstractArray{2}, varargin...)
     return paritycheck(lm.fg, x, varargin...)
 end
 
 # Input as a vector instead of 2d array
-function paritycheck(lm::LossyModel, x::AbstractVector{Int}=lm.x, varargin...)
+function paritycheck(lm::LossyModel, x::AbstractVector=lm.x, varargin...)
     return paritycheck(lm.fg, x[:,:], varargin...)
 end
 
-function parity(lm::LossyModel, x::AbstractVector{Int}=lm.x, args...)
+function parity(lm::LossyModel, x::AbstractVector=lm.x, args...)
     return parity(lm.fg, x, args...)
 end
 
-function energy(lm::LossyModel, x::AbstractVector{Int}=lm.x)
+function energy(lm::LossyModel, x::AbstractVector=lm.x)
     ener_checks = energy_checks(lm, x)
     ener_overlap = energy_overlap(lm, x)
     return ener_checks + ener_overlap
 end
 
-function energy_checks(lm::LossyModel, x::Union{Vector{Int},AbstractArray{Int,2}}=lm.x)
+function energy_checks(lm::LossyModel, x::Union{AbstractVector,AbstractArray{2}}=lm.x)
     # Unsatisfied checks
     hw_checks = parity(lm, x)
     # In principle this should just be lm.beta1*hw_checks, but gotta take into
@@ -104,8 +105,8 @@ function energy_checks(lm::LossyModel, x::Union{Vector{Int},AbstractArray{Int,2}
     ener_checks = hw_checks == 0 ? 0 : lm.beta1*hw_checks
 end
 
-function energy_overlap(lm::LossyModel, x::Union{Vector{Int},AbstractArray{Int,2}}=lm.x;
-        sites::Union{AbstractVector{Int},BitArray{1}}=trues(length(lm.x)))
+function energy_overlap(lm::LossyModel, x::Union{AbstractVector,AbstractArray{2}}=lm.x;
+        sites::Union{AbstractVector,BitArray{1}}=trues(length(lm.x)))
     return lm.beta2*hd(x, lm.y[sites])
 end
 
@@ -136,15 +137,15 @@ function compress(lm::LossyModel, getbasis::Function=newbasis)
     return x_compressed
 end
 
-function decompress(x_compressed::AbstractVector{Int}, basis::AbstractVector{Int}, args...)
+function decompress(x_compressed::AbstractVector, basis::AbstractVector, args...)
     x_reconstructed = gfmatrixmult(basis, x_compressed, args...)
     return x_reconstructed
 end
-function decompress(x_compressed::AbstractVector{Int}, fg::FactorGraph, 
+function decompress(x_compressed::AbstractVector, fg::FactorGraph, 
         getbasis::Function=newbasis)
     x_reconstructed = gfmatrixmult(getbasis(fg), x_compressed, q_mult_div(fg)[(1:2)]...)
 end
-function decompress(x_compressed::AbstractVector{Int}, lm::LossyModel, 
+function decompress(x_compressed::AbstractVector, lm::LossyModel, 
         getbasis::Function=newbasis)
     return decompress(x_compressed, lm.fg, getbasis)
 end

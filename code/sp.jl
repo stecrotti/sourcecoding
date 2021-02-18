@@ -132,8 +132,6 @@ function update_var_slow!(fg::SurveyPropagation, i; damp = 0.0)
 end
 
 
-
-
 function update_var!(fg::SurveyPropagation, i; damp = 0.0, rein=0.0)
     ε = 0.0
     J = fg.J
@@ -181,3 +179,46 @@ function iteration!(fg::SurveyPropagation; maxiter = 1000, tol=1e-3, γ=0.0, dam
     end
 end
 
+function update_var_zeroT_slow!(fg::SurveyPropagation, i; damp = 0.0)
+    J = fg.J
+    s = fg.efield[i]
+    y = fg.y
+    ∂i = nzrange(fg.H, i)
+    
+end
+
+
+function update_factor_zeroT_slow!(fg::SurveyPropagation, b; damp = 0.0)
+    ε = 0.0
+    J = fg.J
+    ∂b = nonzeros(fg.X)[nzrange(fg.X, b)]
+    for i ∈ ∂b
+        a = fill(0.0, -J-1:J+1)
+        a[0:J] .= 1
+        for j ∈ ∂b
+            i == j && continue
+            q = fg.Q[j]
+            Σp, Σm = 0.0, 0.0
+            for h=J:-1:1
+                ap, am = a[h], a[-h]
+                Σp += q[h]; Σm += q[-h]
+                a[+h] = ap*Σp + am*Σm
+                a[-h] = am*Σp + ap*Σm
+            end
+            a[0] *= 1 - q[0]
+        end
+        p = fill(0.0, -J:J)
+        for u = 1:J
+            p[+u] = a[+u]-a[u+1]
+            p[-u] = (a[-u]-a[-u-1])
+            #*exp(2fg.y*u)
+        end
+        p[0] = 1 - a[0]
+        p ./= sum(p)
+        ε = max(ε, maximum(abs, fg.P[i] - p))
+        for u in eachindex(p)
+            fg.P[i][u] = damp * fg.P[i][u] + (1-damp) * p[u]
+        end
+    end
+    ε
+end

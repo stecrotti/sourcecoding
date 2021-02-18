@@ -389,7 +389,7 @@ function refresh!(fg::FactorGraphGF2)
     return nothing
 end
 
-function refresh!(fg::FactorGraph, y::Vector{Int},
+function refresh!(fg::FactorGraph, y::AbstractVector,
     algo::Union{BP,MS}=MS(); randseed::Int=0)
     refresh!(fg)
     extfields!(fg, y, algo, randseed=randseed)
@@ -401,7 +401,7 @@ function extfields!(lm::LossyModel, algo::Union{BP,MS}; randseed::Int=0)
     extfields!(lm.fg, lm.y, algo, randseed=randseed)
 end
 
-function distortion(fg::FactorGraph, y::Vector{Int}, x::Vector{Int}=guesses(fg))
+function distortion(fg::FactorGraph, y::AbstractVector, x::AbstractVector=guesses(fg))
     return hd(x,y)/(fg.n*log2(fg.q))
 end
 
@@ -410,8 +410,8 @@ naive_compression_distortion(fg::FactorGraph,args...;kw...) = 0.5*(nfacts(fg)/nv
 
 # Fix the independent variables to their value in the source vector
 # Pass x as an argument to then be able to retrieve it
-function fix_indep_from_src(fg::FactorGraph, y::Vector{Int}, 
-        x::Vector{Int}=zeros(Int, fg.n); 
+function fix_indep_from_src(fg::FactorGraph, y::AbstractVector, 
+        x::AbstractVector=zeros(Int, fg.n); 
         independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent))
     x .= _fix_indep(fg,y,x, basis=basis, independent=independent)
     return distortion(fg, y, x)

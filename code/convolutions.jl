@@ -137,3 +137,24 @@ function gfmsclist(lf, conv=gfmsc)
     f2 = gfmsclist(lf[n÷2+1:end], conv)
     conv(f1, f2)
 end
+
+
+function msclist_slow(F, J=lastindex(F[1]))
+    g = fill(-Inf,-J:J)
+    for x in Iterators.product(fill(-J:J, length(F))...)
+        v = sum(Fi[xi] for (Fi,xi) in zip(F,x))
+        if v > g[clamp(sum(x),-J,J)]
+            g[clamp(sum(x),-J,J)] = v
+        end
+    end
+    g
+end
+
+function msclist(F, J=lastindex(F[1]))
+    g = fill(-Inf,-J:J); g[0] = 0
+    for i in eachindex(F)
+        g = msc(g, F[i])
+    end
+    g
+end
+

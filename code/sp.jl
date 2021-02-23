@@ -120,11 +120,6 @@ function update_var_zeroT!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0)
          si[clamp(h,-J,J)] = max(si[clamp(h,-J,J)], abs(h) - qfull[h])
     end
     replace!(si, Inf => -Inf)
-    si .-= maximum(si)
-
-    if length(Q)==2
-        @assert msc(init,P[1])==Q[1] && msc(init,P[2])==Q[2] 
-    end
 
     qnew = fill(-Inf, -J:J)
     for (qcav,q) ∈ zip(Q, sp.Q[∂i])
@@ -132,21 +127,22 @@ function update_var_zeroT!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0)
         for h in eachindex(qcav)
             qnew[clamp(h,-J,J)] = max(qnew[clamp(h,-J,J)], abs(h) - qcav[h])
         end
-        # replace!(qnew, Inf => -Inf)
+        replace!(qnew, Inf => -Inf)
         rein != 0 && (qnew .+= si.*rein)
         qnew .-= maximum(qnew)
         # @show qnew_fast = qnew
         @assert !any(isnan,qnew) "NaN after normaliz in update var"
-        ε = max(ε, maximum(x->isinf(x) ? 0.0 : abs(x), qnew - q))
+        ε = max(ε, maximum(x->isnan(x) ? 0.0 : abs(x), qnew - q))
         if damp != 0
-            q .= damp .* sp.Q[a] .+ (1-damp) .* qnew
+            q .= damp .* q .+ (1-damp) .* qnew
         else
             q .= qnew
         end
-    end
+    end 
     si[0] *= 1 - rein
     si[-J:-1] .*= 1 + rein
     si[1:J] .*= 1 + rein
+    si .-= maximum(si)
     ε
 end
 
@@ -169,8 +165,6 @@ function update_var_zeroT_slow!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0
     q[J] = maximum(q[J:end])
     q[-J] = maximum(q[begin:-J])
     si[-J:J] .=  q[-J:J] 
-    rein != 0 && (qnew .+= si.*rein)
-    si .-= maximum(si)
     # compute cavity fields
     for a in ∂i
         P = [sp.P[b] for b in ∂i if b!=a]
@@ -184,9 +178,10 @@ function update_var_zeroT_slow!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0
         # clamp
         q[J] = maximum(q[J:end])
         q[-J] = maximum(q[begin:-J])
-        # @show qnew_slow = q[-J:J] .- maximum(q[-J:J])
-        qnew = OffsetArray(q[-J:J] .- maximum(q[-J:J]), -J:J)
-        ε = max(ε, maximum(x->isinf(x) ? 0.0 : abs(x), qnew - sp.Q[a]))
+        qnew = OffsetArray(q[-J:J], -J:J)
+        rein != 0 && (qnew .+= si.*rein)
+        qnew .-= maximum(qnew)
+        ε = max(ε, maximum(x->isnan(x) ? 0.0 : abs(x), qnew - sp.Q[a]))
         if damp != 0
             sp.Q[a] .= damp .* sp.Q[a] .+ (1-damp) .* qnew
         else
@@ -197,6 +192,7 @@ function update_var_zeroT_slow!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0
     si[0] *= 1 - rein
     si[-J:-1] .*= 1 + rein
     si[1:J] .*= 1 + rein
+    si .-= maximum(si)
     ε
 end  
 
@@ -206,47 +202,37 @@ function update_factor_zeroT!(sp::SurveyPropagation, b; damp = 0.0)
     J = sp.J
     ∂b = nonzeros(sp.X)[nzrange(sp.X, b)]
     for i ∈ ∂b
-        p = fill(0.0, -J:J)
+        p = fill(-Inf, -J:J)
+        b = fill(-Inf, -J:J); b[1:J] .= 0.0
+        pnew = fill(-Inf, -J:J)
+        bnew = fill(-Inf, -J:J); bnew[1:J] .= 0.0
         sumqstar = 0.0
         qmax = -Inf
-        b = fill(-Inf, -J:J); b[1:J] .= 0.0
-        a = fill(-Inf, -J:J)
         for j ∈ ∂b
-            j == i && continue
+            i == j && continue
             q = sp.Q[j]
-            # recursion for u=0
-            sumqstar += maximum(q)
-            qmax = max(qmax, q[0]-maximum(q))
-            # recursion for |u|>0
-            for u in 1:J
-                anew = fill(-Inf, -J:J)
-                bnew = fill(-Inf, -J:J)
-                # recursion for a uses b from the previous round
-                for h in J:-1:u+1
-                    anew[u] = max(anew[u], q[h]+a[u], q[-h]+a[-u])
-                    anew[-u] = max(anew[-u], q[h]+a[-u], q[-h]+a[u])
-                end 
-                # @show u,q[u],b[u]
-                anew[u] = max(anew[u], q[u]+b[u], q[-u]+b[-u])
-                anew[-u] = max(anew[-u], q[u]+b[-u], q[-u]+b[u])
-                # @show anew
-                # recursion for b
-                for h in J:-1:u
-                    @show u,q[u],b[u]
-                    bnew[u] = max(bnew[u], q[h]+b[u], q[-h]+b[-u])
-                    @show bnew[u]
-                    bnew[-u] = max(bnew[-u], q[h]+b[-u], q[-h]+b[u])
-                end
-                @show bnew
-                a .= anew
-                b .= bnew
+            qstar = maximum(q)
+            sumqstar += qstar
+            qmax = max(qmax, q[0] - qstar)
+            # update p and b
+            for u in 1:J-1
+                m1 = maximum(q[u+1:end])
+                m2 = maximum(q[begin:-u-1])
+                pnew[u] = max(q[u]+b[u], q[-u]+b[-u], m1+p[u], m2+p[-u])
+                pnew[-u] = max(q[u]+b[-u], q[-u]+b[u], m1+p[-u], m2+p[u])
+                n1 = max(m1, q[u])
+                n2 = max(m2, q[-u])
+                bnew[u] = max(n1+b[u], n2+b[-u])
+                bnew[-u] = max(n1+b[-u], n2+b[u])
             end
+            pnew[J] = bnew[J] = max(q[J]+b[J], q[-J]+b[-J])
+            pnew[-J] = bnew[-J] = max(q[J]+b[-J], q[-J]+b[J])
+            b .= bnew
+            p .= pnew
         end
-        p[0] = sumqstar + qmax 
-        p[1:J] = a[1:J]
-        p[-J:-1] = a[-J:-1]
+        p[0] = sumqstar + qmax  
         p .-= maximum(p)
-        ε = max(ε, maximum(x->isinf(x) ? 0.0 : abs(x), sp.P[i] - p))
+        ε = max(ε, maximum(x->isnan(x) ? 0.0 : abs(x), sp.P[i] - p))
         for u in eachindex(p)
             if damp != 0
                 sp.P[i][u] = damp * sp.P[i][u] + (1-damp) * p[u]
@@ -271,7 +257,7 @@ function update_factor_zeroT_slow!(sp::SurveyPropagation, b; damp = 0.0)
             p[u] = max(p[u], sum(q[h] for (q,h) in zip(Q,hs)))
         end
         p .-= maximum(p)
-        ε = max(ε, maximum(x->isinf(x) ? 0.0 : abs(x), sp.P[i] - p))
+        ε = max(ε, maximum(x->isnan(x) ? 0.0 : abs(x), sp.P[i] - p))
         for u in eachindex(p)
             if damp != 0
                 sp.P[i][u] = damp * sp.P[i][u] + (1-damp) * p[u]
@@ -334,7 +320,22 @@ function iteration!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, γ=0.0, dam
         callback(t, ε, sp) && break
         ε < tol && break
     end
-    
+end
+
+function iteration_zeroT!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, damp=0.0, rein=0.0, callback=(x...)->false)
+    errf = fill(0.0, size(H,1))
+    errv = fill(0.0, size(H,2))
+    @inbounds for t = 1:maxiter
+        Threads.@threads for a=1:size(H,1)
+            errf[a] = update_factor_zeroT!(sp, a, damp=damp)
+        end
+        Threads.@threads for i=1:size(H,2)
+            errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein)
+        end
+        ε = max(maximum(errf), maximum(errv))
+        callback(t, ε, sp) && break
+        ε < tol && break
+    end
 end
 
 # Max-Sum convolution

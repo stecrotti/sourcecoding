@@ -32,6 +32,15 @@ function ⊛(p1, p2)
     q
 end
 
+# Max-Sum convolution
+function msc(f1,f2)
+    g = fill(-Inf,firstindex(f1)+firstindex(f2):lastindex(f1)+lastindex(f2))
+    for x1 in eachindex(f1), x2 in eachindex(f2)
+        g[x1+x2] = max(g[x1+x2], f1[x1]+f2[x2])
+    end
+    g
+end
+
 
 function update_var_slow!(sp::SurveyPropagation, i; damp = 0.0)
     ε = 0.0
@@ -70,7 +79,6 @@ function update_var_slow!(sp::SurveyPropagation, i; damp = 0.0)
     ε
 end
 
-
 function update_var!(sp::SurveyPropagation, i; damp = 0.0, rein=0.0)
     ε = 0.0
     J = sp.J
@@ -99,174 +107,6 @@ function update_var!(sp::SurveyPropagation, i; damp = 0.0, rein=0.0)
     sp.survey[i][0] *= 1 - rein
     sp.survey[i][-J:-1] .^= 1 + rein
     sp.survey[i][1:J] .^= 1 + rein
-    ε
-end
-
-function update_var_zeroT!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0)
-    ε = 0.0
-    J = sp.J
-    s = sp.efield[i]
-    ∂i = nzrange(sp.H, i)
-    # Functions for max-sum convolution
-    P = [abs.(OffsetArray(-J:J, -J:J)) + p for p in sp.P[∂i]]
-    # Init: "log(delta)" centered at s
-    # init = fill(-Inf, -J:J); init[s] = 0.0
-    init = fill(0.0, s:s)
-    Q = [fill(0.0, 0:0) for a ∈ 1:length(∂i)]
-    qfull = cavity!(Q, P, msc, init)
-    si = sp.survey[i]
-    si .= -Inf
-    for h in eachindex(qfull)
-         si[clamp(h,-J,J)] = max(si[clamp(h,-J,J)], abs(h) - qfull[h])
-    end
-    replace!(si, Inf => -Inf)
-
-    qnew = fill(-Inf, -J:J)
-    for (qcav,q) ∈ zip(Q, sp.Q[∂i])
-        qnew .= -Inf
-        for h in eachindex(qcav)
-            qnew[clamp(h,-J,J)] = max(qnew[clamp(h,-J,J)], abs(h) - qcav[h])
-        end
-        replace!(qnew, Inf => -Inf)
-        rein != 0 && (qnew .+= si.*rein)
-        qnew .-= maximum(qnew)
-        # @show qnew_fast = qnew
-        @assert !any(isnan,qnew) "NaN after normaliz in update var"
-        ε = max(ε, maximum(x->isnan(x) ? 0.0 : abs(x), qnew - q))
-        if damp != 0
-            q .= damp .* q .+ (1-damp) .* qnew
-        else
-            q .= qnew
-        end
-    end 
-    si[0] *= 1 - rein
-    si[-J:-1] .*= 1 + rein
-    si[1:J] .*= 1 + rein
-    si .-= maximum(si)
-    ε
-end
-
-function update_var_zeroT_slow!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0)
-    ε = 0.0
-    J = sp.J
-    s = sp.efield[i]
-    ∂i = nzrange(sp.H, i)
-    # compute survey
-    P = sp.P[∂i]
-    si = sp.survey[i]
-    q = fill(Inf, sum(firstindex(p) for p in P)-1:sum(lastindex(p) for p in P)+1)
-    for us in Iterators.product(fill(-J:J, length(P))...)
-        h = sum(us) + s
-        # @show us, abs(h) - sum(abs.(u) for (p,u) in zip(P,us))
-        q[h] = min(q[h], abs(h) - sum(abs.(u)+p[u] for (p,u) in zip(P,us)))
-    end
-    replace!(q, Inf => -Inf)
-    # clamp
-    q[J] = maximum(q[J:end])
-    q[-J] = maximum(q[begin:-J])
-    si[-J:J] .=  q[-J:J] 
-    # compute cavity fields
-    for a in ∂i
-        P = [sp.P[b] for b in ∂i if b!=a]
-        q = fill(Inf, sum(firstindex(p) for p in P)-1:sum(lastindex(p) for p in P)+1)
-        for us in Iterators.product(fill(-J:J, length(P))...)
-            h = sum(us) + s
-            q[h] = min(q[h], abs(h) - sum(abs.(u)+p[u] for (p,u) in zip(P,us)))
-            # @show abs(h) - sum(abs.(u)+p[u] for (p,u) in zip(P,us))
-        end
-        replace!(q, Inf => -Inf)
-        # clamp
-        q[J] = maximum(q[J:end])
-        q[-J] = maximum(q[begin:-J])
-        qnew = OffsetArray(q[-J:J], -J:J)
-        rein != 0 && (qnew .+= si.*rein)
-        qnew .-= maximum(qnew)
-        ε = max(ε, maximum(x->isnan(x) ? 0.0 : abs(x), qnew - sp.Q[a]))
-        if damp != 0
-            sp.Q[a] .= damp .* sp.Q[a] .+ (1-damp) .* qnew
-        else
-            sp.Q[a] .= qnew
-        end
-        # @show sp.Q[a]
-    end
-    si[0] *= 1 - rein
-    si[-J:-1] .*= 1 + rein
-    si[1:J] .*= 1 + rein
-    si .-= maximum(si)
-    ε
-end  
-
-
-function update_factor_zeroT!(sp::SurveyPropagation, b; damp = 0.0)
-    ε = 0.0
-    J = sp.J
-    ∂b = nonzeros(sp.X)[nzrange(sp.X, b)]
-    for i ∈ ∂b
-        p = fill(-Inf, -J:J)
-        b = fill(-Inf, -J:J); b[1:J] .= 0.0
-        pnew = fill(-Inf, -J:J)
-        bnew = fill(-Inf, -J:J); bnew[1:J] .= 0.0
-        sumqstar = 0.0
-        qmax = -Inf
-        for j ∈ ∂b
-            i == j && continue
-            q = sp.Q[j]
-            qstar = maximum(q)
-            sumqstar += qstar
-            qmax = max(qmax, q[0] - qstar)
-            # update p and b
-            for u in 1:J-1
-                m1 = maximum(q[u+1:end])
-                m2 = maximum(q[begin:-u-1])
-                pnew[u] = max(q[u]+b[u], q[-u]+b[-u], m1+p[u], m2+p[-u])
-                pnew[-u] = max(q[u]+b[-u], q[-u]+b[u], m1+p[-u], m2+p[u])
-                n1 = max(m1, q[u])
-                n2 = max(m2, q[-u])
-                bnew[u] = max(n1+b[u], n2+b[-u])
-                bnew[-u] = max(n1+b[-u], n2+b[u])
-            end
-            pnew[J] = bnew[J] = max(q[J]+b[J], q[-J]+b[-J])
-            pnew[-J] = bnew[-J] = max(q[J]+b[-J], q[-J]+b[J])
-            b .= bnew
-            p .= pnew
-        end
-        p[0] = sumqstar + qmax  
-        p .-= maximum(p)
-        ε = max(ε, maximum(x->isnan(x) ? 0.0 : abs(x), sp.P[i] - p))
-        for u in eachindex(p)
-            if damp != 0
-                sp.P[i][u] = damp * sp.P[i][u] + (1-damp) * p[u]
-            else
-                sp.P[i][u] = p[u]
-            end
-            # sp.P[i][u] = damp * sp.P[i][u] + (1-damp) * p[u]
-        end
-    end
-    ε
-end
-
-function update_factor_zeroT_slow!(sp::SurveyPropagation, b; damp = 0.0)
-    ε = 0.0
-    J = sp.J
-    ∂b = nonzeros(sp.X)[nzrange(sp.X, b)]
-    for i ∈ ∂b
-        p = fill(-Inf, -J:J)
-        Q = [sp.Q[j] for j in ∂b if j!=i]
-        for hs in Iterators.product(fill(-J:J, length(Q))...)
-            u = minimum(abs,hs)*sign(prod(hs))
-            p[u] = max(p[u], sum(q[h] for (q,h) in zip(Q,hs)))
-        end
-        p .-= maximum(p)
-        ε = max(ε, maximum(x->isnan(x) ? 0.0 : abs(x), sp.P[i] - p))
-        for u in eachindex(p)
-            if damp != 0
-                sp.P[i][u] = damp * sp.P[i][u] + (1-damp) * p[u]
-            else
-                sp.P[i][u] = p[u]
-            end
-            # sp.P[i][u] = damp * sp.P[i][u] + (1-damp) * p[u]
-        end
-    end
     ε
 end
 
@@ -306,6 +146,185 @@ function update_factor!(sp::SurveyPropagation, b; damp = 0.0)
 end
 
 
+function update_var_zeroT!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0,
+        qnew = fill(-Inf, -sp.J:sp.J))
+    ε = 0.0
+    J = sp.J
+    s = sp.efield[i]
+    ∂i = nzrange(sp.H, i)
+    # Functions for max-sum convolution
+    P = [abs.(OffsetArray(-J:J, -J:J)) + p for p in sp.P[∂i]]
+    # Init: "log(delta)" centered at s
+    init = fill(0.0, s:s)
+    Q = [fill(0.0, 0:0) for a ∈ 1:length(∂i)]
+    qfull = cavity!(Q, P, msc, init)
+    si = sp.survey[i]
+    si .= -Inf
+    for h in eachindex(qfull)
+         si[clamp(h,-J,J)] = max(si[clamp(h,-J,J)], abs(h) - qfull[h])
+    end
+    # any(isequal(Inf), si) && println("+Inf in si")
+    # correct for -Inf in qfull which pick up a minus sign and become +Inf
+    replace!(si, Inf => -Inf)
+
+    for (qcav,q) ∈ zip(Q, sp.Q[∂i])
+        qnew .= -Inf
+        for h in eachindex(qcav)
+            qnew[clamp(h,-J,J)] = max(qnew[clamp(h,-J,J)], abs(h) - qcav[h])
+        end
+        # any(isequal(Inf), qnew) && println("+Inf in qnew")
+        replace!(qnew, Inf => -Inf)
+        rein != 0 && (qnew .+= si.*rein)
+        qnew .-= maximum(qnew)
+        @assert !any(isnan,qnew) "NaN after normaliz in update var"
+        ε = max(ε, maximum(x->isnan(x) ? 0.0 : abs(x), qnew - q))
+        if damp != 0
+            q .= damp .* q .+ (1-damp) .* qnew
+        else
+            q .= qnew
+        end
+    end 
+    si[0] *= 1 - rein
+    si[-J:-1] .*= 1 + rein
+    si[1:J] .*= 1 + rein
+    si .-= maximum(si)
+    ε
+end
+
+
+function update_factor_zeroT!(sp::SurveyPropagation, a; damp = 0.0, 
+        p = fill(Inf, -sp.J:sp.J), b = copy(p), pnew = copy(p), bnew = copy(b))
+    ε = 0.0
+    J = sp.J
+    ∂a = nonzeros(sp.X)[nzrange(sp.X, a)]
+    
+    for i ∈ ∂a
+        # recursion on p and b compute p[u!=0]
+        p .= -Inf
+        b .= -Inf; b[1:J] .= 0.0
+        pnew .= -Inf
+        bnew .= -Inf; bnew[1:J] .= 0.0
+        # initalize recursion for p[0]
+        sumqstar = 0.0
+        qmax = -Inf
+        for j ∈ ∂b
+            i == j && continue
+            q = sp.Q[j]
+            # updates for p[0]
+            qstar = maximum(q)
+            sumqstar += qstar
+            qmax = max(qmax, q[0] - qstar)
+            # update p and b
+            for u in 1:J-1
+                m1 = maximum(q[u+1:end])
+                m2 = maximum(q[begin:-u-1])
+                pnew[u] = max(q[u]+b[u], q[-u]+b[-u], m1+p[u], m2+p[-u])
+                pnew[-u] = max(q[u]+b[-u], q[-u]+b[u], m1+p[-u], m2+p[u])
+                # use max over |h|>u to compute max over |h|≥u
+                n1 = max(m1, q[u])
+                n2 = max(m2, q[-u])
+                bnew[u] = max(n1+b[u], n2+b[-u])
+                bnew[-u] = max(n1+b[-u], n2+b[u])
+            end
+            pnew[J] = bnew[J] = max(q[J]+b[J], q[-J]+b[-J])
+            pnew[-J] = bnew[-J] = max(q[J]+b[-J], q[-J]+b[J])
+            b .= bnew
+            p .= pnew
+        end
+        p[0] = sumqstar + qmax  
+        p .-= maximum(p)
+        ε = max(ε, maximum(x->isnan(x) ? 0.0 : abs(x), sp.P[i] - p))
+        for u in eachindex(p)
+            if damp != 0
+                sp.P[i][u] = damp * sp.P[i][u] + (1-damp) * p[u]
+            else
+                sp.P[i][u] = p[u]
+            end
+        end
+    end
+    ε
+end
+
+
+function update_var_zeroT_slow!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0)
+    ε = 0.0
+    J = sp.J
+    s = sp.efield[i]
+    ∂i = nzrange(sp.H, i)
+    # compute survey
+    P = sp.P[∂i]
+    si = sp.survey[i]
+    q = fill(Inf, sum(firstindex(p) for p in P)-1:sum(lastindex(p) for p in P)+1)
+    for us in Iterators.product(fill(-J:J, length(P))...)
+        h = sum(us) + s
+        # @show us, abs(h) - sum(abs.(u) for (p,u) in zip(P,us))
+        q[h] = min(q[h], abs(h) - sum(abs.(u)+p[u] for (p,u) in zip(P,us)))
+    end
+    replace!(q, Inf => -Inf)
+    # clamp
+    q[J] = maximum(q[J:end])
+    q[-J] = maximum(q[begin:-J])
+    si[-J:J] .=  q[-J:J] 
+    # compute cavity fields
+    qnew = fill(-Inf, -J:J)
+    for a in ∂i
+        P = [sp.P[b] for b in ∂i if b!=a]
+        q = fill(Inf, sum(firstindex(p) for p in P)-1:sum(lastindex(p) for p in P)+1)
+        for us in Iterators.product(fill(-J:J, length(P))...)
+            h = sum(us) + s
+            q[h] = min(q[h], abs(h) - sum(abs.(u)+p[u] for (p,u) in zip(P,us)))
+            # @show abs(h) - sum(abs.(u)+p[u] for (p,u) in zip(P,us))
+        end
+        replace!(q, Inf => -Inf)
+        # clamp
+        q[J] = maximum(q[J:end])
+        q[-J] = maximum(q[begin:-J])
+        qnew .= OffsetArray(q[-J:J], -J:J)
+        rein != 0 && (qnew .+= si.*rein)
+        qnew .-= maximum(qnew)
+        ε = max(ε, maximum(x->isnan(x) ? 0.0 : abs(x), qnew - sp.Q[a]))
+        if damp != 0
+            sp.Q[a] .= damp .* sp.Q[a] .+ (1-damp) .* qnew
+        else
+            sp.Q[a] .= qnew
+        end
+        # @show sp.Q[a]
+    end
+    si[0] *= 1 - rein
+    si[-J:-1] .*= 1 + rein
+    si[1:J] .*= 1 + rein
+    si .-= maximum(si)
+    ε
+end  
+
+
+function update_factor_zeroT_slow!(sp::SurveyPropagation, b; damp = 0.0)
+    ε = 0.0
+    J = sp.J
+    ∂b = nonzeros(sp.X)[nzrange(sp.X, b)]
+    for i ∈ ∂b
+        p = fill(-Inf, -J:J)
+        Q = [sp.Q[j] for j in ∂b if j!=i]
+        for hs in Iterators.product(fill(-J:J, length(Q))...)
+            u = minimum(abs,hs)*sign(prod(hs))
+            p[u] = max(p[u], sum(q[h] for (q,h) in zip(Q,hs)))
+        end
+        p .-= maximum(p)
+        ε = max(ε, maximum(x->isnan(x) ? 0.0 : abs(x), sp.P[i] - p))
+        for u in eachindex(p)
+            if damp != 0
+                sp.P[i][u] = damp * sp.P[i][u] + (1-damp) * p[u]
+            else
+                sp.P[i][u] = p[u]
+            end
+            # sp.P[i][u] = damp * sp.P[i][u] + (1-damp) * p[u]
+        end
+    end
+    ε
+end
+
+
+
 function iteration!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, γ=0.0, damp=0.0, rein=0.0, callback=(x...)->false)
     errf = fill(0.0, size(H,1))
     errv = fill(0.0, size(H,2))
@@ -322,15 +341,24 @@ function iteration!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, γ=0.0, dam
     end
 end
 
-function iteration_zeroT!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, damp=0.0, rein=0.0, callback=(x...)->false)
+function iteration_zeroT!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, 
+        damp=0.0, rein=0.0, callback=(x...)->false)
     errf = fill(0.0, size(H,1))
     errv = fill(0.0, size(H,2))
+    # Initialize here to not allocate inside inner loops
+    p = fill(Inf, -sp.J:sp.J)
+    b = copy(p)
+    pnew = copy(p)
+    bnew = copy(b)
+    qnew = fill(-Inf, -sp.J:sp.J)
+
     @inbounds for t = 1:maxiter
         Threads.@threads for a=1:size(H,1)
-            errf[a] = update_factor_zeroT!(sp, a, damp=damp)
+            errf[a] = update_factor_zeroT!(sp, a, damp=damp, 
+                p=p, b=b, pnew=pnew, bnew=bnew)
         end
         Threads.@threads for i=1:size(H,2)
-            errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein)
+            errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein, qnew=qnew)
         end
         ε = max(maximum(errf), maximum(errv))
         callback(t, ε, sp) && break
@@ -338,11 +366,4 @@ function iteration_zeroT!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, damp=
     end
 end
 
-# Max-Sum convolution
-function msc(f1,f2)
-    g = fill(-Inf,firstindex(f1)+firstindex(f2):lastindex(f1)+lastindex(f2))
-    for x1 in eachindex(f1), x2 in eachindex(f2)
-        g[x1+x2] = max(g[x1+x2], f1[x1]+f2[x2])
-    end
-    g
-end
+

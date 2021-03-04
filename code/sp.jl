@@ -145,7 +145,6 @@ function update_factor!(sp::SurveyPropagation, b; damp = 0.0)
     ε
 end
 
-
 function update_var_zeroT!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0,
         qnew = fill(-Inf, -sp.J:sp.J))
     ε = 0.0
@@ -197,7 +196,6 @@ function update_factor_zeroT!(sp::SurveyPropagation, a; damp = 0.0,
     ε = 0.0
     J = sp.J
     ∂a = nonzeros(sp.X)[nzrange(sp.X, a)]
-    
     for i ∈ ∂a
         # recursion on p and b compute p[u!=0]
         p .= -Inf
@@ -207,7 +205,7 @@ function update_factor_zeroT!(sp::SurveyPropagation, a; damp = 0.0,
         # initalize recursion for p[0]
         sumqstar = 0.0
         qmax = -Inf
-        for j ∈ ∂b
+        for j ∈ ∂a
             i == j && continue
             q = sp.Q[j]
             # updates for p[0]
@@ -345,6 +343,25 @@ function iteration_zeroT!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3,
         damp=0.0, rein=0.0, callback=(x...)->false)
     errf = fill(0.0, size(H,1))
     errv = fill(0.0, size(H,2))
+
+    @inbounds for t = 1:maxiter
+        Threads.@threads for a=1:size(H,1)
+            errf[a] = update_factor_zeroT!(sp, a, damp=damp)
+        end
+        Threads.@threads for i=1:size(H,2)
+            errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein)
+        end
+        ε = max(maximum(errf), maximum(errv))
+        callback(t, ε, sp) && break
+        ε < tol && break
+    end
+end
+
+function iteration_zeroT_random!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, 
+        damp=0.0, rein=0.0, callback=(x...)->false,
+        permv=randperm(size(H,2)), permf=randperm(size(H,1)))
+    errf = fill(0.0, size(H,1))
+    errv = fill(0.0, size(H,2))
     # Initialize here to not allocate inside inner loops
     p = fill(Inf, -sp.J:sp.J)
     b = copy(p)
@@ -353,11 +370,15 @@ function iteration_zeroT!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3,
     qnew = fill(-Inf, -sp.J:sp.J)
 
     @inbounds for t = 1:maxiter
-        Threads.@threads for a=1:size(H,1)
+        shuffle!(permv); shuffle!(permf)
+        for j=1:size(H,1)
+            a = permf[j]; i = permv[j]
             errf[a] = update_factor_zeroT!(sp, a, damp=damp, 
                 p=p, b=b, pnew=pnew, bnew=bnew)
+            errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein, qnew=qnew)
         end
-        Threads.@threads for i=1:size(H,2)
+        for j=size(H,1)+1:size(H,2)
+            i = permv[j]
             errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein, qnew=qnew)
         end
         ε = max(maximum(errf), maximum(errv))

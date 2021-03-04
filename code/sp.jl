@@ -152,7 +152,7 @@ function update_var_zeroT!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0,
     s = sp.efield[i]
     ∂i = nzrange(sp.H, i)
     # Functions for max-sum convolution
-    P = [abs.(OffsetArray(-J:J, -J:J)) + p for p in sp.P[∂i]]
+    P = [p-abs.(OffsetArray(-J:J, -J:J)) for p in sp.P[∂i]]
     # Init: "log(delta)" centered at s
     init = fill(0.0, s:s)
     Q = [fill(0.0, 0:0) for a ∈ 1:length(∂i)]
@@ -160,19 +160,17 @@ function update_var_zeroT!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0,
     si = sp.survey[i]
     si .= -Inf
     for h in eachindex(qfull)
-         si[clamp(h,-J,J)] = max(si[clamp(h,-J,J)], abs(h) - qfull[h])
+         si[clamp(h,-J,J)] = max(si[clamp(h,-J,J)], abs(h) + qfull[h])
     end
     # any(isequal(Inf), si) && println("+Inf in si")
-    # correct for -Inf in qfull which pick up a minus sign and become +Inf
-    replace!(si, Inf => -Inf)
 
     for (qcav,q) ∈ zip(Q, sp.Q[∂i])
         qnew .= -Inf
         for h in eachindex(qcav)
-            qnew[clamp(h,-J,J)] = max(qnew[clamp(h,-J,J)], abs(h) - qcav[h])
+            qnew[clamp(h,-J,J)] = max(qnew[clamp(h,-J,J)], abs(h) + qcav[h])
         end
         # any(isequal(Inf), qnew) && println("+Inf in qnew")
-        replace!(qnew, Inf => -Inf)
+        # replace!(qnew, Inf => -Inf)
         rein != 0 && (qnew .+= si.*rein)
         qnew .-= maximum(qnew)
         @assert !any(isnan,qnew) "NaN after normaliz in update var"
@@ -252,13 +250,12 @@ function update_var_zeroT_slow!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0
     # compute survey
     P = sp.P[∂i]
     si = sp.survey[i]
-    q = fill(Inf, sum(firstindex(p) for p in P)-1:sum(lastindex(p) for p in P)+1)
+    q = fill(-Inf, sum(firstindex(p) for p in P)-1:sum(lastindex(p) for p in P)+1)
     for us in Iterators.product(fill(-J:J, length(P))...)
         h = sum(us) + s
         # @show us, abs(h) - sum(abs.(u) for (p,u) in zip(P,us))
-        q[h] = min(q[h], abs(h) - sum(abs.(u)+p[u] for (p,u) in zip(P,us)))
+        q[h] = max(q[h], abs(h) + sum(p[u]-abs.(u) for (p,u) in zip(P,us)))
     end
-    replace!(q, Inf => -Inf)
     # clamp
     q[J] = maximum(q[J:end])
     q[-J] = maximum(q[begin:-J])
@@ -267,13 +264,12 @@ function update_var_zeroT_slow!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0
     qnew = fill(-Inf, -J:J)
     for a in ∂i
         P = [sp.P[b] for b in ∂i if b!=a]
-        q = fill(Inf, sum(firstindex(p) for p in P)-1:sum(lastindex(p) for p in P)+1)
+        q = fill(-Inf, sum(firstindex(p) for p in P)-1:sum(lastindex(p) for p in P)+1)
         for us in Iterators.product(fill(-J:J, length(P))...)
             h = sum(us) + s
-            q[h] = min(q[h], abs(h) - sum(abs.(u)+p[u] for (p,u) in zip(P,us)))
+            q[h] = max(q[h], abs(h) + sum(p[u]-abs.(u) for (p,u) in zip(P,us)))
             # @show abs(h) - sum(abs.(u)+p[u] for (p,u) in zip(P,us))
         end
-        replace!(q, Inf => -Inf)
         # clamp
         q[J] = maximum(q[J:end])
         q[-J] = maximum(q[begin:-J])

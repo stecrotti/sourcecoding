@@ -84,12 +84,12 @@ function update_var!(sp::SurveyPropagation, i; damp = 0.0, rein=0.0)
     J = sp.J
     s = sp.efield[i]
     ∂i = nzrange(sp.H, i)
-    P = [p .* exp.(sp.y * abs.(eachindex(p))) for p in sp.P[∂i]]
+    P = [p .* exp.(-sp.y * abs.(eachindex(p))) for p in sp.P[∂i]]
     init = fill(1.0, s:s)
     Q = [fill(1.0, 0:0) for a ∈ 1:length(∂i)]
     qfull = cavity!(Q, P, ⊛, init)
     for h in eachindex(qfull)
-         sp.survey[i][clamp(h,-J,J)] += qfull[h] * exp(-sp.y*abs(h))
+         sp.survey[i][clamp(h,-J,J)] += qfull[h] * exp(sp.y*abs(h))
     end
     sp.survey[i] ./= sum(sp.survey[i])
 
@@ -97,7 +97,7 @@ function update_var!(sp::SurveyPropagation, i; damp = 0.0, rein=0.0)
     for (qcav,q) ∈ zip(Q, sp.Q[∂i])
         qnew .= 0.0
         for h in eachindex(qcav)
-            qnew[clamp(h,-J,J)] += qcav[h] * exp(-sp.y*abs(h))
+            qnew[clamp(h,-J,J)] += qcav[h] * exp(sp.y*abs(h))
         end
         qnew .*= sp.survey[i].^rein
         qnew ./= sum(qnew)
@@ -143,6 +143,25 @@ function update_factor!(sp::SurveyPropagation, b; damp = 0.0)
         end
     end
     ε
+end
+
+function overlap(sp::SurveyPropagation)
+    O = 0.0
+
+    cached_overlap_factor = Cached_Overlap_Factor(sp.J)
+    maxvardeg = maximum(sum(sp.H, dims=2))
+    cached_overlap_var = Cached_Overlap_Var(sp.J, maxvardeg, sp.y)
+
+    for i in 1:size(sp.H,2)
+        O += cached_overlap_var(sp.P[nzrange(sp.H, i)], sp.efield[i])[1]
+    end
+    for a in 1:size(sp.H,1)
+        O += cached_overlap_factor(sp.Q[nonzeros(sp.X)[nzrange(sp.X, a)]], sp.J, sp.y)[1]
+    end
+    for (p,q) in zip(sp.P,sp.Q)
+        O -= overlap_slow_edge(p, q, sp.J, sp.y)[1]
+    end
+    -O/size(sp.H,2)
 end
 
 function update_var_zeroT!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0,
@@ -319,7 +338,8 @@ end
 
 
 
-function iteration!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, γ=0.0, damp=0.0, rein=0.0, callback=(x...)->false)
+function iteration!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, γ=0.0, 
+        damp=0.0, rein=0.0, callback=(x...)->false)
     errf = fill(0.0, size(H,1))
     errv = fill(0.0, size(H,2))
     @inbounds for t = 1:maxiter

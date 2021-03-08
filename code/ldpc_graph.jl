@@ -227,14 +227,14 @@ end
 # "Nodes" is the one expressing everything in terms of node degrees, as in
 #  https://web.stanford.edu/~montanar/RESEARCH/book.html 
 
-function edges2nodes(lambda::Vector{<:AbstractFloat}, 
-        rho::Vector{<:AbstractFloat})
+function edges2nodes(lambda::Vector{<:Real}, 
+        rho::Vector{<:Real})
     lambda_new = [lambda[i]/i for i in eachindex(lambda)]
     rho_new = [rho[j]/j for j in eachindex(rho)]
     return lambda_new./sum(lambda_new), rho_new./sum(rho_new)
 end
-function nodes2edges(lambda::Vector{<:AbstractFloat}, 
-    rho::Vector{<:AbstractFloat})
+function nodes2edges(lambda::Vector{<:Real}, 
+    rho::Vector{<:Real})
     lambda_new = [lambda[i]*i for i in eachindex(lambda)]
     rho_new = [rho[j]*j for j in eachindex(rho)]
     return lambda_new./sum(lambda_new), rho_new./sum(rho_new)

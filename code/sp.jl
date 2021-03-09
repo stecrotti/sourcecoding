@@ -145,23 +145,31 @@ function update_factor!(sp::SurveyPropagation, b; damp = 0.0)
     ε
 end
 
+# Computes overlap, free energy and complexity
 function overlap(sp::SurveyPropagation)
-    O = 0.0
+    O = F = 0.0
+    n = size(sp.H,2)
 
     cached_overlap_factor = Cached_Overlap_Factor(sp.J)
     maxvardeg = maximum(sum(sp.H, dims=2))
     cached_overlap_var = Cached_Overlap_Var(sp.J, maxvardeg, sp.y)
 
-    for i in 1:size(sp.H,2)
-        O += cached_overlap_var(sp.P[nzrange(sp.H, i)], sp.efield[i])[1]
+    for i in 1:n
+        o,f = cached_overlap_var(sp.P[nzrange(sp.H, i)], sp.efield[i])
+        O += o; F += f
     end
     for a in 1:size(sp.H,1)
-        O += cached_overlap_factor(sp.Q[nonzeros(sp.X)[nzrange(sp.X, a)]], sp.J, sp.y)[1]
+        o,f = cached_overlap_factor(sp.Q[nonzeros(sp.X)[nzrange(sp.X, a)]], sp.J, sp.y)
+        O += o; F += f
     end
     for (p,q) in zip(sp.P,sp.Q)
-        O -= overlap_slow_edge(p, q, sp.J, sp.y)[1]
+        o,f = overlap_slow_edge(p, q, sp.J, sp.y)
+        O -= o; F -= f
     end
-    -O/size(sp.H,2)
+    O = -O/n
+    F = -1/sp.y*F/n
+    C = y*(-O-F) 
+    O, F, C
 end
 
 function update_var_zeroT!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0,
@@ -335,7 +343,6 @@ function update_factor_zeroT_slow!(sp::SurveyPropagation, b; damp = 0.0)
     end
     ε
 end
-
 
 
 function iteration!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, γ=0.0, 

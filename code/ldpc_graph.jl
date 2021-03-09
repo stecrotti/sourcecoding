@@ -439,7 +439,7 @@ end
 
 ####### SUBROUTINES
 function _check_consistency_polynomials(lambda, rho, nedges, n, m)
-    if sum(lambda) != 1 || sum(rho) != 1
+    if !(sum(lambda) ≈ 1) || !(sum(rho) ≈ 1)
         error("Vector lambda and rho must sum to 1")
     elseif n != round(nedges*sum(lambda[i]/i for i in eachindex(lambda)))
         error("n, lambda and nedges incompatible")

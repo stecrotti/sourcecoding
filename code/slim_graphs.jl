@@ -97,3 +97,47 @@ function findbasis(H)
     indep = colperm[size(H,1)+1:end]
     B[invperm(colperm),:], indep
 end 
+
+function gfrrefGF2!(H::AbstractArray{Int,2})
+    (m,n) = size(H)
+    # Initialize pivot to zero
+    indep = Int[]
+    p = 0
+    @showprogress for c = 1:n
+        nz = findfirst(!iszero, @views H[p+1:end,c])
+        if nz === nothing
+            continue
+        else
+            p += 1
+            push!(indep, c)
+            # Get a 1 on the diagonal
+            if nz != 1
+                H[p,:], H[nz+p-1,:] = H[nz+p-1,:], H[p,:]
+            end
+            # Apply row-wise xor to rows below the pivot
+            for r = [1:p-1; p+1:m]
+                if H[r,c] != 0
+                    for cc in c:n
+                        H[r,cc] = xor(H[r,cc], H[p,cc])
+                    end
+                end
+            end
+            if p == m 
+                break
+            end
+        end
+    end
+    return H, indep
+end
+
+gfrrefGF2(H::AbstractArray{Int,2}) = gfrrefGF2!(copy(H))
+
+function findbasis_slow(H)
+    A,indep = gfrrefGF2(H)
+    (m,n) = size(H)
+    dep = setdiff(1:n, indep)
+    colperm = [indep; dep]
+    B = [A[:,dep];I]
+    B .= B[invperm(colperm),:]
+    B, indep
+end

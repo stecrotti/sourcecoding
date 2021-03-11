@@ -229,6 +229,6 @@ function overlap1RSB(Λ, K;
     end
     O = -(α*O_factor + O_var - mΛ*O_edge)/samples
     F = -1/y*(α*F_factor + F_var - mΛ*F_edge)/samples
-    C = -O - F
+    C = y*(-O - F)
     O,F,C
 end

@@ -42,43 +42,6 @@ function msc(f1,f2)
 end
 
 
-function update_var_slow!(sp::SurveyPropagation, i; damp = 0.0)
-    ε = 0.0
-    J = sp.J
-    s = sp.efield[i]
-    y = sp.y
-    ∂i = nzrange(sp.H, i)
-    q = fill(1.0, s:s)
-    for a in ∂i
-        p = sp.P[a]
-        q = q ⊛ (p .* exp.(y .* abs.(eachindex(p))))
-    end
-    si = sp.survey[i]
-    si .= 0.0
-    for h in eachindex(q)
-        si[clamp(h,-J,J)] += q[h] * exp(-y*abs(h))
-    end
-    si ./= sum(si)
-    for a in ∂i
-        q = fill(1.0, s:s)
-        for b ∈ ∂i
-            b == a && continue
-            p = sp.P[b]
-            q = q ⊛ (p .* exp.(y .* abs.(eachindex(p))))
-        end
-        qnew = fill(0.0, -J:J)
-        for h in eachindex(q)
-            qnew[clamp(h,-J,J)] += q[h] * exp(-y * abs(h))
-        end
-
-        qnew ./= sum(qnew)
-        ε = max(ε, maximum(abs, qnew - sp.Q[a]))
-        sp.Q[a] .= qnew
-        @show qnew
-    end
-    ε
-end
-
 function update_var!(sp::SurveyPropagation, i; damp = 0.0, rein=0.0)
     ε = 0.0
     J = sp.J
@@ -151,23 +114,23 @@ function overlap(sp::SurveyPropagation)
     n = size(sp.H,2)
 
     cached_overlap_factor = Cached_Overlap_Factor(sp.J)
-    maxvardeg = maximum(sum(sp.H, dims=2))
+    maxvardeg = maximum(sum(sp.H, dims=1))
     cached_overlap_var = Cached_Overlap_Var(sp.J, maxvardeg, sp.y)
 
     for i in 1:n
-        o,f = cached_overlap_var(sp.P[nzrange(sp.H, i)], sp.efield[i])
-        O += o; F += f
+        o,logz = cached_overlap_var(sp.P[nzrange(sp.H, i)], sp.efield[i])
+        O += -o; F += -1/sp.y*logz
     end
     for a in 1:size(sp.H,1)
-        o,f = cached_overlap_factor(sp.Q[nonzeros(sp.X)[nzrange(sp.X, a)]], sp.J, sp.y)
-        O += o; F += f
+        o,logz = cached_overlap_factor(sp.Q[nonzeros(sp.X)[nzrange(sp.X, a)]], sp.J, sp.y)
+        O += -o; F += -1/sp.y*logz
     end
     for (p,q) in zip(sp.P,sp.Q)
-        o,f = overlap_slow_edge(p, q, sp.J, sp.y)
-        O -= o; F -= f
+        o,logz = overlap_slow_edge(p, q, sp.J, sp.y)
+        O += o; F += 1/sp.y*logz
     end
-    O = -O/n
-    F = -1/sp.y*F/n
+    O = O/n
+    F = F/n
     C = y*(-O-F) 
     O, F, C
 end
@@ -179,7 +142,7 @@ function update_var_zeroT!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0,
     s = sp.efield[i]
     ∂i = nzrange(sp.H, i)
     # Functions for max-sum convolution
-    P = [p-abs.(OffsetArray(-J:J, -J:J)) for p in sp.P[∂i]]
+    P = [p-abs.(eachindex(p)) for p in sp.P[∂i]]
     # Init: "log(delta)" centered at s
     init = fill(0.0, s:s)
     Q = [fill(0.0, 0:0) for a ∈ 1:length(∂i)]
@@ -269,6 +232,110 @@ function update_factor_zeroT!(sp::SurveyPropagation, a; damp = 0.0,
 end
 
 
+function iteration!(sp::SurveyPropagation; maxiter=1000, tol=1e-3, γ=0.0, 
+        damp=0.0, rein=0.0, callback=(x...)->false)
+    errf = fill(0.0, size(H,1))
+    errv = fill(0.0, size(H,2))
+    ε = -Inf
+    @inbounds for t = 1:maxiter
+        Threads.@threads for a=1:size(H,1)
+            errf[a] = update_factor!(sp, a, damp=damp)
+        end
+        Threads.@threads for i=1:size(H,2)
+            errv[i] = update_var!(sp, i, damp=damp, rein=rein)
+        end
+        ε = max(maximum(errf), maximum(errv))
+        callback(t, ε, sp) && break
+        ε < tol && break
+    end
+    ε
+end
+
+function iteration_zeroT!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, 
+        damp=0.0, rein=0.0, callback=(x...)->false)
+    errf = fill(0.0, size(H,1))
+    errv = fill(0.0, size(H,2))
+
+    @inbounds for t = 1:maxiter
+        Threads.@threads for a=1:size(H,1)
+            errf[a] = update_factor_zeroT!(sp, a, damp=damp)
+        end
+        Threads.@threads for i=1:size(H,2)
+            errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein)
+        end
+        ε = max(maximum(errf), maximum(errv))
+        callback(t, ε, sp) && break
+        ε < tol && break
+    end
+end
+
+function iteration_zeroT_random!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, 
+        damp=0.0, rein=0.0, callback=(x...)->false,
+        permv=randperm(size(H,2)), permf=randperm(size(H,1)))
+    errf = fill(0.0, size(H,1))
+    errv = fill(0.0, size(H,2))
+    # Initialize here to not allocate inside inner loops
+    p = fill(Inf, -sp.J:sp.J)
+    b = copy(p)
+    pnew = copy(p)
+    bnew = copy(b)
+    qnew = fill(-Inf, -sp.J:sp.J)
+
+    @inbounds for t = 1:maxiter
+        shuffle!(permv); shuffle!(permf)
+        for j=1:size(H,1)
+            a = permf[j]; i = permv[j]
+            errf[a] = update_factor_zeroT!(sp, a, damp=damp, 
+                p=p, b=b, pnew=pnew, bnew=bnew)
+            errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein, qnew=qnew)
+        end
+        for j=size(H,1)+1:size(H,2)
+            i = permv[j]
+            errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein, qnew=qnew)
+        end
+        ε = max(maximum(errf), maximum(errv))
+        callback(t, ε, sp) && break
+        ε < tol && break
+    end
+end
+
+function update_var_slow!(sp::SurveyPropagation, i; damp = 0.0)
+    ε = 0.0
+    J = sp.J
+    s = sp.efield[i]
+    y = sp.y
+    ∂i = nzrange(sp.H, i)
+    q = fill(1.0, s:s)
+    for a in ∂i
+        p = sp.P[a]
+        q = q ⊛ (p .* exp.(y .* abs.(eachindex(p))))
+    end
+    si = sp.survey[i]
+    si .= 0.0
+    for h in eachindex(q)
+        si[clamp(h,-J,J)] += q[h] * exp(-y*abs(h))
+    end
+    si ./= sum(si)
+    for a in ∂i
+        q = fill(1.0, s:s)
+        for b ∈ ∂i
+            b == a && continue
+            p = sp.P[b]
+            q = q ⊛ (p .* exp.(y .* abs.(eachindex(p))))
+        end
+        qnew = fill(0.0, -J:J)
+        for h in eachindex(q)
+            qnew[clamp(h,-J,J)] += q[h] * exp(-y * abs(h))
+        end
+
+        qnew ./= sum(qnew)
+        ε = max(ε, maximum(abs, qnew - sp.Q[a]))
+        sp.Q[a] .= qnew
+        @show qnew
+    end
+    ε
+end
+
 function update_var_zeroT_slow!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0)
     ε = 0.0
     J = sp.J
@@ -343,71 +410,4 @@ function update_factor_zeroT_slow!(sp::SurveyPropagation, b; damp = 0.0)
     end
     ε
 end
-
-
-function iteration!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, γ=0.0, 
-        damp=0.0, rein=0.0, callback=(x...)->false)
-    errf = fill(0.0, size(H,1))
-    errv = fill(0.0, size(H,2))
-    @inbounds for t = 1:maxiter
-        Threads.@threads for a=1:size(H,1)
-            errf[a] = update_factor!(sp, a, damp=damp)
-        end
-        Threads.@threads for i=1:size(H,2)
-            errv[i] = update_var!(sp, i, damp=damp, rein=rein)
-        end
-        ε = max(maximum(errf), maximum(errv))
-        callback(t, ε, sp) && break
-        ε < tol && break
-    end
-end
-
-function iteration_zeroT!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, 
-        damp=0.0, rein=0.0, callback=(x...)->false)
-    errf = fill(0.0, size(H,1))
-    errv = fill(0.0, size(H,2))
-
-    @inbounds for t = 1:maxiter
-        Threads.@threads for a=1:size(H,1)
-            errf[a] = update_factor_zeroT!(sp, a, damp=damp)
-        end
-        Threads.@threads for i=1:size(H,2)
-            errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein)
-        end
-        ε = max(maximum(errf), maximum(errv))
-        callback(t, ε, sp) && break
-        ε < tol && break
-    end
-end
-
-function iteration_zeroT_random!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, 
-        damp=0.0, rein=0.0, callback=(x...)->false,
-        permv=randperm(size(H,2)), permf=randperm(size(H,1)))
-    errf = fill(0.0, size(H,1))
-    errv = fill(0.0, size(H,2))
-    # Initialize here to not allocate inside inner loops
-    p = fill(Inf, -sp.J:sp.J)
-    b = copy(p)
-    pnew = copy(p)
-    bnew = copy(b)
-    qnew = fill(-Inf, -sp.J:sp.J)
-
-    @inbounds for t = 1:maxiter
-        shuffle!(permv); shuffle!(permf)
-        for j=1:size(H,1)
-            a = permf[j]; i = permv[j]
-            errf[a] = update_factor_zeroT!(sp, a, damp=damp, 
-                p=p, b=b, pnew=pnew, bnew=bnew)
-            errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein, qnew=qnew)
-        end
-        for j=size(H,1)+1:size(H,2)
-            i = permv[j]
-            errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein, qnew=qnew)
-        end
-        ε = max(maximum(errf), maximum(errv))
-        callback(t, ε, sp) && break
-        ε < tol && break
-    end
-end
-
 

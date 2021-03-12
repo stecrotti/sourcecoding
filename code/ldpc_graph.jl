@@ -227,14 +227,14 @@ end
 # "Nodes" is the one expressing everything in terms of node degrees, as in
 #  https://web.stanford.edu/~montanar/RESEARCH/book.html 
 
-function edges2nodes(lambda::Vector{<:AbstractFloat}, 
-        rho::Vector{<:AbstractFloat})
+function edges2nodes(lambda::Vector{<:Real}, 
+        rho::Vector{<:Real})
     lambda_new = [lambda[i]/i for i in eachindex(lambda)]
     rho_new = [rho[j]/j for j in eachindex(rho)]
     return lambda_new./sum(lambda_new), rho_new./sum(rho_new)
 end
-function nodes2edges(lambda::Vector{<:AbstractFloat}, 
-    rho::Vector{<:AbstractFloat})
+function nodes2edges(lambda::Vector{<:Real}, 
+    rho::Vector{<:Real})
     lambda_new = [lambda[i]*i for i in eachindex(lambda)]
     rho_new = [rho[j]*j for j in eachindex(rho)]
     return lambda_new./sum(lambda_new), rho_new./sum(rho_new)
@@ -439,7 +439,7 @@ end
 
 ####### SUBROUTINES
 function _check_consistency_polynomials(lambda, rho, nedges, n, m)
-    if sum(lambda) != 1 || sum(rho) != 1
+    if !(sum(lambda) ≈ 1) || !(sum(rho) ≈ 1)
         error("Vector lambda and rho must sum to 1")
     elseif n != round(nedges*sum(lambda[i]/i for i in eachindex(lambda)))
         error("n, lambda and nedges incompatible")

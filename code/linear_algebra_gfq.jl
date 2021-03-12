@@ -15,7 +15,7 @@ function gfrref!(H::AbstractArray{Int,2},
     # Initialize pivot to zero
     pivot_column_indices = zeros(Int, m)
     p = 0
-    for c = 1:n
+    @showprogress for c = 1:n
         if iszero(H[p+1:end,c])
             continue
         else

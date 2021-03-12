@@ -10,6 +10,8 @@ include("optimal_cycle.jl")
 include("Simulation.jl")
 include("slim_graphs.jl")
 include("cavity.jl")
+include("sp.jl")
+include("rsb.jl")
 include("./plotters/approx_entropy.jl")
 include("./plotters/plot_pgf.jl")
 

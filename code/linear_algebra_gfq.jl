@@ -1,5 +1,6 @@
 #### Linear algebra on 𝔾𝔽(2ᵏ) ####
-using LinearAlgebra, LightGraphs, SimpleWeightedGraphs, SparseArrays
+using LinearAlgebra, LightGraphs, SimpleWeightedGraphs, SparseArrays, 
+    ProgressMeter
 
 
 """Reduce matrix over GF(q) to reduced row echelon form"""

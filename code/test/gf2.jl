@@ -1,9 +1,10 @@
 include("./../headers.jl")
 
-const q = 4
+const q = 2
 const gamma = 1e-4
-const n = Int(round(420*1/log2(q)))
-const R = [0.7894]
+const n = Int(round(420*10/log2(q)))
+# const R = [0.7894]
+const R = collect(0.2:0.1:0.9)
 const m = Int.(round.(n*(1 .- R)))
 const b = Int(round(n/30))*ones(Int, length(m))
 const maxiter = Int(1e3)

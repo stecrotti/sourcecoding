@@ -101,7 +101,7 @@ end
 function gfrrefGF2!(H::AbstractArray{Int,2})
     (m,n) = size(H)
     # Initialize pivot to zero
-    indep = Int[]
+    dep = Int[]
     p = 0
     @showprogress for c = 1:n
         nz = findfirst(!iszero, @views H[p+1:end,c])
@@ -109,12 +109,12 @@ function gfrrefGF2!(H::AbstractArray{Int,2})
             continue
         else
             p += 1
-            push!(indep, c)
+            push!(dep, c)
             # Get a 1 on the diagonal
             if nz != 1
                 H[p,:], H[nz+p-1,:] = H[nz+p-1,:], H[p,:]
             end
-            # Apply row-wise xor to rows below the pivot
+            # Apply row-wise xor to rows above and below the pivot
             for r = [1:p-1; p+1:m]
                 if H[r,c] != 0
                     for cc in c:n
@@ -127,17 +127,16 @@ function gfrrefGF2!(H::AbstractArray{Int,2})
             end
         end
     end
-    return H, indep
+    return H, dep
 end
 
 gfrrefGF2(H::AbstractArray{Int,2}) = gfrrefGF2!(copy(H))
 
 function findbasis_slow(H)
-    A,indep = gfrrefGF2(H)
-    (m,n) = size(H)
-    dep = setdiff(1:n, indep)
-    colperm = [indep; dep]
-    B = [A[:,dep];I]
+    A,dep = gfrrefGF2(Array(H))
+    indep = setdiff(1:size(H,2), dep)
+    colperm = [dep; indep]
+    B = [A[1:length(dep),indep];I]
     B .= B[invperm(colperm),:]
     B, indep
 end

@@ -8,7 +8,7 @@ beta2_init(algo::LossyAlgo) = 1.0
 
 # Belief Propagation
 @with_kw struct BP <: LossyAlgo
-    maxiter::Int = Int(1e3)             # Max mun of iterations
+    maxiter::Int = Int(1e3)             # Max num of iterations
     convergence::Symbol = :messages     # Convergence criterion
     @assert convergence in [:messages, :decvars, :parity]
     nmin::Int = 300                     # Min number of consecutive unchanged decision vars
@@ -22,7 +22,7 @@ end
 
 # Max-sum
 @with_kw struct MS <: LossyAlgo
-    maxiter::Int = Int(1e3)             # Max mun of iterations
+    maxiter::Int = Int(1e3)             # Max num of iterations
     convergence::Symbol = :parity       # Convergence criterion
     @assert convergence in [:messages, :decvars, :parity]
     nmin::Int = 300                     # Min number of consecutive unchanged decision vars
@@ -66,13 +66,13 @@ function output_str(res::BPResults{<:Union{BP,MS}})
     return out_str
 end
 
-function onebpiter!(fg::FactorGraph, algo::BP, neutral=neutralel(algo,fg.q))
+function onebpiter_slow!(fg::FactorGraph, algo::BP, neutral=neutralel(algo,fg.q))
 
     maxdiff = diff = 0.0
     for f in randperm(length(fg.Fneigs))
         for (v_idx, v) in enumerate(fg.Fneigs[f])
             # Divide message from belief
-            fg.fields[v] ./= fg.mfv[f][v_idx]
+            fg.fields[v] /= fg.mfv[f][v_idx]
             # Restore possible n/0 or 0/0
             fg.fields[v][isnan.(fg.fields[v])] .= 1.0
             # Define functions for weighted convolution
@@ -125,8 +125,7 @@ function onebpiter!(fg::FactorGraph, algo::BP, neutral=neutralel(algo,fg.q))
 end
 
 function onebpiter!(fg::FactorGraph, algo::MS,
-    neutral=neutralel(algo,fg.q);
-    fact_perm = randperm(fg.m))
+    neutral=neutralel(algo,fg.q); fact_perm = randperm(fg.m))
 
     maxdiff = diff = 0.0
     for f in fact_perm
@@ -170,6 +169,11 @@ function onebpiter_slow!(fg::FactorGraphGF2, algo::MS,
     aux = Float64[]
     # Loop over factors
     for f in fact_perm
+        # if degree 1, just forces to +1 its only neighbor
+        if length(fg.Fneigs[f])==1
+            fg.fields[only(fg.Fneigs[f])] = Inf
+            continue
+        end
         # Loop over neighbors of `f`
         for (v_idx, v) in enumerate(fg.Fneigs[f])
             # Subtract message from belief
@@ -190,14 +194,34 @@ function onebpiter_slow!(fg::FactorGraphGF2, algo::MS,
     return maxdiff
 end
 
+struct Prod{T}
+    p::T
+    nz::Int  # number of zeros
+    ni::Int  # number of inf
+end
+Prod{Int}() = Prod(1, 0, 0)
+Base.:*(P::Prod{Int}, x) = iszero(x) ? Prod(P.p, P.nz+1, 0) : Prod(P.p * x, P.nz, 0)
+function Base.:/(P::Prod{Int}, x)
+    if iszero(x)
+        return P.nz==1 ? P.p : 0
+    else
+        return P.nz==0 ? P.p/x : 0
+    end
+end
+
 function onebpiter!(fg::FactorGraphGF2, algo::MS, neutral=neutralel(algo,fg.q);
-        fact_perm = randperm(fg.m))
+        fact_perm = randperm(fg.m), beta=Inf)
     maxchange = 0.0
     # Loop over factors
     for f in fact_perm
+        # if degree 1, just forces to +1 its only neighbor
+        if length(fg.Fneigs[f])==1
+            fg.fields[only(fg.Fneigs[f])] = Inf
+            continue
+        end
         fmin = fmin2 = Inf
         imin = 1
-        s = 1.0
+        s = Prod{Int}()
         # Loop over neighbors of `f`, computing:
         # - prod of signs `s`
         # - first min (and index) and second min of abs values of messages
@@ -216,11 +240,89 @@ function onebpiter!(fg::FactorGraphGF2, algo::MS, neutral=neutralel(algo,fg.q);
         end
         for (i, v) in enumerate(fg.Fneigs[f])
             # Apply formula to update message
-            m = (i == imin ? fmin2 : fmin) * s * sign(fg.fields[v])
+            m = (i == imin ? fmin2 : fmin) * (s / sign(fg.fields[v]))
+            isinf(m) && error("m infinite. Degree(a)=", length(fg.Fneigs[f]),
+                ". i=$i, v=$v, neigs=$(fg.Fneigs[f]). sign=", s / sign(fg.fields[v]))
             # Look for maximum change in message
             maxchange = max(maxchange, abs(m-fg.mfv[f][i]))
             fg.mfv[f][i] = m
             # Update belief after updating the message
+            # fg.fields[v] + m == 0 && @show fg.fields[v], m, imin, fmin
+            fg.fields[v] += m
+            isnan(fg.fields[v]) && error("NaN in field")
+        end
+    end
+    maxchange
+end
+
+Prod{Float64}() = Prod(1.0, 0, 0)
+function Base.:*(P::Prod{Float64}, x) 
+    if isinf(x) 
+        return Prod(P.p*sign(x), P.nz, P.ni+1) 
+    elseif iszero(x)
+        return Prod(P.p, P.nz+1, P.ni)    
+    else
+        return Prod(P.p * x, P.nz, P.ni)
+    end
+end
+
+function Base.:/(P::Prod{Float64}, x)
+    if iszero(x)
+        if P.nz > 1
+            return 0.0
+        elseif P.nz==1
+            return P.ni==0 ? P.p : Inf*sign(P.p)
+        end
+    elseif isinf(x)
+        if P.nz > 0
+            return 0.0
+        else
+            if P.ni==1
+                return P.p*sign(x)
+            elseif P.ni>1
+                return Inf*sign(P.p)*sign(x)
+            end
+        end
+    else
+        if P.nz > 0
+            return 0.0
+        else
+            return P.ni>0 ? Inf*sign(P.p)*sign(x) : P.p/x
+        end
+    end
+    error("Got to an impossible case: x has a special value (zero or inf) ",
+        "but that value was never accumulated during multiplication")
+end
+
+function onebpiter!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.q);
+    fact_perm = randperm(fg.m), beta=1.0)
+    maxchange = 0.0
+    # Loop over factors
+    for f in fact_perm
+        # if degree 1, just forces to +1 its only neighbor
+        if length(fg.Fneigs[f])==1
+            fg.fields[only(fg.Fneigs[f])] = Inf
+            continue
+        end
+        # @show f
+        t = Prod{Float64}()
+        for (i, v) in enumerate(fg.Fneigs[f])
+            # Avoid Inf-Inf=NaN
+            if fg.fields[v] == fg.mfv[f][i] 
+                fg.fields[v] = 0.0
+            else
+                fg.fields[v] -= fg.mfv[f][i]
+            end
+            t *= tanh(beta*fg.fields[v])
+        end
+        for (i, v) in enumerate(fg.Fneigs[f])
+            m = 1/beta*atanh(t/tanh(beta*fg.fields[v]))
+            isnan(m) && @show t,tanh(beta*fg.fields[v])
+            # Look for maximum change in message
+            maxchange = max(maxchange, abs(m-fg.mfv[f][i]))
+            fg.mfv[f][i] = m
+            # Update belief after updating the message
+            isnan(fg.fields[v]+m) && (@show f,v,fg.fields[v],m; error("NaN in field"))
             fg.fields[v] += m
         end
     end
@@ -240,11 +342,12 @@ function guesses(fg::FactorGraphGF2, g::Vector{Int}=zeros(Int,fg.n))
     return g
 end
 
-function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
+function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::AbstractVector,
     codeword=falses(algo.maxiter),
     maxchange=fill(NaN, algo.maxiter); randseed::Int=0, neutral=neutralel(algo,fg.q),
     verbose::Bool=false, showprogress::Bool=verbose, oneiter!::Function=onebpiter!, 
-    independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent))
+    independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent),
+    beta=Inf)
 
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
     newguesses = zeros(Int,fg.n)
@@ -253,16 +356,13 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
     wait_time = showprogress ? 1 : Inf
     n = 0
     
-    refresh!(fg)
-    extfields!(fg,y,algo,randseed=randseed)
-
     fact_perm = randperm(fg.m)
 
     for trial in 1:algo.Tmax
         prog = ProgressMeter.Progress(algo.maxiter, wait_time, 
             "Trial $trial/$(algo.Tmax) ")
         for t in 1:algo.maxiter
-            maxchange[t] = oneiter!(fg, algo, neutral, fact_perm=fact_perm)
+            maxchange[t] = oneiter!(fg, algo, neutral, fact_perm=fact_perm, beta=beta)
             shuffle!(fact_perm)
             newguesses .= guesses(fg, newguesses)
             par = parity(fg, newguesses)
@@ -300,7 +400,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
         end
         if trial != algo.Tmax
             # If convergence not reached, re-initialize random fields and start again
-            refresh!(fg)
+            refresh!(fg, algo)
             extfields!(fg,y,algo,randseed=randseed+trial)
             fill!(maxchange, NaN)
             n = 0
@@ -314,8 +414,10 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::Vector{Int},
 end
 
 function solve!(lm::LossyModel, algo::Union{BP,MS}, args...; randseed::Int=0,
-    verbose::Bool=false, kwargs...)
-    output = bp!(lm.fg, algo, lm.y, args...; randseed=randseed, kwargs...)
+        verbose::Bool=false, beta=lm.beta2, kwargs...)
+    refresh!(lm.fg, algo)
+    extfields!(lm.fg,lm.y,algo,randseed=randseed)
+    output = bp!(lm.fg, algo, lm.y, args...; randseed=randseed, beta=beta, kwargs...)
     lm.x = guesses(lm.fg)
     return output
 end
@@ -340,7 +442,7 @@ function reinforce!(fg::FactorGraphGF2, algo::Union{BP,MS})
     for (v,gv) in enumerate(fg.fields)
         if algo.gamma > 0
             if typeof(algo)==BP
-                fg.fields[v] *= gv.^algo.gamma
+                fg.fields[v] += gv.*algo.gamma
             elseif typeof(algo)==MS
                 fg.fields[v] += gv*algo.gamma
             end
@@ -355,7 +457,7 @@ neutralel(algo::MS, q::Int) = Fun(x == 0 ? 0.0 : -Inf for x=0:q-1)
 # Creates fields for the priors: the closest to y, the stronger the field
 # The prior distr is given by exp(field)
 # A small noise with amplitude sigma is added to break the symmetry
-function extfields!(fg::FactorGraph, y::Vector{Int}, algo::Union{BP,MS}; 
+function extfields!(fg::FactorGraph, y::AbstractVector, algo::Union{BP,MS}; 
         randseed::Int=0)
     randseed != 0 && Random.seed!(randseed) 
     q = fg.q
@@ -375,16 +477,22 @@ function extfields!(fg::FactorGraph, y::Vector{Int}, algo::Union{BP,MS};
 end
 
 # Re-initialize messages
-function refresh!(fg::FactorGraph)
+function refresh!(fg::FactorGraph, algo)
     for f in eachindex(fg.mfv)
         fg.mfv[f] .= [OffsetArray(1/fg.q*ones(fg.q), 0:fg.q-1) 
             for v in eachindex(fg.mfv[f])]
     end
     return nothing
 end
-function refresh!(fg::FactorGraphGF2)
+function refresh!(fg::FactorGraphGF2, algo::MS)
     for f in eachindex(fg.mfv)
         fg.mfv[f] .= 0.0
+    end
+    return nothing
+end
+function refresh!(fg::FactorGraphGF2, algo::BP)
+    for f in eachindex(fg.mfv)
+        fg.mfv[f] .= algo.sigma*randn(length(fg.mfv[f]))
     end
     return nothing
 end
@@ -419,7 +527,7 @@ end
 
 # Fix the independent variables to the decision variables outputted by max-sum
 # Pass x as an argument to then be able to retrieve it
-function fix_indep_from_ms(fg::FactorGraph, y::Vector{Int}, 
+function fix_indep_from_ms(fg::FactorGraph, y::AbstractVector, 
         x::Vector{Int}=zeros(Int, fg.n); 
         independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent))
     x .= _fix_indep(fg, guesses(fg), x, basis=basis, independent=independent)

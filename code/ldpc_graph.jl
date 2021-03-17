@@ -166,12 +166,13 @@ function ldpc_graphGF2(n::Int, m::Int,
                             multi_edge_found = true
                             break
                         end
+                    else
+                        # Initialize neighbors
+                        push!(Fneigs[f], v)
+                        push!(Vneigs[v], f)
+                        # Initalize parity check matrix elements
+                        H[f,v] = 1
                     end
-                    # Initialize neighbors
-                    push!(Fneigs[f], v)
-                    push!(Vneigs[v], f)
-                    # Initalize parity check matrix elements
-                    H[f,v] = 1
                 end
                 s += j
                 f += 1
@@ -326,7 +327,7 @@ function hd(x::BitArray{1}, y::BitArray{1})::Int
     end
     return d
 end
-function hd(x::AbstractVector{Int}, y::AbstractVector{Int})::Int
+function hd(x::AbstractVector, y::AbstractVector)::Int
     d = 0
     for (a,b) in zip(x,y)
         d += count_ones(xor(a,b))

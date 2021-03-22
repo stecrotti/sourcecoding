@@ -447,6 +447,9 @@ function _check_consistency_polynomials(lambda, rho, nedges, n, m)
     elseif m != round(nedges*(sum(rho[j]/j for j in eachindex(rho))))
         error("m, rho and nedges incompatible")
     end
+    if m > n
+        error("Cannot build graph with m>n")
+    end
 end
 
 #### Not used

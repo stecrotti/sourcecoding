@@ -210,7 +210,7 @@ function Base.:/(P::Prod{Int}, x)
 end
 
 function onebpiter!(fg::FactorGraphGF2, algo::MS, neutral=neutralel(algo,fg.q);
-        fact_perm = randperm(fg.m), beta=Inf)
+        fact_perm = randperm(fg.m))
     maxchange = 0.0
     # Loop over factors
     for f in fact_perm
@@ -221,6 +221,11 @@ function onebpiter!(fg::FactorGraphGF2, algo::MS, neutral=neutralel(algo,fg.q);
         end
         fmin = fmin2 = Inf
         imin = 1
+        # if degree 1, just forces to +1 its only neighbor
+        if length(fg.Fneigs[f])==1
+            fg.fields[only(fg.Fneigs[f])] = Inf
+            continue
+        end
         s = Prod{Int}()
         # Loop over neighbors of `f`, computing:
         # - prod of signs `s`
@@ -295,7 +300,7 @@ function Base.:/(P::Prod{Float64}, x)
 end
 
 function onebpiter!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.q);
-    fact_perm = randperm(fg.m), beta=1.0)
+    fact_perm = randperm(fg.m))
     maxchange = 0.0
     # Loop over factors
     for f in fact_perm
@@ -313,11 +318,12 @@ function onebpiter!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.q);
             else
                 fg.fields[v] -= fg.mfv[f][i]
             end
-            t *= tanh(beta*fg.fields[v])
+            t *= tanh(fg.fields[v])
+            t.ni > 0 && println("Inf in t")
         end
         for (i, v) in enumerate(fg.Fneigs[f])
-            m = 1/beta*atanh(t/tanh(beta*fg.fields[v]))
-            isnan(m) && @show t,tanh(beta*fg.fields[v])
+            m = atanh(t/tanh(fg.fields[v]))
+            isnan(m) && @show t,tanh(fg.fields[v])
             # Look for maximum change in message
             maxchange = max(maxchange, abs(m-fg.mfv[f][i]))
             fg.mfv[f][i] = m
@@ -346,8 +352,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::AbstractVector,
     codeword=falses(algo.maxiter),
     maxchange=fill(NaN, algo.maxiter); randseed::Int=0, neutral=neutralel(algo,fg.q),
     verbose::Bool=false, showprogress::Bool=verbose, oneiter!::Function=onebpiter!, 
-    independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent),
-    beta=Inf)
+    independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent))
 
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
     newguesses = zeros(Int,fg.n)
@@ -362,7 +367,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::AbstractVector,
         prog = ProgressMeter.Progress(algo.maxiter, wait_time, 
             "Trial $trial/$(algo.Tmax) ")
         for t in 1:algo.maxiter
-            maxchange[t] = oneiter!(fg, algo, neutral, fact_perm=fact_perm, beta=beta)
+            maxchange[t] = oneiter!(fg, algo, neutral, fact_perm=fact_perm)
             shuffle!(fact_perm)
             newguesses .= guesses(fg, newguesses)
             par = parity(fg, newguesses)
@@ -417,7 +422,7 @@ function solve!(lm::LossyModel, algo::Union{BP,MS}, args...; randseed::Int=0,
         verbose::Bool=false, beta=lm.beta2, kwargs...)
     refresh!(lm.fg, algo)
     extfields!(lm.fg,lm.y,algo,randseed=randseed)
-    output = bp!(lm.fg, algo, lm.y, args...; randseed=randseed, beta=beta, kwargs...)
+    output = bp!(lm.fg, algo, lm.y, args...; randseed=randseed, kwargs...)
     lm.x = guesses(lm.fg)
     return output
 end
@@ -521,24 +526,31 @@ naive_compression_distortion(fg::FactorGraph,args...;kw...) = 0.5*(nfacts(fg)/nv
 function fix_indep_from_src(fg::FactorGraph, y::AbstractVector, 
         x::AbstractVector=zeros(Int, fg.n); 
         independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent))
-    x .= _fix_indep(fg,y,x, basis=basis, independent=independent)
+    x .= _fix_indep(fg,y,x, basis, independent)
     return distortion(fg, y, x)
 end
 
 # Fix the independent variables to the decision variables outputted by max-sum
 # Pass x as an argument to then be able to retrieve it
 function fix_indep_from_ms(fg::FactorGraph, y::AbstractVector, 
-        x::Vector{Int}=zeros(Int, fg.n); 
+        x=typeof(fg)==FactorGraphGF2 ? falses(fg.n) : zeros(Int, fg.n); 
         independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent))
-    x .= _fix_indep(fg, guesses(fg), x, basis=basis, independent=independent)
+    x .= _fix_indep(fg, guesses(fg), x, basis, independent)
     return distortion(fg, y, x)
 end
 
-function _fix_indep(fg::FactorGraph, z::Vector{Int}, x::Vector{Int};
-    basis::AbstractArray{Int,2}, independent::BitArray{1})
+function _fix_indep(fg::FactorGraph, z::Vector{Int}, x::Vector{Int},
+    basis, independent::BitArray{1})
 
     x[independent] .= z[independent]
     x[.!independent] .= gfmatrixmult(basis[.!independent,:],  x[independent], 
         fg.q, fg.mult)
+    return x
+end
+
+function _fix_indep(fg::FactorGraphGF2, z, x, basis, independent::BitArray{1})
+
+    x[independent] .= z[independent]
+    x[.!independent] .= basis[.!independent,:] * x[independent] .% 2
     return x
 end

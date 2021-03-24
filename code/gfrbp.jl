@@ -196,16 +196,15 @@ end
 
 struct Prod{T}
     p::T
-    nz::Int  # number of zeros
-    ni::Int  # number of inf
+    n::Int  # number of zeros
 end
-Prod{Int}() = Prod(1, 0, 0)
-Base.:*(P::Prod{Int}, x) = iszero(x) ? Prod(P.p, P.nz+1, 0) : Prod(P.p * x, P.nz, 0)
-function Base.:/(P::Prod{Int}, x)
+Prod{T}() where T = Prod(one(T), 0)
+Base.:*(P::Prod{T}, x) where T = iszero(x) ? Prod(P.p, P.n+1) : Prod(P.p * x, P.n)
+function Base.:/(P::Prod{T}, x) where T
     if iszero(x)
-        return P.nz==1 ? P.p : 0
+        return P.n==1 ? P.p : zero(T)
     else
-        return P.nz==0 ? P.p/x : 0
+        return P.n==0 ? P.p/x : zero(T)
     end
 end
 
@@ -260,45 +259,6 @@ function onebpiter!(fg::FactorGraphGF2, algo::MS, neutral=neutralel(algo,fg.q);
     maxchange
 end
 
-Prod{Float64}() = Prod(1.0, 0, 0)
-function Base.:*(P::Prod{Float64}, x) 
-    if isinf(x) 
-        return Prod(P.p*sign(x), P.nz, P.ni+1) 
-    elseif iszero(x)
-        return Prod(P.p, P.nz+1, P.ni)    
-    else
-        return Prod(P.p * x, P.nz, P.ni)
-    end
-end
-
-function Base.:/(P::Prod{Float64}, x)
-    if iszero(x)
-        if P.nz > 1
-            return 0.0
-        elseif P.nz==1
-            return P.ni==0 ? P.p : Inf*sign(P.p)
-        end
-    elseif isinf(x)
-        if P.nz > 0
-            return 0.0
-        else
-            if P.ni==1
-                return P.p*sign(x)
-            elseif P.ni>1
-                return Inf*sign(P.p)*sign(x)
-            end
-        end
-    else
-        if P.nz > 0
-            return 0.0
-        else
-            return P.ni>0 ? Inf*sign(P.p)*sign(x) : P.p/x
-        end
-    end
-    error("Got to an impossible case: x has a special value (zero or inf) ",
-        "but that value was never accumulated during multiplication")
-end
-
 function onebpiter!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.q);
     fact_perm = randperm(fg.m))
     maxchange = 0.0
@@ -309,7 +269,6 @@ function onebpiter!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.q);
             fg.fields[only(fg.Fneigs[f])] = Inf
             continue
         end
-        # @show f
         t = Prod{Float64}()
         for (i, v) in enumerate(fg.Fneigs[f])
             # Avoid Inf-Inf=NaN
@@ -318,17 +277,21 @@ function onebpiter!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.q);
             else
                 fg.fields[v] -= fg.mfv[f][i]
             end
+            # isnan((t*tanh(fg.fields[v])).p) && @show t, tanh(fg.fields[v]) 
             t *= tanh(fg.fields[v])
-            t.ni > 0 && println("Inf in t")
         end
         for (i, v) in enumerate(fg.Fneigs[f])
             m = atanh(t/tanh(fg.fields[v]))
-            isnan(m) && @show t,tanh(fg.fields[v])
-            # Look for maximum change in message
-            maxchange = max(maxchange, abs(m-fg.mfv[f][i]))
+            # isnan(m) && @show t,tanh(fg.fields[v])
+            # Look for maximum change in message, avoid Inf-Inf
+            m != fg.mfv[f][i] && (maxchange = max(maxchange, abs(m-fg.mfv[f][i])))
             fg.mfv[f][i] = m
             # Update belief after updating the message
-            isnan(fg.fields[v]+m) && (@show f,v,fg.fields[v],m; error("NaN in field"))
+            if isnan(fg.fields[v]+m) 
+                # @show f,v,fg.fields[v],m 
+                # error("NaN in field")
+                return -1.0
+            end
             fg.fields[v] += m
         end
     end
@@ -352,7 +315,7 @@ function bp!(fg::FactorGraph, algo::Union{BP,MS}, y::AbstractVector,
     codeword=falses(algo.maxiter),
     maxchange=fill(NaN, algo.maxiter); randseed::Int=0, neutral=neutralel(algo,fg.q),
     verbose::Bool=false, showprogress::Bool=verbose, oneiter!::Function=onebpiter!, 
-    independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent))
+    independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent)[1])
 
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
     newguesses = zeros(Int,fg.n)
@@ -525,7 +488,7 @@ naive_compression_distortion(fg::FactorGraph,args...;kw...) = 0.5*(nfacts(fg)/nv
 # Pass x as an argument to then be able to retrieve it
 function fix_indep_from_src(fg::FactorGraph, y::AbstractVector, 
         x::AbstractVector=zeros(Int, fg.n); 
-        independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent))
+        independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent)[1])
     x .= _fix_indep(fg,y,x, basis, independent)
     return distortion(fg, y, x)
 end
@@ -534,7 +497,7 @@ end
 # Pass x as an argument to then be able to retrieve it
 function fix_indep_from_ms(fg::FactorGraph, y::AbstractVector, 
         x=typeof(fg)==FactorGraphGF2 ? falses(fg.n) : zeros(Int, fg.n); 
-        independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent))
+        independent::BitArray{1}=falses(fg.n), basis=lightbasis(fg, independent)[1])
     x .= _fix_indep(fg, guesses(fg), x, basis, independent)
     return distortion(fg, y, x)
 end

@@ -134,6 +134,7 @@ function Plots.plot!(pl::Plots.Plot, sims::Vector{Simulation{T}};
     dist = distortion.(sims, convergedonly)
     npoints = length.(dist)
     r = [rate(sim) for sim in sims]
+    length(sims)==0 && return pl
     if allpoints
         rate_c_augmented = vcat([rate(sim)*ones(nconverged(sim)) for sim in sims]...)
         rate_u_augmented = vcat([rate(sim)*ones(nunconverged(sim)) for sim in sims]...)
@@ -187,6 +188,8 @@ function Plots.plot(sims::Union{Simulation{T},Vector{Simulation{T}},Vector{Vecto
     Plots.plot!(pl, r, naive_compression_inv.(r), label="Naive compression")
     return plot!(pl, sims; size=size, kwargs...)
 end
+
+plot_rdb(; kw...) = Plots.plot(Simulation{BP}[]; kw...)
 
 function iters_hist(sim::Simulation{<:LossyAlgo}; kwargs...)
     iters = iterations(sim; kwargs...)

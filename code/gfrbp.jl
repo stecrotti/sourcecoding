@@ -259,7 +259,7 @@ function onebpiter!(fg::FactorGraphGF2, algo::MS, neutral=neutralel(algo,fg.q);
     maxchange
 end
 
-function onebpiter!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.q);
+function onebpiter_old!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.q);
     fact_perm = randperm(fg.m))
     maxchange = 0.0
     # Loop over factors
@@ -288,11 +288,41 @@ function onebpiter!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.q);
             fg.mfv[f][i] = m
             # Update belief after updating the message
             if isnan(fg.fields[v]+m) 
-                # @show f,v,fg.fields[v],m 
+                @show f,v,fg.fields[v],m 
                 # error("NaN in field")
                 return -1.0
             end
             fg.fields[v] += m
+        end
+    end
+    maxchange
+end
+
+function onebpiter!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.q);
+    fact_perm = randperm(fg.m))
+    maxchange = 0.0
+    # Loop over factors
+    for f in fact_perm
+        t = Prod{Float64}()
+        for (i, v) in enumerate(fg.Fneigs[f])
+            if fg.fields[v] == fg.mfv[f][i]
+                fg.fields[v] = 0.0
+            else
+                fg.fields[v] = (fg.fields[v]-fg.mfv[f][i])/(1-fg.fields[v]*fg.mfv[f][i])
+            end
+            t *= fg.fields[v]
+        end
+        for (i, v) in enumerate(fg.Fneigs[f])
+            m = t/fg.fields[v]
+            maxchange = max(maxchange, abs(m-fg.mfv[f][i]))
+            fg.mfv[f][i] = m
+            newfield = (m+fg.fields[v])/(1+m*fg.fields[v])
+            if isnan(newfield)
+                # @show m,fg.fields[v], f, i, v
+                return -1.0
+            end
+            fg.fields[v] = newfield
+            abs(fg.fields[v]) > 1 && error("Something that should be tanh has abs >1")
         end
     end
     maxchange
@@ -479,6 +509,14 @@ end
 
 function distortion(fg::FactorGraph, y::AbstractVector, x::AbstractVector=guesses(fg))
     return hd(x,y)/(fg.n*log2(fg.q))
+end
+
+function distortion(fg::FactorGraphGF2, y::AbstractVector, x::AbstractVector=guesses(fg))
+    d = 0.0
+    for (xx,yy) in zip(x,y)
+        d += sign(xx)!=sign(yy)
+    end
+    d/fg.n
 end
 
 #### Distortion for non-converged instances

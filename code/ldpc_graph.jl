@@ -363,7 +363,7 @@ function parity(fg::FactorGraphGF2, x::AbstractVector=guesses(fg))
         for v in fg.Fneigs[f]
             p += x[v]
         end
-        z += p % 2
+        z += p % 2  
         p = 0
     end
     return z 

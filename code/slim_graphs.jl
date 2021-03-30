@@ -110,7 +110,6 @@ function gfrrefGF2!(H::AbstractArray{Int,2})
         else
             p += 1
             push!(dep, c)
-            # Get a 1 on the diagonal
             if nz != 1
                 H[p,:], H[nz+p-1,:] = H[nz+p-1,:], H[p,:]
             end

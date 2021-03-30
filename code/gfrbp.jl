@@ -285,13 +285,13 @@ function onebpiter_old!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.
             # isnan(m) && @show t,tanh(fg.fields[v])
             # Look for maximum change in message, avoid Inf-Inf
             m != fg.mfv[f][i] && (maxchange = max(maxchange, abs(m-fg.mfv[f][i])))
-            fg.mfv[f][i] = m
             # Update belief after updating the message
             if isnan(fg.fields[v]+m) 
                 @show f,v,fg.fields[v],m 
                 # error("NaN in field")
                 return -1.0
             end
+            fg.mfv[f][i] = m
             fg.fields[v] += m
         end
     end

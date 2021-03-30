@@ -184,7 +184,7 @@ function Plots.plot(sims::Union{Simulation{T},Vector{Simulation{T}},Vector{Vecto
         size=(500,500), kwargs...) where {T<:LossyAlgo}
     d = LinRange(0,0.5,100)
     r = LinRange(0, 1, 100)
-    pl = Plots.plot(rdb.(d), d, label="RDB")
+    pl = Plots.plot(rdb.(d), d, label="Information bound")
     Plots.plot!(pl, r, naive_compression_inv.(r), label="Naive compression")
     return plot!(pl, sims; size=size, kwargs...)
 end

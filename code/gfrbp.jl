@@ -299,9 +299,8 @@ function onebpiter_old!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.
 end
 
 function onebpiter!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.q);
-    fact_perm = randperm(fg.m))
+        fact_perm = randperm(fg.m))
     maxchange = 0.0
-    # Loop over factors
     for f in fact_perm
         t = Prod{Float64}()
         for (i, v) in enumerate(fg.Fneigs[f])
@@ -318,7 +317,6 @@ function onebpiter!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.q);
             fg.mfv[f][i] = m
             newfield = (m+fg.fields[v])/(1+m*fg.fields[v])
             if isnan(newfield)
-                # @show m,fg.fields[v], f, i, v
                 return -1.0
             end
             fg.fields[v] = newfield
@@ -554,4 +552,81 @@ function _fix_indep(fg::FactorGraphGF2, z, x, basis, independent::BitArray{1})
     x[independent] .= z[independent]
     x[.!independent] .= basis[.!independent,:] * x[independent] .% 2
     return x
+end
+
+#### DECIMATION
+function performance(fg::FactorGraph, fields, σ=ones(Int,fg.n), x=falses(fg.n))
+    σ .= sign.(fg.fields)
+    x .= σ .== -1
+    nunsat = parity(fg, x)
+    dist = distortion(fg, fields, σ)
+    ovl = 1-2*dist
+    nunsat, ovl, dist
+end
+
+function decimate1!(fg, fields, freevars; ndec=1, maxiter=200, F=1.0, verbose=true, tol=1e-12)
+    ε = 0.0
+    iters = 0
+    for f in 1:m; fg.mfv[f] .= zeros(length(fg.mfv[f])) end
+    fg.fields .= copy(fields)  
+    # pre-allocate for speed
+    fact_perm = randperm(fg.m); σ=ones(Int, fg.n); x=falses(fg.n)
+    for it in 1:maxiter
+        ε = onebpiter!(fg, BP(); fact_perm=fact_perm) 
+        if ε==-1
+            return -2, NaN, NaN, it
+        end
+        if ε < tol; (iters = it; break) else; iters=maxiter end 
+        shuffle!(fact_perm)
+    end
+    nunsat, ovl, dist = performance(fg, fields, σ, x)
+    if verbose 
+        @printf(" Step   0. Free = %3d. ε = %6.2E. Unsat = %3d. Ovl = %.3f. Iters %d\n", 
+            length(freevars), ε, nunsat,  ovl, iters)
+    end
+    cnt = 1
+    iters = 0
+    while !isempty(freevars)
+        sort!(freevars, by=j->abs(fg.fields[j]))
+        freevars, tofix = freevars[1:end-ndec], freevars[max(1,end-ndec+1):end]
+        for tf in tofix; fg.fields[tf] == 0 && (fg.fields[tf] = fields[tf]) end
+        fg.fields[tofix] .= F*sign.(fg.fields[tofix])
+        for it in 1:maxiter
+            ε = onebpiter!(fg, BP(); fact_perm=fact_perm)
+            ε == -1.0 && return -1, NaN, NaN, it   # when a contradiction is found
+            if ε < tol; (iters = it; break) else; iters=maxiter end 
+            shuffle!(fact_perm)
+        end
+        nunsat, ovl, dist = performance(fg, fields, σ, x)
+        if verbose 
+            @printf(" Step %3d. Fixing %6s. Free = %3d. ε = %6.2E. Unsat = %3d. Ovl = %.3f. Iters %d\n", 
+                cnt, string(tofix), length(freevars), ε, nunsat,  ovl, iters)
+        end
+        nunsat == 0 && return nunsat, ovl, dist, iters
+        cnt += 1
+    end
+    nunsat, ovl, dist, iters
+end
+
+function decimate!(fg, fields, free=collect(1:fg.n); Tmax=1, kw...)
+    freevars = copy(free)
+    for t in 1:Tmax
+        freevars .= copy(free)
+        nunsat, ovl, dist, iters = decimate1!(fg, fields, freevars; kw...)
+        str = "$nunsat unsat"
+        nunsat==-1 && (str="contradiction found after $iters iters")
+        nunsat==-2 && (str="contradiction found already in the first BP run before decimation, after $iters iters")
+        print("# Trial $t of $Tmax: ", str)
+        if nunsat == 0 
+            if all(sign.(fg.fields) .!= 0)
+                println()
+                return nunsat, ovl, dist
+            else
+               print(" but ", sum(sign.(fg.fields).==0), " undecided") 
+            end
+        end
+        println()
+    end
+    println("No zero-unsat found after $Tmax trials")
+    return -1, NaN, NaN
 end

@@ -129,11 +129,9 @@ end
 # Works only for GF(2^k)
 function gfdot(x::AbstractVector{Int}, y::AbstractVector{Int}, q::Int=2,
     mult::OffsetArray{Int,2,Array{Int,2}}=gftables(q)[1])
-    L = length(x)
-    @assert length(y) == L
     p = 0
-    for k in 1:L
-        p = xor(p, mult[x[k],y[k]])
+    for (a,b) in @views zip(x,y)
+        p = xor(p, mult[a,b])
     end
     p
 end
@@ -207,18 +205,23 @@ end
 
 # Move between GF(2) and GF(2^k)
 function system_gfqto2(H::AbstractArray{Int,2},
-    q_and_tables...; getbasis::Function=gfnullspace,
-    H2::SparseMatrixCSC{Int,Int}=spzeros(Int, ))
+    q::Int=2, gfmult::OffsetArray{Int,2}=gftables(q)[1],
+    gfdiv::OffsetArray{Int,2}=gftables(q)[3]; getbasis::Function=gfnullspace)
     # Find a basis for the solutions of H
-    q = q_and_tables[1]
-    B,_ = getbasis(H, q_and_tables...)
-    # Check that #rows of H is an integer multiple of k
-    @assert mod(size(H,1), Int(log2(q)))==0
+    B,_ = getbasis(H, q, gfmult, gfdiv)
+    # Go from basis for GF(2^k) to basis for GF(2)
+    a,b = size(B)
+    Bprime = zeros(Int, a, b*(q-1))
+    for j in 1:b
+        for r in 1:q-1
+            Bprime[:,(j-1)*(q-1)+r] .= gfmult[r,B[:,j]] 
+        end
+    end
     # Convert each column of B (each basis vector) to GF(2)
-    B2 = hcat([gfqto2(B[:,j],Int(log2(q))) for j in 1:size(B,2)]...)
+    B2 = hcat([gfqto2(Bprime[:,j],Int(log2(q))) for j in 1:size(Bprime,2)]...)
     #  B2 is now a GF(2) basis
     # Build a corresponding parity-check matrix
-    Hgf2 = basis2matrix(B2, q_and_tables..., H=H2)
+    Hgf2 = basis2matrix(B2, q, gfmult, gfdiv)
     return Hgf2
 end
 
@@ -226,14 +229,22 @@ end
 #  build a parity-check matrix whose kernel is the space of solutions
 # H is passed as argument to avoid allocating
 function basis2matrix(B::AbstractArray{Int,2},
-    q_and_tables...;
-    H::SparseMatrixCSC{Int,Int}=spzeros(Int, size(B,1)-size(B,2), size(B,1)))
+    q_and_tables...)
     # Reduce B to reduced column echelon form [I;A]
-    Brcef = gfrcef(B, q_and_tables...)
+    Brcef,_ = gfrcef(B, q_and_tables...)
     # Build H as [A I]
-    m,n = size(H)
-    H[diagind(H,n-m)] .= 1
-    H[:,1:n-m] = Brcef[n-m+1:end,:]
+    n,f = size(Brcef)
+    k = f
+    for c in f:-1:1
+        if !iszero(Brcef[:,c])
+            k = c
+            break
+        end
+    end
+    m = n-k
+    H = spzeros(Int, m, n)
+    H[diagind(H,k)] .= 1
+    H[:,1:k] = Brcef[k+1:end,1:k]
     return H
 end
 

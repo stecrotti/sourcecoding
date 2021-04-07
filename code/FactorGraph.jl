@@ -289,7 +289,7 @@ function lightbasis(fg::FactorGraph, independent::BitArray{1}=falses(fg.n);
     # if size(lb,2) != nvars(fg) - nfacts(fg)
     #     # error("Graph is not full-rank")
     # end
-    return lb
+    return lb, independent
 end
 
 function lightbasis(H_trian::AbstractArray{Int,2}, column_perm::Vector{Int}, 

@@ -12,6 +12,7 @@ include("slim_graphs.jl")
 include("cavity.jl")
 include("sp.jl")
 include("rsb.jl")
+include("rs.jl")
 include("./plotters/approx_entropy.jl")
 include("./plotters/plot_pgf.jl")
 

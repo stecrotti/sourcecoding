@@ -80,7 +80,7 @@ function solve!(lm::LossyModel, algo::SA,
     
     rng = Random.MersenneTwister(randseed)
     # Initialize to the requested initial state
-    algo.init_state!(lm, rng)
+    algo.init_state!(lm)
     # Adapt mc_move parameters to the current model
     adapt_to_model!(algo.mc_move, lm)
 
@@ -182,6 +182,20 @@ function accept(mc_move::Union{MetropBasisCoeffs,MetropSmallJumps},
         energy_overlap(lm, lm.x[to_flip], sites=to_flip)
     acc = metrop_accept(dE, rng)
     acc && (lm.x[to_flip] .= newvals)
+    return acc, dE
+end
+
+function accept(mc_move::Union{MetropBasisCoeffs,MetropSmallJumps}, 
+        lm::LossyModelGF2, to_flip::AbstractVector,
+        newvals::Vector, rng::AbstractRNG)
+    # Compare energy shift only wrt those variables `to_flip`
+    dE = 0
+    for i in to_flip
+        dE += 1-2*(xor(lm.x[i],lm.y[i]))
+    end
+    dE *= lm.beta2
+    acc = metrop_accept(dE, rng)
+    acc && (lm.x[to_flip] .= .!lm.x[to_flip])
     return acc, dE
 end
 

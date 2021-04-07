@@ -111,7 +111,7 @@ end
 # Computes overlap, free energy and complexity
 function overlap(sp::SurveyPropagation)
     O = F = 0.0
-    n = size(sp.H,2)
+    m,n = size(sp.H)
 
     cached_overlap_factor = Cached_Overlap_Factor(sp.J)
     maxvardeg = maximum(sum(sp.H, dims=1))
@@ -121,7 +121,7 @@ function overlap(sp::SurveyPropagation)
         o,logz = cached_overlap_var(sp.P[nzrange(sp.H, i)], sp.efield[i])
         O += -o; F += -1/sp.y*logz
     end
-    for a in 1:size(sp.H,1)
+    for a in 1:m
         o,logz = cached_overlap_factor(sp.Q[nonzeros(sp.X)[nzrange(sp.X, a)]], sp.J, sp.y)
         O += -o; F += -1/sp.y*logz
     end
@@ -299,6 +299,18 @@ function iteration_zeroT_random!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3
     end
 end
 
+function performance(sp::SurveyPropagation, s)
+    σ = sign.(argmax.(sp.survey))
+    x = σ .== -1
+    z = sp.H*x .% 2
+    nunsat = sum(z)
+    ovl = mean(σ .== s)
+    dist = (1-ovl)/2
+    nunsat, ovl, dist
+end
+
+###### SLOW VERSIONS
+
 function update_var_slow!(sp::SurveyPropagation, i; damp = 0.0)
     ε = 0.0
     J = sp.J
@@ -384,7 +396,6 @@ function update_var_zeroT_slow!(sp::SurveyPropagation, i; damp = 0.0, rein = 0.0
     si .-= maximum(si)
     ε
 end  
-
 
 function update_factor_zeroT_slow!(sp::SurveyPropagation, b; damp = 0.0)
     ε = 0.0

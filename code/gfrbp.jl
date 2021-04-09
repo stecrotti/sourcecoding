@@ -320,7 +320,7 @@ function onebpiter!(fg::FactorGraphGF2, algo::BP, neutral=neutralel(algo,fg.q);
                 return -1.0
             end
             fg.fields[v] = newfield
-            abs(fg.fields[v]) > 1 && error("Something that should be tanh has abs >1")
+            # abs(fg.fields[v]) > 1 && error("Something that should be tanh has abs >1")
         end
     end
     maxchange

@@ -20,7 +20,7 @@ function ldpc_graphGFQ(q::Int, n::Int, m::Int,
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
 
     ### Argument validation ###
-    _check_consistency_polynomials(lambda, rho, nedges, n, m)
+    _check_consistency_polynomials_edges(lambda, rho, nedges, n, m)
 
     if verbose
         println("Building factor graph...")
@@ -120,7 +120,7 @@ function ldpc_graphGF2(n::Int, m::Int,
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
 
     ### Argument validation ###
-    _check_consistency_polynomials(lambda, rho, nedges, n, m)
+    _check_consistency_polynomials_edges(lambda, rho, nedges, n, m)
     
     if verbose
         println("Building factor graph...")
@@ -187,10 +187,11 @@ function ldpc_graphGF2(n::Int, m::Int,
             fg = FactorGraphGF2(2, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, 
                 fields, H, mfv)
             # Check that the number of connected components is 1
-            fg_ = deepcopy(fg)
-            breduction!(fg_,1)
-            depths,_,_ = lr!(fg_)
-            all(depths .!= 0) && return fg 
+            # fg_ = deepcopy(fg)
+            # breduction!(fg_,1)
+            # depths,_,_ = lr!(fg_)
+            # all(depths .!= 0) && return fg 
+            return fg
         end
     end
     # If you got here, multi-edges made it impossible to build a graph
@@ -439,7 +440,7 @@ function int2gfq(y::Vector{Int}, k::Int=1, pad::Int=ndigits(maximum(y),base=2^k)
 end
 
 ####### SUBROUTINES
-function _check_consistency_polynomials(lambda, rho, nedges, n, m)
+function _check_consistency_polynomials_edges(lambda, rho, nedges, n, m)
     if !(sum(lambda) ≈ 1) || !(sum(rho) ≈ 1)
         error("Vector lambda and rho must sum to 1")
     elseif n != round(nedges*sum(lambda[i]/i for i in eachindex(lambda)))
@@ -451,6 +452,8 @@ function _check_consistency_polynomials(lambda, rho, nedges, n, m)
         error("Cannot build graph with m>n")
     end
 end
+
+
 
 #### Not used
 # function ldpc_adjmat(q::Int, n::Int, m::Int,

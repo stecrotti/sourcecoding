@@ -220,11 +220,6 @@ function onebpiter!(fg::FactorGraphGF2, algo::MS, neutral=neutralel(algo,fg.q);
         end
         fmin = fmin2 = Inf
         imin = 1
-        # if degree 1, just forces to +1 its only neighbor
-        if length(fg.Fneigs[f])==1
-            fg.fields[only(fg.Fneigs[f])] = Inf
-            continue
-        end
         s = Prod{Int}()
         # Loop over neighbors of `f`, computing:
         # - prod of signs `s`

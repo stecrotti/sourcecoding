@@ -60,7 +60,7 @@ end
 function belief_propagation(n, m, nedges, Lambda, Rho, efield=zeros(n), 
         msg=zeros(nedges),  args...; kw...)
     H = ldpc_matrix(n, m, nedges, Lambda, Rho, args...; kw...)
-    BeliefPropagation(H, msg, efield )
+    BeliefPropagation(H, msg, copy(efield))
 end
 
 # BP ROUTINES
@@ -79,7 +79,7 @@ function Base.:/(P::Prod{T}, x) where T
 end
 
 # returns -1 if a contradiction is found, the max absolute change in message otherwise
-function update_factor!(bp::BeliefPropagation, a::Int; damp=0.0)
+function update_factor!(bp::BeliefPropagation, a::Int; damp=0.0, rein=0.0)
     maxchange = 0.0
     t = Prod{Float64}()
     vars = rowvals(bp.H)
@@ -102,19 +102,59 @@ function update_factor!(bp::BeliefPropagation, a::Int; damp=0.0)
         # contradiction: m and field[v] were completely polarized but opposite
         isnan(newfield) && return -1.0
         bp.m[i] = m
-        bp.efield[v] = newfield
+        bp.efield[v] = sign(newfield)*abs(newfield)^(max(1.0-rein,1e-100))
+    end
+    maxchange
+end
+
+# max-sum
+function update_factor_ms!(bp::BeliefPropagation, a::Int; damp=0.0, rein=0.0)
+    maxchange = 0.0
+    fmin = fmin2 = Inf
+    imin = 1
+    s = Prod{Int}()
+    vars = rowvals(bp.H)
+    for i in nzrange(bp.H,a)
+        v = vars[i]
+        if bp.efield[v] == bp.m[i]
+            # avoid 0/0 when the two are equal and have absolute value Inf
+            bp.efield[v] = 0
+        else
+            bp.efield[v] = bp.efield[v] - bp.m[i]
+        end
+        s *= sign(bp.efield[v])
+        m = abs(bp.efield[v])
+        if fmin > m
+            fmin2 = fmin
+            fmin = m
+            imin = i
+        elseif fmin2 > m
+            fmin2 = m
+        end
+    end
+    for i in nzrange(bp.H,a)
+        v = vars[i]
+        m = (i == imin ? fmin2 : fmin) * (s / sign(bp.efield[v]))
+        maxchange = max(maxchange, abs(m-bp.m[i]))
+        m = m*(1-damp) + bp.m[i]*damp
+        newfield = m + bp.efield[v]
+        # contradiction: m and field[v] were completely polarized but opposite
+        isnan(newfield) && return -1.0
+        bp.m[i] = m
+        bp.efield[v] = newfield*(1.0+rein)
     end
     maxchange
 end
 
 # returns ε=-1 if a contradiction is found and the number of the last iteration
 function iteration!(bp::BeliefPropagation; factor_perm=randperm(nfactors(bp)), 
-        maxiter=1000, tol=1e-12, damp=0.0, callback=(x...)->false)
+        maxiter=1000, tol=1e-12, damp=0.0, rein=0.0, callback=(x...)->false,
+        update! = update_factor!)
     ε  = 0.0
     for it in 1:maxiter 
         ε  = 0.0
         for a in factor_perm
-            maxchange = update_factor!(bp, a, damp=damp)
+            maxchange = update!(bp, a, damp=damp, rein=rein*it)
             maxchange == -1 && return -1.0, it
             ε = max(ε, maxchange)
         end
@@ -153,11 +193,10 @@ function distortion(x::AbstractVector, y::AbstractVector)
     d/length(x)
 end
 function performance(bp::BeliefPropagation, fields, 
-        σ=ones(Int,nvars(bp)), x=falses(nvars(bp)))
-    σ .= sign.(bp.efield)
-    x .= σ .== -1
+        x = sign.(bp.efield) .== -1)
+    x .= sign.(bp.efield) .== -1
     nunsat = parity(bp, x)
-    dist = distortion(fields, σ)
+    dist = distortion(fields, bp.efield)
     ovl = 1-2*dist
     nunsat, ovl, dist
 end
@@ -185,10 +224,10 @@ function decimate1!(bp::BeliefPropagation, fields, freevars::BitArray{1};
     # reset messages
     bp.m .= 0; bp.efield .= copy(fields)
     # pre-allocate for speed
-    factor_perm = randperm(nfactors(bp)); σ=ones(Int, nvars(bp)); x=falses(nvars(bp))
+    factor_perm = randperm(nfactors(bp)); x=falses(nvars(bp))
     # warmup bp run
     ε, iters = iteration!(bp, factor_perm=factor_perm; kw...)
-    nunsat, ovl, dist = performance(bp, fields, σ, x)
+    nunsat, ovl, dist = performance(bp, fields, x)
     nfree = sum(freevars)
     callback(ε, nunsat, bp, nfree, ovl, dist, iters, 0) && return nunsat, ovl, dist, iters
 
@@ -198,7 +237,7 @@ function decimate1!(bp::BeliefPropagation, fields, freevars::BitArray{1};
         # if tofix is undecided, give it its value in the source    
         bp.efield[tofix] = maxfield==0 ? fields[tofix] : sign(bp.efield[tofix])
         ε, iters = iteration!(bp, factor_perm=factor_perm; kw...)
-        nunsat, ovl, dist = performance(bp, fields, σ, x)
+        nunsat, ovl, dist = performance(bp, fields  , x)
         callback(ε, nunsat, bp, nfree-t, ovl, dist, iters, t) && return ε, nunsat, ovl, dist, iters
     end
     ε, nunsat, ovl, dist, iters
@@ -224,7 +263,7 @@ end
 
 # PLOTTING
 function plot_rdb(; f30=true, f3=true) 
-    DD = 0.01:0.01:0.5
+    DD = 0.001:0.01:0.5
     RR = 1 .+ DD.*log2.(DD) + (1 .- DD).*log2.(1 .- DD)
     pl = Plots.plot(RR, DD, label="Information bound")
     Plots.plot!(pl, RR, 0.5*(1 .- RR), label="Naive compression")
@@ -242,3 +281,5 @@ function plot_rdb(; f30=true, f3=true)
     end
     pl
 end
+
+

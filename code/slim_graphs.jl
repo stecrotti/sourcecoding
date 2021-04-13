@@ -98,13 +98,13 @@ function findbasis(H)
     B[invperm(colperm),:], indep
 end 
 
-function gfrrefGF2!(H::AbstractArray{Int,2})
+function gfrrefGF2!(H::AbstractArray{<:Number,2})
     (m,n) = size(H)
     # Initialize pivot to zero
     dep = Int[]
     p = 0
-    @showprogress for c = 1:n
-        nz = findfirst(!iszero, @views H[p+1:end,c])
+    for c = 1:n
+        nz = findfirst(!iszero, H[p+1:end,c])
         if nz === nothing
             continue
         else
@@ -129,10 +129,10 @@ function gfrrefGF2!(H::AbstractArray{Int,2})
     return H, dep
 end
 
-gfrrefGF2(H::AbstractArray{Int,2}) = gfrrefGF2!(copy(H))
+gfrrefGF2(H::AbstractArray{<:Number,2}) = gfrrefGF2!(copy(H))
 
 function findbasis_slow(H)
-    A,dep = gfrrefGF2(Array(H))
+    A,dep = gfrrefGF2!(H)
     indep = setdiff(1:size(H,2), dep)
     colperm = [dep; indep]
     B = [A[1:length(dep),indep];I]

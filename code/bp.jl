@@ -85,10 +85,11 @@ function update_factor!(bp::BeliefPropagation, a::Int; damp=0.0, rein=0.0)
     vars = rowvals(bp.H)
     for i in nzrange(bp.H,a)
         v = vars[i]
-        if bp.efield[v] == bp.m[i]
-            # avoid 0/0 when the two are equal and have absolute value 1
-            bp.efield[v] = 0.0
-        else
+        # if bp.efield[v] == bp.m[i]
+        #     # avoid 0/0 when the two are equal and have absolute value 1
+        #     bp.efield[v] = 0.0
+        if abs(bp.efield[v])!=1
+        # else
             bp.efield[v] = (bp.efield[v]-bp.m[i])/(1-bp.efield[v]*bp.m[i])
         end
         t *= bp.efield[v]
@@ -102,7 +103,7 @@ function update_factor!(bp::BeliefPropagation, a::Int; damp=0.0, rein=0.0)
         # contradiction: m and field[v] were completely polarized but opposite
         isnan(newfield) && return -1.0
         bp.m[i] = m
-        bp.efield[v] = sign(newfield)*abs(newfield)^(max(1.0-rein,1e-100))
+        bp.efield[v] = sign(newfield)*abs(newfield)^(max(1.0-rein,0.0))
     end
     maxchange
 end

@@ -255,7 +255,8 @@ function metrop_accept(dE::Real, rng::AbstractRNG)::Bool
 end
 
 function output_str(res::SAResults)
-    out_str = "Parity " * string(res.parity) * ". " *
+    out_str = 
+    # "Parity " * string(res.parity) * ". " *
               "Distortion " * @sprintf("%.3f ", res.distortion) *
               "at β₁=" * string(res.beta_argmin[1]) * ", β₂=" * 
                 string(round(res.beta_argmin[2],digits=3)) * 
@@ -296,7 +297,7 @@ function grow!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int},
     i = findfirst(ee->isbelow(ee, v, fg, depths), neigs_of_v)
     # grow upwards branches everywhere except where you came from (factor f) and
     #  factor below (factor with index i)
-    for (j,ee) in enumerate(neigs_of_v); if ee!=f && j!=i
+    for (j,ee) in enumerate(neigs_of_v); if j!=i
         grow_upwards!(fg, v, ee, depths, to_flip, isincore)
     end; end
     # grow downwards to maximum 1 factor
@@ -311,12 +312,23 @@ function grow_downwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int},
     # consider all neighbors except the one we're coming from (v)
     neigs_of_f = [w for w in fg.Fneigs[f] if (w != v && !isincore[w])]
     if !isempty(neigs_of_f)
-        # find maximum depth
-        maxdepth = maximum(depths[neigs_of_f])
-        argmaxdepth = findall(depths[neigs_of_f] .== maxdepth)
-        # pick at random one of the nieghbors with equal max depth
-        new_v = neigs_of_f[rand(argmaxdepth)]
-        grow!(fg, new_v, f, depths, to_flip, isincore)
+        # if v is not the only neighbor of minimum depth, pick one of the others
+        mindepth = minimum(depths[neigs_of_f])
+        if depths[v]==mindepth
+            argmindepth = findall(depths[neigs_of_f] .== mindepth)
+            # pick at random one of the neighbors with equal min depth
+            new_v = neigs_of_f[rand(argmindepth)]
+            grow!(fg, new_v, f, depths, to_flip, isincore)
+        else
+            # find maximum depth
+            maxdepth = maximum(depths[neigs_of_f])
+            argmaxdepth = findall(depths[neigs_of_f] .== maxdepth)
+            # pick at random one of the neighbors with equal max depth
+            new_v = neigs_of_f[rand(argmaxdepth)]
+            grow!(fg, new_v, f, depths, to_flip, isincore)
+        end
+    else
+        println("Warning: no neighbors found going down from v to f")
     end
     return nothing
 end

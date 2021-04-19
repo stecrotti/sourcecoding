@@ -93,10 +93,11 @@ function distortion(x::AbstractVector, y::AbstractVector)
     end
     d/length(x)
 end
-function performance(bp::BPFull)
+function performance(bp::BPFull, s::AbstractVector)
     x = argmax.(bp.belief) .== 2
     nunsat = parity(bp, x)
-    dist = mean(argmax.(bp.belief) .!= argmax.(bp.efield))
+    y = s .== -1
+    dist = mean(x .!= y)
     ovl = 1-2*dist
     nunsat, ovl, dist
 end
@@ -104,13 +105,14 @@ end
 #### DECIMATION
 
 # try Tmax times to reach zero unsat with decimation
-function decimate!(bp::BPFull, fields, indep; Tmax=1, kw...)
+# returns nunsat, ovl, dist
+function decimate!(bp::BPFull, efield, indep, s; Tmax=1, kw...)
     freevars = falses(nvars(bp)); freevars[indep] .= true
     for t in 1:Tmax
+        ε, nunsat, ovl, dist, iters = decimate1!(bp, efield, freevars, s; kw...)
         print("Trial $t of $Tmax: ")
-        ε, nunsat, ovl, dist, iters = decimate1!(bp, fields, freevars; kw...)
         ε == -1 && print("contradiction found. ")
-        println(nunsat, " unsat")
+        println(nunsat, " unsat. Dist = ", round(dist,digits=3))
         nunsat == 0 && return nunsat, ovl, dist
         freevars .= false; freevars[indep] .= true
     end
@@ -118,43 +120,47 @@ function decimate!(bp::BPFull, fields, indep; Tmax=1, kw...)
 end
 
 # 1 trial of decimation
-function decimate1!(bp::BPFull, fields, freevars::BitArray{1}; 
+function decimate1!(bp::BPFull, efield, freevars::BitArray{1}, s; 
         callback=(ε,nunsat,args...) -> (ε==-1||nunsat==0), kw...)
     # reset messages
     fill!(bp.h,(0.5,0.5)); fill!(bp.u,(0.5,0.5))
+    bp.efield .= efield
     # warmup bp run
     ε, iters = iteration!(bp; kw...)
-    nunsat, ovl, dist = performance(bp)
+    nunsat, ovl, dist = performance(bp, s)
     nfree = sum(freevars)
-    callback(ε, nunsat, bp, nfree, ovl, dist, iters, 0) && return nunsat, ovl, dist, iters
+    callback(ε, nunsat, bp, nfree, ovl, dist, iters, 0) && return ε, nunsat, ovl, dist, iters
 
     for t in 1:nfree
-        maxfield, tofix = find_most_biased(bp, freevars)
+        maxfield, tofix, newfield = find_most_biased(bp, freevars)
         freevars[tofix] = false
-        # # if tofix is undecided, give it its value in the source    
-        # bp.efield[tofix] = maxfield==0 ? fields[tofix] : sign(bp.efield[tofix])
+        # fix most decided variable by applying a strong field 
+        bp.efield[tofix] = newfield
         ε, iters = iteration!(bp; kw...)
-        nunsat, ovl, dist = performance(bp)
-        callback(ε, nunsat, bp, nfree-t, ovl, dist, iters, t) && return ε, nunsat, ovl, dist, iters
+        nunsat, ovl, dist = performance(bp, s)
+        callback(ε, nunsat, bp, nfree-t, ovl, dist, iters, t, maxfield) && return ε, nunsat, ovl, dist, iters
     end
     ε, nunsat, ovl, dist, iters
 end
 
+# returns max prob, idx of variable, sign of the belief
 function find_most_biased(bp::BPFull, freevars::BitArray{1})
-    m = -Inf; mi = 1
-    for (i,h) in pairs(bp.efield)
+    m = -Inf; mi = 1; s = 0
+    newfields = [(1.0,0.0), (0.0,1.0)]
+    newfield = (0.5,0.5)
+    for (i,h) in pairs(bp.belief)
        if freevars[i] && maximum(h)>m
-            m = maximum(h); mi = i
+            m, q = findmax(h); mi = i
+            newfield = newfields[q]
        end
     end
-    m, mi
+    m, mi, newfield
 end
 
-function cb_decimation(ε, nunsat, bp::BPFull, nfree, ovl, dist, iters, step)
-    @printf(" Step  %3d. Free = %3d. ε = %6.2E. Unsat = %3d. Ovl = %.3f. Iters %d\n", 
-            step, nfree, ε, nunsat,  ovl, iters)
-    (ε==-1 || nunsat==0) && return true
-    false
+function cb_decimation(ε, nunsat, bp::BPFull, nfree, ovl, dist, iters, step, maxfield, args...)
+    @printf(" Step  %3d. Free = %3d. Maxfield = %1.2E. ε = %6.2E. Unsat = %3d. Ovl = %.3f. Iters %d\n", 
+            step, nfree, maxfield, ε, nunsat,  ovl, iters)
+    return ε==-1 || nunsat==0
 end
 
 

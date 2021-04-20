@@ -255,7 +255,8 @@ function metrop_accept(dE::Real, rng::AbstractRNG)::Bool
 end
 
 function output_str(res::SAResults)
-    out_str = "Parity " * string(res.parity) * ". " *
+    out_str = 
+    # "Parity " * string(res.parity) * ". " *
               "Distortion " * @sprintf("%.3f ", res.distortion) *
               "at β₁=" * string(res.beta_argmin[1]) * ", β₂=" * 
                 string(round(res.beta_argmin[2],digits=3)) * 
@@ -291,12 +292,11 @@ function grow!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int},
     to_flip[v] = !(to_flip[v])
     # branches must grow in all directions except the one we're coming from,
     #  i.e. factor f
-    neigs_of_v = [e for e in fg.Vneigs[v] if e != f]
-    # find the factor below v (if any)
-    i = findfirst(ee->isbelow(ee, v, fg, depths), neigs_of_v)
+    neigs_of_v = fg.Vneigs[v]
+    i = findfirst(ee->isbelow(ee, v, fg, depths) && ee!=f, neigs_of_v)
     # grow upwards branches everywhere except where you came from (factor f) and
     #  factor below (factor with index i)
-    for (j,ee) in enumerate(neigs_of_v); if ee!=f && j!=i
+    for (j,ee) in enumerate(neigs_of_v); if j!=i && ee!=f
         grow_upwards!(fg, v, ee, depths, to_flip, isincore)
     end; end
     # grow downwards to maximum 1 factor
@@ -311,26 +311,85 @@ function grow_downwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int},
     # consider all neighbors except the one we're coming from (v)
     neigs_of_f = [w for w in fg.Fneigs[f] if (w != v && !isincore[w])]
     if !isempty(neigs_of_f)
-        # find maximum depth
-        maxdepth = maximum(depths[neigs_of_f])
-        argmaxdepth = findall(depths[neigs_of_f] .== maxdepth)
-        # pick at random one of the nieghbors with equal max depth
-        new_v = neigs_of_f[rand(argmaxdepth)]
-        grow!(fg, new_v, f, depths, to_flip, isincore)
+        # if v is not the only neighbor of minimum depth, pick one of the others
+        mindepth = minimum(depths[neigs_of_f])
+        if depths[v]==mindepth
+            argmindepth = findall(depths[neigs_of_f] .== mindepth)
+            # pick at random one of the neighbors with equal min depth
+            new_v = neigs_of_f[rand(argmindepth)]
+            grow!(fg, new_v, f, depths, to_flip, isincore)
+        else
+            # find maximum depth
+            maxdepth = maximum(depths[neigs_of_f])
+            argmaxdepth = findall(depths[neigs_of_f] .== maxdepth)
+            # pick at random one of the neighbors with equal max depth
+            new_v = neigs_of_f[rand(argmaxdepth)]
+            grow!(fg, new_v, f, depths, to_flip, isincore)
+        end
+    else
+        println("Warning: no neighbors found going down from v to f")
     end
     return nothing
 end
 
+# function grow_upwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
+#     to_flip::BitArray{1}, isincore::BitArray{1})
+#     # consider all neighbors except the one we're coming from (v)
+#     neigs_of_f = [w for w in fg.Fneigs[f] if (w != v && !isincore[w])]
+#     if !isempty(neigs_of_f)
+#         # find minimum depth
+#         mindepth = minimum(depths[neigs_of_f])
+#         argmindepth = findall(depths[neigs_of_f] .== mindepth)
+#         # pick at random one of the nieghbors with equal min depth
+#         new_v = neigs_of_f[rand(argmindepth)]
+#         grow!(fg, new_v, f, depths, to_flip, isincore)
+#     end
+#     return nothing
+# end
+
+# function grow_downwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
+#     to_flip::BitArray{1}, isincore::BitArray{1})
+#     # consider all neighbors except the one we're coming from (v)
+#     neigs_of_f = fg.Fneigs[f]
+#     mindepth = typemax(Int); maxdepth = 0
+#     argmindepth = -1
+#     for w in neigs_of_f
+#         if w != v && !isincore[w] 
+#             if depths[w]<mindepth
+#                 argmindepth = w
+#                 mindepth = depths[w]
+#             end
+#             if depths[w]>maxdepth
+#                 maxdepth = depths[w]
+#             end
+#         end
+#         if depths[v]==mindepth
+#             # if v is not the only neighbor of minimum depth, pick one of the others
+#             grow!(fg, argmindepth, f, depths, to_flip, isincore)
+#         else
+#             argmaxdepth = [w for w in neigs_of_f if w != v && !isincore[w] && depths[w]==maxdepth]
+#             if !isempty(argmaxdepth) 
+#                 new_v = rand(argmaxdepth)
+#                 grow!(fg, new_v, f, depths, to_flip, isincore)
+#             end    
+#         end
+#     end
+#     return nothing
+# end
+
+
 function grow_upwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
     to_flip::BitArray{1}, isincore::BitArray{1})
-    # consider all neighbors except the one we're coming from (v)
-    neigs_of_f = [w for w in fg.Fneigs[f] if (w != v && !isincore[w])]
-    if !isempty(neigs_of_f)
-        # find minimum depth
-        mindepth = minimum(depths[neigs_of_f])
-        argmindepth = findall(depths[neigs_of_f] .== mindepth)
-        # pick at random one of the nieghbors with equal min depth
-        new_v = neigs_of_f[rand(argmindepth)]
+    mindepth = typemax(Int)
+    neigs_of_f = fg.Fneigs[f]
+    for w in neigs_of_f
+        if w != v && !isincore[w] && depths[w]<mindepth
+            mindepth = depths[w]
+        end
+    end
+    argmindepth = [w for w in neigs_of_f if w != v && !isincore[w] && depths[w]==mindepth]
+    if !isempty(argmindepth) 
+        new_v = rand(argmindepth)
         grow!(fg, new_v, f, depths, to_flip, isincore)
     end
     return nothing

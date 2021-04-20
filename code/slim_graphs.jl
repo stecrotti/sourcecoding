@@ -1,4 +1,4 @@
-using SparseArrays, LinearAlgebra
+using SparseArrays, LinearAlgebra, ProgressMeter
 
 function readgraph(graph)
     I=Int[]
@@ -103,7 +103,7 @@ function gfrrefGF2!(H::AbstractArray{<:Number,2})
     # Initialize pivot to zero
     dep = Int[]
     p = 0
-    for c = 1:n
+    @showprogress for c = 1:n
         nz = findfirst(!iszero, H[p+1:end,c])
         if nz === nothing
             continue

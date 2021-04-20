@@ -234,8 +234,8 @@ end
 
 function iteration!(sp::SurveyPropagation; maxiter=1000, tol=1e-3, γ=0.0, 
         damp=0.0, rein=0.0, callback=(x...)->false)
-    errf = fill(0.0, size(H,1))
-    errv = fill(0.0, size(H,2))
+    errf = fill(0.0, size(sp.H,1))
+    errv = fill(0.0, size(sp.H,2))
     ε = -Inf
     @inbounds for t = 1:maxiter
         Threads.@threads for a=1:size(H,1)

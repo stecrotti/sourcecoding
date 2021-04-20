@@ -269,9 +269,9 @@ end
 
 ### Build a seaweed as described in https://arxiv.org/pdf/cond-mat/0207140.pdf
 
-function seaweed(fg::FactorGraph, seed::Int, depths::Vector{Int}=lr(fg)[1], 
-        isincore::BitArray{1} = (depths .== 0);
-        to_flip::BitArray{1}=falses(fg.n))
+
+function seaweed_rec(fg::FactorGraph, seed::Int, depths::Vector{Int}=lr(fg)[1], 
+        isincore = (depths .== 0); to_flip =zeros(Bool, fg.n))
     # Check that there is at least 1 leaf
     @assert nvarleaves(fg) > 0 "Graph must contain at least 1 leaf"
     # Check that seed is one of the variables in the graph
@@ -279,15 +279,15 @@ function seaweed(fg::FactorGraph, seed::Int, depths::Vector{Int}=lr(fg)[1],
     # Check that seed is a variable outside the core    
     @assert !isincore[seed] "Cannot grow seaweed starting from a variable in the core"
     # Grow the seaweed
-    grow!(fg, seed, 0, depths, to_flip, isincore)
+    grow_rec!(fg, seed, 0, depths, to_flip, isincore)
     # check that the resulting seaweed satisfies parity
     to_flip_int = Int.(to_flip)
     @assert parity(fg, to_flip_int)==0
-    return to_flip_int
+    return to_flip
 end
 
-function grow!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
-        to_flip::BitArray{1}, isincore::BitArray{1})
+function grow_rec!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
+        to_flip::AbstractVector, isincore::AbstractVector)
     # flip v
     to_flip[v] = !(to_flip[v])
     # branches must grow in all directions except the one we're coming from,
@@ -297,17 +297,17 @@ function grow!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int},
     # grow upwards branches everywhere except where you came from (factor f) and
     #  factor below (factor with index i)
     for (j,ee) in enumerate(neigs_of_v); if j!=i && ee!=f
-        grow_upwards!(fg, v, ee, depths, to_flip, isincore)
+        grow_upwards_rec!(fg, v, ee, depths, to_flip, isincore)
     end; end
     # grow downwards to maximum 1 factor
     if !isnothing(i)
-        grow_downwards!(fg, v, neigs_of_v[i], depths, to_flip, isincore)
+        grow_downwards_rec!(fg, v, neigs_of_v[i], depths, to_flip, isincore)
     end
     return nothing
 end
 
-function grow_downwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
-    to_flip::BitArray{1}, isincore::BitArray{1})
+function grow_downwards_rec!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
+    to_flip::AbstractVector, isincore::AbstractVector)
     # consider all neighbors except the one we're coming from (v)
     neigs_of_f = [w for w in fg.Fneigs[f] if (w != v && !isincore[w])]
     if !isempty(neigs_of_f)
@@ -317,14 +317,14 @@ function grow_downwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int},
             argmindepth = findall(depths[neigs_of_f] .== mindepth)
             # pick at random one of the neighbors with equal min depth
             new_v = neigs_of_f[rand(argmindepth)]
-            grow!(fg, new_v, f, depths, to_flip, isincore)
+            grow_rec!(fg, new_v, f, depths, to_flip, isincore)
         else
             # find maximum depth
             maxdepth = maximum(depths[neigs_of_f])
             argmaxdepth = findall(depths[neigs_of_f] .== maxdepth)
             # pick at random one of the neighbors with equal max depth
             new_v = neigs_of_f[rand(argmaxdepth)]
-            grow!(fg, new_v, f, depths, to_flip, isincore)
+            grow_rec!(fg, new_v, f, depths, to_flip, isincore)
         end
     else
         println("Warning: no neighbors found going down from v to f")
@@ -332,7 +332,7 @@ function grow_downwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int},
     return nothing
 end
 
-# function grow_upwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
+# function grow_upwards_rec!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
 #     to_flip::BitArray{1}, isincore::BitArray{1})
 #     # consider all neighbors except the one we're coming from (v)
 #     neigs_of_f = [w for w in fg.Fneigs[f] if (w != v && !isincore[w])]
@@ -342,12 +342,12 @@ end
 #         argmindepth = findall(depths[neigs_of_f] .== mindepth)
 #         # pick at random one of the nieghbors with equal min depth
 #         new_v = neigs_of_f[rand(argmindepth)]
-#         grow!(fg, new_v, f, depths, to_flip, isincore)
+#         grow_rec!(fg, new_v, f, depths, to_flip, isincore)
 #     end
 #     return nothing
 # end
 
-# function grow_downwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
+# function grow_downwards_rec!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
 #     to_flip::BitArray{1}, isincore::BitArray{1})
 #     # consider all neighbors except the one we're coming from (v)
 #     neigs_of_f = fg.Fneigs[f]
@@ -365,12 +365,12 @@ end
 #         end
 #         if depths[v]==mindepth
 #             # if v is not the only neighbor of minimum depth, pick one of the others
-#             grow!(fg, argmindepth, f, depths, to_flip, isincore)
+#             grow_rec!(fg, argmindepth, f, depths, to_flip, isincore)
 #         else
 #             argmaxdepth = [w for w in neigs_of_f if w != v && !isincore[w] && depths[w]==maxdepth]
 #             if !isempty(argmaxdepth) 
 #                 new_v = rand(argmaxdepth)
-#                 grow!(fg, new_v, f, depths, to_flip, isincore)
+#                 grow_rec!(fg, new_v, f, depths, to_flip, isincore)
 #             end    
 #         end
 #     end
@@ -378,8 +378,8 @@ end
 # end
 
 
-function grow_upwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
-    to_flip::BitArray{1}, isincore::BitArray{1})
+function grow_upwards_rec!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int}, 
+    to_flip::AbstractVector, isincore::AbstractVector)
     mindepth = typemax(Int)
     neigs_of_f = fg.Fneigs[f]
     for w in neigs_of_f
@@ -390,7 +390,7 @@ function grow_upwards!(fg::FactorGraph, v::Int, f::Int, depths::Vector{Int},
     argmindepth = [w for w in neigs_of_f if w != v && !isincore[w] && depths[w]==mindepth]
     if !isempty(argmindepth) 
         new_v = rand(argmindepth)
-        grow!(fg, new_v, f, depths, to_flip, isincore)
+        grow_rec!(fg, new_v, f, depths, to_flip, isincore)
     end
     return nothing
 end

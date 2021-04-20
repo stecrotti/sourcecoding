@@ -30,7 +30,7 @@ function update_var!(bp::BPFull, i::Int; damp=0.0, rein=0.0)
     u = bp.u[∂i]
     h = copy(bp.h[∂i])
     full = cavity!(h, u, msg_mult, bp.efield[i])
-    iszero(sum(full)) && @show i, ∂i, h
+    iszero(sum(full)) && return -1  # normaliz of belief is zero
     bp.belief[i] = full ./ sum(full)
     for (hnew,a) in zip(h, ∂i)
         hnew = hnew ./ sum(hnew)
@@ -62,9 +62,11 @@ function iteration!(bp::BPFull; maxiter=10^3, tol=1e-12, damp=0.0, rein=0.0,
     for it = 1:maxiter
         for a=1:size(bp.H,1)
             errf[a] = update_factor!(bp, a, damp=damp)
+            errf[a] == -1 && return -1,it
         end
         for i=1:size(bp.H,2)
             errv[i] = update_var!(bp, i, damp=damp, rein=rein)
+            errv[i] == -1 && return -1,it
         end
         ε = max(maximum(errf), maximum(errv))
         callback(it, ε, bp) && return ε,it
@@ -129,7 +131,7 @@ function decimate1!(bp::BPFull, efield, freevars::BitArray{1}, s;
     ε, iters = iteration!(bp; kw...)
     nunsat, ovl, dist = performance(bp, s)
     nfree = sum(freevars)
-    callback(ε, nunsat, bp, nfree, ovl, dist, iters, 0) && return ε, nunsat, ovl, dist, iters
+    callback(ε, nunsat, bp, nfree, ovl, dist, iters, 0, -Inf) && return ε, nunsat, ovl, dist, iters
 
     for t in 1:nfree
         maxfield, tofix, newfield = find_most_biased(bp, freevars)

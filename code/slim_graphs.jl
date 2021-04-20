@@ -34,9 +34,8 @@ function readseeds(seeds, H)
     end
 end
 
-function leaf_removal(H::SparseMatrixCSC)
+function leaf_removal(H::SparseMatrixCSC, Ht = sparse(transpose(H)))
     M, N = size(H)
-    Ht = sparse(transpose(H)) # for faster access by row
     degs = vec(sum(H .!= 0, dims=1))
     facts = fill(true, M)
     rowperm = Int[]

@@ -14,7 +14,7 @@ nvars(bp::BeliefPropagation) = size(bp.H,1)
 # assumes all of the parameters are consistent
 # follows Luby, "Efficient erasure correcting codes", doi: 10.1109/18.910575.
 function ldpc_matrix(n::Int, m::Int, nedges::Int, Lambda, Rho,
-    edgesleft=zeros(Int, nedges), edgesright=copy(edgesleft),
+    edgesleft=zeros(Int, nedges), edgesright=copy(edgesleft);
     accept_multi_edges=true, maxtrials=1000)
 
     for t in 1:maxtrials

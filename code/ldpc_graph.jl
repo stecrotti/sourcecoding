@@ -360,15 +360,14 @@ end
 parity(fg::FactorGraph, args...) = hw(paritycheck(fg, args...))
 function parity(fg::FactorGraphGF2, x::AbstractVector=guesses(fg))
     z = p = 0
-    for f in eachindex(fg.Fneigs)
-        for v in fg.Fneigs[f]
+    for f in fg.Fneigs
+        for v in f
             p += x[v]
         end
         z += p % 2  
         p = 0
     end
     return z 
-    # return sum(paritycheck(fg,x))
 end
 
 function free_energy(fg::FactorGraphGF2)

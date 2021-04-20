@@ -9,15 +9,7 @@ function cavity!(dest, source, op, init)
         dest[begin] = init 
         return op(first(source), init)
     end
-    if length(source) == 2
-        dest[begin] = op(first(Iterators.reverse(source)), init)
-        dest[end] = op(first(source), init)
-        return op(dest[begin], first(source))
-    end
-    dest[begin], rest = Iterators.peel(source)
-    for (s,i) = zip(rest, eachindex(dest))
-        dest[i+1] = op(dest[i], s)
-    end
+    copyto!(dest, Iterators.accumulate(op, source))
     full = op(dest[end], init)
     right = init
     for (i,s)=zip(lastindex(dest):-1:firstindex(dest)+1,Iterators.reverse(source))

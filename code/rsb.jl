@@ -85,9 +85,9 @@ function RSB(Λ, K;
     mt = MersenneTwister()
     function Sampler(P, R)
         idx = fill(0,10)
-        wP = StatsBase.weights(P)
+        wP = StatsBase.weights(P.parent)
         function s()
-            d = sample(mt, eachindex(P), wP)
+            d = sample(mt, collect(eachindex(P)), wP)
             resize!(idx, d)
             rand!(mt, idx, R)
         end
@@ -182,9 +182,9 @@ function overlap1RSB(Λ, K;
     mt = MersenneTwister()
     function Sampler(P, R)
         idx = fill(0,10)
-        wP = StatsBase.weights(P)
+        wP = StatsBase.weights(P.parent)
         function s()
-            d = sample(mt, eachindex(P), wP)
+            d = sample(mt, collect(eachindex(P)), wP)
             resize!(idx, d)
             rand!(mt, idx, R)
         end

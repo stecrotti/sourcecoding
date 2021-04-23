@@ -43,6 +43,13 @@ function leaf_removal(H::SparseMatrixCSC, Ht = sparse(transpose(H)))
     indep = findall(degs .== 0)
     dep = Int[]
     while !isempty(Q)
+        # introduce some randomness
+        L = length(Q)
+        if L > 1
+            r = rand(2:L)
+            Q[1], Q[r] = Q[r], Q[1]
+        end
+        # shuffle!(Q)
         i = popfirst!(Q)
         degs[i] == 0 && continue
         push!(dep, i)

@@ -102,7 +102,7 @@ function gfrrefGF2!(H::AbstractArray{<:Number,2})
     # Initialize pivot to zero
     dep = Int[]
     p = 0
-    @showprogress for c = 1:n
+    for c = 1:n
         nz = findfirst(!iszero, H[p+1:end,c])
         if nz === nothing
             continue
@@ -110,7 +110,7 @@ function gfrrefGF2!(H::AbstractArray{<:Number,2})
             p += 1
             push!(dep, c)
             if nz != 1
-                H[p,:], H[nz+p-1,:] = H[nz+p-1,:], H[p,:]
+                H[p,:], H[p+nz-1,:] = H[nz+p-1,:], H[p,:]
             end
             # Apply row-wise xor to rows above and below the pivot
             for r = [1:p-1; p+1:m]
@@ -127,14 +127,45 @@ function gfrrefGF2!(H::AbstractArray{<:Number,2})
     end
     return H, dep
 end
-
 gfrrefGF2(H::AbstractArray{<:Number,2}) = gfrrefGF2!(copy(H))
 
 function findbasis_slow(H)
-    A,dep = gfrrefGF2!(H)
+    A,dep = gfrrefGF2(H)
     indep = setdiff(1:size(H,2), dep)
     colperm = [dep; indep]
     B = [A[1:length(dep),indep];I]
     B .= B[invperm(colperm),:]
     B, indep
 end
+
+function gfrcefGF2!(H::AbstractArray{<:Number,2})
+    (n,m) = size(H)
+    # Initialize pivot to zero
+    dep = Int[]
+    p = 0
+    for r = 1:n
+        nz = findfirst(!iszero, H[r,p+1:end])
+        if nz === nothing
+            continue
+        else
+            p += 1
+            push!(dep, r)
+            if nz != 1
+                H[:,p], H[:,p+nz-1] = H[:,p+nz-1], H[:,p]
+            end
+            # Apply colum-wise xor to rows left and right of the pivot
+            for c = [1:p-1; p+1:m]
+                if H[r,c] != 0
+                    for rr in r:n
+                        H[rr,c] = xor(H[rr,c], H[rr,p])
+                    end
+                end
+            end
+            if p == m 
+                break
+            end
+        end
+    end
+    return H, dep
+end
+gfrcefGF2(H::AbstractArray{<:Number,2}) = gfrcefGF2!(copy(H))

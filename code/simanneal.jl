@@ -397,9 +397,10 @@ end
 
 function isbelow(e::Int, v::Int, fg::FactorGraph, depths::Vector{Int})
     neigs_of_e = fg.Fneigs[e]
-    mindepth_idx = argmin(depths[neigs_of_e])
-    isbel = (neigs_of_e[mindepth_idx] == v)
-    return isbel
+    # mindepth_idx = argmin(depths[neigs_of_e])
+    # isbel = (neigs_of_e[mindepth_idx] == v)
+    # return isbel
+    return depths[v] == minimum(depths[neigs_of_e])
 end
 
 function plot_seaweed(fg::FactorGraph, seed::Int)

@@ -62,7 +62,9 @@ function FactorGraphGF2(A::AbstractArray{Int,2},
             end
         end
     end
-    mult, gfinv, gfdiv = gftables(2)
+    mult = OffsetArray([0 0; 0 1], 0:1, 0:1)
+    gfinv = [1]
+    gfdiv = OffsetArray(hcat([0,1]), 0:1, 1:1)
     H = issparse(A) ? A : sparse(A)
     return FactorGraphGF2(2, mult, gfinv, gfdiv, n, m, Vneigs, Fneigs, fields, H, mfv)
 end
@@ -192,7 +194,9 @@ function deletefactor!(fg::FactorGraph, f::Int=rand(filter(ff -> factdegree(fg,f
     return neigs_of_f
 end
 function deletefactors!(fg::FactorGraph, ff::Vector{Int}) 
-    return unique!(vcat([deletefactor!(fg,f) for f in ff]...))
+    removed =  unique!(vcat([deletefactor!(fg,f) for f in ff]...))
+    dropzeros!(fg.H)
+    removed
 end
 
 function deletevar!(fg::FactorGraph, 

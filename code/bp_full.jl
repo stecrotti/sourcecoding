@@ -12,6 +12,15 @@ struct BPFull{F,M}
 end
 nfactors(bp::BPFull) = size(bp.H,1)
 nvars(bp::BPFull) = size(bp.H,2)
+function BPFull(H::SparseMatrixCSC)
+    n = size(H,2)
+    X = sparse(SparseMatrixCSC(size(H)...,H.colptr,H.rowval,collect(1:length(H.nzval)))')
+    efield = fill((0.5,0.5), n)
+    h = fill((0.5,.5),nedges)
+    u = fill((0.5,.5),nedges)
+    belief = fill((0.5,.5),n)
+    BPFull(H, X, h, u, efield, belief)
+end
 
 function bp_full(n, m, nedges, Lambda, Rho, efield=fill((0.5,0.5),n), 
         h=fill((0.5,.5),nedges), u=fill((0.5,.5),nedges),  
@@ -37,6 +46,7 @@ function update_var!(bp::BPFull, i::Int; damp=0.0, rein=0.0)
         ε = max(ε, maximum(abs, hnew.-bp.h[a]))
         bp.h[a] = bp.h[a].*damp .+ hnew.*(1-damp)
     end
+    bp.efield[i] = bp.efield[i] .+ rein.*bp.belief[i]
     ε
 end
 
@@ -123,9 +133,10 @@ end
 
 # 1 trial of decimation
 function decimate1!(bp::BPFull, efield, freevars::BitArray{1}, s; 
+        u_init=fill((0.5,0.5), length(bp.u)), h_init=fill((0.5,0.5), length(bp.h)),
         callback=(ε,nunsat,args...) -> (ε==-1||nunsat==0), kw...)
     # reset messages
-    fill!(bp.h,(0.5,0.5)); fill!(bp.u,(0.5,0.5))
+    bp.h .= h_init; bp.u .= u_init
     bp.efield .= efield
     # warmup bp run
     ε, iters = iteration!(bp; kw...)

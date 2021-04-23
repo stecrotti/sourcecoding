@@ -253,14 +253,14 @@ end
 
 function iteration_zeroT!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, 
         damp=0.0, rein=0.0, callback=(x...)->false)
-    errf = fill(0.0, size(H,1))
-    errv = fill(0.0, size(H,2))
+    errf = fill(0.0, size(sp.H,1))
+    errv = fill(0.0, size(sp.H,2))
 
     @inbounds for t = 1:maxiter
-        Threads.@threads for a=1:size(H,1)
+        Threads.@threads for a=1:size(sp.H,1)
             errf[a] = update_factor_zeroT!(sp, a, damp=damp)
         end
-        Threads.@threads for i=1:size(H,2)
+        Threads.@threads for i=1:size(sp.H,2)
             errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein)
         end
         ε = max(maximum(errf), maximum(errv))
@@ -271,7 +271,7 @@ end
 
 function iteration_zeroT_random!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3, 
         damp=0.0, rein=0.0, callback=(x...)->false,
-        permv=randperm(size(H,2)), permf=randperm(size(H,1)))
+        permv=randperm(size(sp.H,2)), permf=randperm(size(sp.H,1)))
     errf = fill(0.0, size(H,1))
     errv = fill(0.0, size(H,2))
     # Initialize here to not allocate inside inner loops
@@ -283,13 +283,13 @@ function iteration_zeroT_random!(sp::SurveyPropagation; maxiter = 1000, tol=1e-3
 
     @inbounds for t = 1:maxiter
         shuffle!(permv); shuffle!(permf)
-        for j=1:size(H,1)
+        for j=1:size(sp.H,1)
             a = permf[j]; i = permv[j]
             errf[a] = update_factor_zeroT!(sp, a, damp=damp, 
                 p=p, b=b, pnew=pnew, bnew=bnew)
             errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein, qnew=qnew)
         end
-        for j=size(H,1)+1:size(H,2)
+        for j=size(sp.H,1)+1:size(sp.H,2)
             i = permv[j]
             errv[i] = update_var_zeroT!(sp, i, damp=damp, rein=rein, qnew=qnew)
         end

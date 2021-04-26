@@ -12,10 +12,9 @@ struct BPFull{F,M}
 end
 nfactors(bp::BPFull) = size(bp.H,1)
 nvars(bp::BPFull) = size(bp.H,2)
-function BPFull(H::SparseMatrixCSC)
+function BPFull(H::SparseMatrixCSC, efield = fill((0.5,0.5), n))
     n = size(H,2)
     X = sparse(SparseMatrixCSC(size(H)...,H.colptr,H.rowval,collect(1:length(H.nzval)))')
-    efield = fill((0.5,0.5), n)
     h = fill((0.5,.5),nedges)
     u = fill((0.5,.5),nedges)
     belief = fill((0.5,.5),n)
@@ -113,15 +112,24 @@ function performance(bp::BPFull, s::AbstractVector)
     ovl = 1-2*dist
     nunsat, ovl, dist
 end
+function avg_dist(bp::BPFull, s::AbstractVector)
+    ovl = 0.0
+    for i in 1:nvars(bp)
+        ovl += s[i]*(bp.belief[i][1]-bp.belief[i][2])
+    end
+    0.5(1-ovl/nvars(bp))
+end
 
 #### DECIMATION
 
 # try Tmax times to reach zero unsat with decimation
 # returns nunsat, ovl, dist
-function decimate!(bp::BPFull, efield, indep, s; Tmax=1, kw...)
+function decimate!(bp::BPFull, efield, indep, s; Tmax=1, 
+        fair_decimation=false, kw...)
     freevars = falses(nvars(bp)); freevars[indep] .= true
     for t in 1:Tmax
-        ε, nunsat, ovl, dist, iters = decimate1!(bp, efield, freevars, s; kw...)
+        ε, nunsat, ovl, dist, iters = decimate1!(bp, efield, freevars, s; 
+            fair_decimation = fair_decimation, kw...)
         print("Trial $t of $Tmax: ")
         ε == -1 && print("contradiction found. ")
         println(nunsat, " unsat. Dist = ", round(dist,digits=3))
@@ -134,18 +142,21 @@ end
 # 1 trial of decimation
 function decimate1!(bp::BPFull, efield, freevars::BitArray{1}, s; 
         u_init=fill((0.5,0.5), length(bp.u)), h_init=fill((0.5,0.5), length(bp.h)),
-        callback=(ε,nunsat,args...) -> (ε==-1||nunsat==0), kw...)
+        callback=(ε,nunsat,args...) -> (ε==-1||nunsat==0), 
+        fair_decimation = false, kw...)
     # reset messages
     bp.h .= h_init; bp.u .= u_init
     bp.efield .= efield
     # warmup bp run
-    ε, iters = iteration!(bp; kw...)
+    ε, iters = iteration!(bp; tol=1e-15, kw...)
+    println("Avg distortion after 1st BP round: ", avg_dist(bp,s))
     nunsat, ovl, dist = performance(bp, s)
     nfree = sum(freevars)
     callback(ε, nunsat, bp, nfree, ovl, dist, iters, 0, -Inf) && return ε, nunsat, ovl, dist, iters
 
     for t in 1:nfree
-        maxfield, tofix, newfield = find_most_biased(bp, freevars)
+        maxfield, tofix, newfield = find_most_biased(bp, freevars, 
+            fair_decimation = fair_decimation)
         freevars[tofix] = false
         # fix most decided variable by applying a strong field 
         bp.efield[tofix] = newfield
@@ -157,14 +168,21 @@ function decimate1!(bp::BPFull, efield, freevars::BitArray{1}, s;
 end
 
 # returns max prob, idx of variable, sign of the belief
-function find_most_biased(bp::BPFull, freevars::BitArray{1})
+function find_most_biased(bp::BPFull, freevars::BitArray{1}; 
+        fair_decimation=false)
     m = -Inf; mi = 1; s = 0
     newfields = [(1.0,0.0), (0.0,1.0)]
     newfield = (0.5,0.5)
     for (i,h) in pairs(bp.belief)
        if freevars[i] && maximum(h)>m
             m, q = findmax(h); mi = i
-            newfield = newfields[q]
+            if fair_decimation
+                # sample fixing field from the distribution given by the belief
+                newfield = rand() < h[1] ? newfields[1] : newfields[2]
+            else
+                # use as fixing field the one corresponding to max belief
+                newfield = newfields[q]
+            end
        end
     end
     m, mi, newfield

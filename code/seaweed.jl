@@ -35,6 +35,8 @@ function grow_sw!(sw::Seaweed, seed::Int;
     @assert seed <= sw.fg.n "Cannot use var $seed as seed since FG has $(fg.n) variables"
     # Check that seed is a variable outside the core    
     @assert !sw.isincore[seed] "Cannot grow seaweed starting from a variable in the core"
+    # Refresh seaweed to all zeros
+    sw.toflip .= false
     push!(sw.Qf, (0, seed))
     while !(isempty(sw.Qf))
         f,v = pop!(sw.Qf); growf!(sw, f, v)
@@ -130,7 +132,8 @@ function seaweed_basis(nsw, fg, dim, Baux = sparse(falses(fg.n,dim)))
     # instanciate seaweed, depths and everything
     sw = Seaweed(fg)
     seed_perm = findall(.!sw.isincore)
-    @showprogress for i in 1:nsw
+    prog = Progress(nsw)
+    for i in 1:nsw
         seed = seed_perm[mod1(i,fg.n)]
         # grow seaweed and put it as the next free column in Baux
         v .= grow_sw!(sw,seed)
@@ -150,6 +153,7 @@ function seaweed_basis(nsw, fg, dim, Baux = sparse(falses(fg.n,dim)))
         i==fg.n && shuffle!(seed_perm)
         sw.toflip .= false
         empty!(sw.Qv_up); empty!(sw.Qv_down)
+        ProgressMeter.next!(prog; showvalues = [(:iter,i), (:dim, cnt-1)])
     end
     @warn "Not enough iterations to span the whole space"
     return dropzeros!(B), nsw

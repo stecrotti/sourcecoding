@@ -2,6 +2,8 @@ include("slim_graphs.jl")
 include("cavity.jl")
 include("bp.jl")
 
+using OffsetArrays, Statistics
+
 struct BPFull{F,M}
     H :: SparseMatrixCSC{F,Int}     # size (nfactors,nvars)
     X :: SparseMatrixCSC{Int,Int}   # to get neighbors of factor nodes
@@ -18,7 +20,7 @@ function BPFull(H::SparseMatrixCSC, efield = fill((0.5,0.5), n))
     h = fill((0.5,.5),nedges)
     u = fill((0.5,.5),nedges)
     belief = fill((0.5,.5),n)
-    BPFull(H, X, h, u, efield, belief)
+    BPFull(H, X, h, u, copy(efield), belief)
 end
 
 function bp_full(n, m, nedges, Lambda, Rho, efield=fill((0.5,0.5),n), 
@@ -26,19 +28,58 @@ function bp_full(n, m, nedges, Lambda, Rho, efield=fill((0.5,0.5),n),
         belief=fill((0.5,.5),n), args...; kw...)
     H = sparse(ldpc_matrix(n, m, nedges, Lambda, Rho, args...; kw...)')
     X = sparse(SparseMatrixCSC(size(H)...,H.colptr,H.rowval,collect(1:length(H.nzval)))')
-    BPFull(H, X, h, u, efield, belief)
+    BPFull(H, X, h, u, copy(efield), belief)
 end
 
 msg_conv(h1::Tuple, h2::Tuple) = (h1[1]*h2[1]+h1[2]*h2[2], h1[1]*h2[2]+h1[2]*h2[1]) 
 msg_mult(u1::Tuple, u2::Tuple) = u1 .* u2
 
-function update_var!(bp::BPFull, i::Int; damp=0.0, rein=0.0)
+function update_var_bp_new!(bp::BPFull, i::Int; damp=0.0, rein=0.0)
+    ε = 0.0
+    ∂i = nzrange(bp.H, i)
+    nzp = 0
+    nzn = 0
+    h = bp.efield[i]    # initialize
+    for a in ∂i
+        u = bp.u[a]
+        all(iszero,u) && println("All zero u")
+        if u[1] < 1e-300
+            nzp += 1
+        elseif u[2] < 1e-300
+            nzn += 1
+        else
+            h = msg_mult(h, u)
+        end
+    end
+    iszero(sum(h)) && return -1.0  # normaliz of belief is zero
+    any(isnan,h) && @show h, bp.efield[i]
+    bp.belief[i] = h ./ sum(h)
+    for a in ∂i
+        u = bp.u[a]
+        if u[1] < 1e-300
+            hnew = nzp==1 ? h : (0.0,1.0)
+        elseif u[2] < 1e-300
+            hnew = nzn==1 ? h : (1.0,0.0)
+        else
+            hnew = msg_mult(h, reverse(u)) # instead of dividing, mult times the swapped message
+        end
+        any(isnan, hnew ./ sum(hnew)) && @show hnew, h, u
+        hnew = hnew ./ sum(hnew)
+        ε = max(ε, maximum(abs, hnew.-bp.h[a]))
+        bp.h[a] = bp.h[a].*damp .+ hnew.*(1-damp)
+    end
+    bp.efield[i] = bp.efield[i] .+ rein.*bp.belief[i]
+    any(isnan, bp.efield[i]) && @show bp.belief[i]
+    ε
+end
+
+function update_var_bp!(bp::BPFull, i::Int; damp=0.0, rein=0.0)
     ε = 0.0
     ∂i = nzrange(bp.H, i)
     u = bp.u[∂i]
     h = copy(bp.h[∂i])
     full = cavity!(h, u, msg_mult, bp.efield[i])
-    iszero(sum(full)) && return -1  # normaliz of belief is zero
+    iszero(sum(full)) && return -1.0  # normaliz of belief is zero
     bp.belief[i] = full ./ sum(full)
     for (hnew,a) in zip(h, ∂i)
         hnew = hnew ./ sum(hnew)
@@ -49,7 +90,38 @@ function update_var!(bp::BPFull, i::Int; damp=0.0, rein=0.0)
     ε
 end
 
-function update_factor!(bp::BPFull, a::Int; damp=0.0)
+function update_factor_bp_new!(bp::BPFull, a::Int; damp=0.0)
+    ε = 0.0
+    ∂a = nonzeros(bp.X)[nzrange(bp.X, a)]
+    nunif = 0
+    u = (1.0,0.0)
+    for i in ∂a
+        h = bp.h[i]
+        if h[1]==h[2]
+            nunif += 1
+        else
+            u = msg_conv(u,h)
+        end
+    end
+    for i in ∂a
+        h = bp.h[i]
+        if h[1]==h[2]
+            unew = nunif==1 ? u : (0.5,0.5)
+        else
+            # "invert" the convolution
+            hinv = (h[1],-h[2])
+            unew = msg_conv(u,hinv)
+        end
+        unew = unew ./ sum(unew) 
+        any(isnan,unew) && println("Nan in update factor")
+        ε = max(ε, maximum(abs, unew.-bp.u[i]))
+        bp.u[i] = bp.u[i].*damp .+ unew.*(1-damp)
+        any(isnan,bp.u[i]) && @show bp.u[i]
+    end
+    ε
+end
+
+function update_factor_bp!(bp::BPFull, a::Int; damp=0.0)
     ε = 0.0
     ∂a = nonzeros(bp.X)[nzrange(bp.X, a)]
     u = copy(bp.u[∂a])
@@ -63,33 +135,27 @@ function update_factor!(bp::BPFull, a::Int; damp=0.0)
     ε
 end
 
-function iteration!(bp::BPFull; maxiter=10^3, tol=1e-12, damp=0.0, rein=0.0,
+
+function iteration!(bp::BPFull; maxiter=10^3, tol=1e-12, damp=0.0, rein=0.0, 
+        update_f! = update_factor_bp!, update_v! = update_var_bp!, 
         callback=(x...)->false)
-    errf = fill(0.0, size(bp.H,1))
-    errv = fill(0.0, size(bp.H,2))
     ε = 0.0
     for it = 1:maxiter
+        ε = 0.0
         for a=1:size(bp.H,1)
-            errf[a] = update_factor!(bp, a, damp=damp)
-            errf[a] == -1 && return -1,it
+            errf = update_f!(bp, a, damp=damp)
+            errf == -1 && return -1,it
+            ε = max(ε, errf)
         end
         for i=1:size(bp.H,2)
-            errv[i] = update_var!(bp, i, damp=damp, rein=rein)
-            errv[i] == -1 && return -1,it
+            errv = update_v!(bp, i, damp=damp, rein=rein)
+            errv == -1 && return -1,it
+            ε = max(ε, errv)
         end
-        ε = max(maximum(errf), maximum(errv))
         callback(it, ε, bp) && return ε,it
         ε < tol && return ε, it
     end
     ε, maxiter
-end
-
-# given a basis and the values of x[indep], compute what x[dep] must be
-function fix_indep!(x, B, indep)
-    n,k = size(B)
-    dep = setdiff(1:n, indep)
-    x[dep] .= B[dep,:]*x[indep] .% 2
-    σ = 1 .- 2x
 end
 
 
@@ -146,7 +212,7 @@ function decimate1!(bp::BPFull, efield, freevars::BitArray{1}, s;
         fair_decimation = false, kw...)
     # reset messages
     bp.h .= h_init; bp.u .= u_init
-    bp.efield .= efield
+    bp.efield .= efield; fill!(bp.belief, (0.5,0.5))
     # warmup bp run
     ε, iters = iteration!(bp; tol=1e-15, kw...)
     println("Avg distortion after 1st BP round: ", avg_dist(bp,s))
@@ -195,3 +261,39 @@ function cb_decimation(ε, nunsat, bp::BPFull, nfree, ovl, dist, iters, step, ma
 end
 
 
+#### MAX-SUM 
+msg_maxconv(h1::Tuple, h2::Tuple) = (max(h1[1]+h2[1],h1[2]+h2[2]), max(h1[1]+h2[2],h1[2]+h2[1])) 
+msg_sum(u1::Tuple, u2::Tuple) = u1 .+ u2
+
+function update_var_ms!(bp::BPFull, i::Int, 
+        h=copy(bp.h[nzrange(bp.H, i)]); damp=0.0, rein=0.0)
+    ε = 0.0
+    ∂i = nzrange(bp.H, i)
+    u = bp.u[∂i]
+    full = cavity!(h, u, msg_sum, bp.efield[i])
+    ## 
+    # some check against i.e. contradictions??
+    ##
+    bp.belief[i] = full .- maximum(full)
+    for (hnew,a) in zip(h, ∂i)
+        hnew = hnew .- maximum(hnew)
+        ε = max(ε, maximum(abs, hnew.-bp.h[a]))
+        bp.h[a] = bp.h[a].*damp .+ hnew.*(1-damp)
+    end
+    bp.efield[i] = bp.efield[i] .+ rein.*bp.belief[i]
+    ε
+end
+
+function update_factor_ms!(bp::BPFull, a::Int, 
+        u=copy(bp.u[nonzeros(bp.X)[nzrange(bp.X, a)]]); damp=0.0)
+    ε = 0.0
+    ∂a = nonzeros(bp.X)[nzrange(bp.X, a)]
+    h = bp.h[∂a]
+    full = cavity!(u, h, msg_maxconv, (0.0,-Inf))
+    for (unew,i) in zip(u, ∂a)
+        unew = unew .- maximum(unew)  
+        ε = max(ε, maximum(abs, unew.-bp.u[i]))
+        bp.u[i] = bp.u[i].*damp .+ unew.*(1-damp)
+    end
+    ε
+end

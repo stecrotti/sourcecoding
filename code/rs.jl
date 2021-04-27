@@ -1,3 +1,5 @@
+using OffsetArrays
+
 # MESSAGE UPDATES
 
 function iter_factor(q, k)

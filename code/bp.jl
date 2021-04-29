@@ -17,6 +17,7 @@ function ldpc_matrix(n::Int, m::Int, nedges::Int, Lambda, Rho,
     edgesleft=zeros(Int, nedges), edgesright=copy(edgesleft);
     accept_multi_edges=true, maxtrials=1000)
 
+    check_consistency_polynomials(n,m,nedges,Lambda,Rho)
     for t in 1:maxtrials
         H = one_ldpc_matrix(n, m, nedges, Lambda, Rho, edgesleft, edgesright)
         (nnz(H) == nedges || accept_multi_edges) && return H

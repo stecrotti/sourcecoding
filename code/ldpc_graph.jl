@@ -1,6 +1,8 @@
 #### Build and handle LDPC graphs, Hamming distances and more, on 𝔾𝔽(2ᵏ) ####
 using GaloisFields, Random
 
+include("FactorGraph.jl")
+
 function ldpc_graph(::Val{2}, args...; kw...)
     return ldpc_graphGF2(args...; kw...)
 end

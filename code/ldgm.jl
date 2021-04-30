@@ -87,7 +87,7 @@ function update_var_ms!(bp::LDGM, i::Int; damp=0.0, rein=0.0)
         bp.h[a] = bp.h[a].*damp .+ hnew.*(1-damp)
         b = msg_sum(b, bp.u[a]) 
     end
-    iszero(sum(b)) && return -1.0  # normaliz of belief is zero
+    isnan(sum(b)) && return -1.0  # normaliz of belief is zero
     bp.belief[i] = b .- maximum(b) 
     bp.efield[i] = bp.efield[i] .+ rein.*bp.belief[i]
     ε

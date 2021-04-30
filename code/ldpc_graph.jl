@@ -122,13 +122,13 @@ function ldpc_graphGF2(n::Int, m::Int,
     randseed != 0 && Random.seed!(randseed)      # for reproducibility
 
     ### Argument validation ###
-    _check_consistency_polynomials_edges(lambda, rho, nedges, n, m)
+    # _check_consistency_polynomials_edges(lambda, rho, nedges, n, m)
     
     if verbose
         println("Building factor graph...")
         println("lambda = ", lambda, "\nrho = ", rho)
     end
-
+   
     Vneigs = [Int[] for v in 1:n]
     Fneigs = [Int[] for f in 1:m]
     H = SparseArrays.spzeros(m,n)

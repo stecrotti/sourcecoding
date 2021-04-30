@@ -175,9 +175,10 @@ end
 
 function iteration_quick!(bp::BPFull; maxiter=10^3, tol=1e-12, damp=0.0, rein=0.0, 
         update_f! = update_factor_bp_quick!, update_v! = update_var_bp_quick!,
+        factor_neigs = [nonzeros(bp.X)[nzrange(bp.X, a)] for a = 1:size(bp.H,1)],
         callback=(x...)->false)
     # pre-allocate memory for the indices of neighbors
-    factor_neigs = [nonzeros(bp.X)[nzrange(bp.X, a)] for a = 1:size(bp.H,1)]
+    
     ε = 0.0
     for it = 1:maxiter
         ε = 0.0
@@ -253,11 +254,13 @@ end
 # try Tmax times to reach zero unsat with decimation
 # returns nunsat, ovl, dist
 function decimate!(bp::BPFull, efield, indep, s; Tmax=1, 
-        fair_decimation=false, kw...)
+        fair_decimation=false, 
+        factor_neigs = [nonzeros(bp.X)[nzrange(bp.X, a)] for a = 1:size(bp.H,1)],
+        kw...)
     freevars = falses(nvars(bp)); freevars[indep] .= true
     for t in 1:Tmax
         ε, nunsat, ovl, dist, iters = decimate1!(bp, efield, freevars, s; 
-            fair_decimation = fair_decimation, kw...)
+            fair_decimation = fair_decimation, factor_neigs = factor_neigs, kw...)
         print("Trial $t of $Tmax: ")
         ε == -1 && print("contradiction found. ")
         println(nunsat, " unsat. Dist = ", round(dist,digits=3))

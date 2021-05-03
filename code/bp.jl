@@ -1,5 +1,6 @@
 using SparseArrays, Random, Printf, Plots
 
+include("matrix_generator.jl")
 include("slim_graphs.jl")   # methods to compute basis
 
 struct BeliefPropagation{F,M}
@@ -10,53 +11,6 @@ end
 nfactors(bp::BeliefPropagation) = size(bp.H,2)
 nvars(bp::BeliefPropagation) = size(bp.H,1)
 
-# build a parity check matrix given degree profile, size and number of edges
-# assumes all of the parameters are consistent
-# follows Luby, "Efficient erasure correcting codes", doi: 10.1109/18.910575.
-function ldpc_matrix(n::Int, m::Int, nedges::Int, Lambda, Rho,
-    edgesleft=zeros(Int, nedges), edgesright=copy(edgesleft);
-    accept_multi_edges=true, maxtrials=1000)
-
-    check_consistency_polynomials(n,m,nedges,Lambda,Rho)
-    for t in 1:maxtrials
-        H = one_ldpc_matrix(n, m, nedges, Lambda, Rho, edgesleft, edgesright)
-        (nnz(H) == nedges || accept_multi_edges) && return H
-    end
-    error("Could not build graph after $maxtrials trials: multi-edges were popping up")
-end
-
-function one_ldpc_matrix(n, m, nedges, Lambda, Rho, edgesleft, edgesright)
-    v = r = 1
-    for i = 1:lastindex(Lambda)
-        ni = round(Int, n*Lambda[i])
-        for _ in 1:ni
-            edgesleft[r:r+i-1] .= v
-            v += 1; r += i
-        end
-    end
-    shuffle!(edgesleft)
-    f = r = 1
-    for j = 1:lastindex(Rho)
-        nj = round(Int, m*Rho[j])
-        for _ in 1:nj
-            edgesright[r:r+j-1] .= f
-            f += 1; r += j
-        end
-    end
-    sparse(edgesleft, edgesright, trues(nedges))
-end
-
-function check_consistency_polynomials(n,m,nedges,Lambda,Rho)
-    for l in Lambda
-        @assert isinteger(round(n*l, digits=10))
-    end
-    for r in Rho
-        @assert isinteger(round(m*r, digits=10))
-    end
-    @assert isapprox(n*sum(i*l for (i,l) in pairs(Lambda)), nedges, atol=1e-8) 
-    @assert isapprox(m*sum(j*r for (j,r) in pairs(Rho)), nedges, atol=1e-8)
-    @assert isapprox(sum(Lambda) == sum(Rho), 1, atol=1e-8)
-end
 
 function belief_propagation(n, m, nedges, Lambda, Rho, efield=zeros(n), 
         msg=zeros(nedges),  args...; kw...)

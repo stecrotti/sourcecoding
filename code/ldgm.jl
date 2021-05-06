@@ -8,9 +8,10 @@ struct LDGM{F,M}
     X :: SparseMatrixCSC{Int,Int}   # to get neighbors of factor nodes
     h :: Vector{M}                  # messages var -> factor
     u :: Vector{M}                  # messages factor -> var
-    efield :: Vector{M}             # external field
+    efield :: Vector{M}             # external field for source
     belief :: Vector{M}
-    s :: Vector{Int}                  # source vector
+    s :: Vector{Int}                # source vector
+    prior :: Vector{M}              # external field for variables
 end
 nfactors(bp::LDGM) = size(bp.G,1)
 nvars(bp::LDGM) = size(bp.G,2)
@@ -20,16 +21,17 @@ function LDGM(G::SparseMatrixCSC, s, efield = fill((0.5,0.5), size(G,1)))
     h = fill((0.5,.5), nnz(G))
     u = fill((0.5,.5), nnz(G))
     belief = fill((0.5,.5), k)
-    LDGM(G, X, h, u, copy(efield), belief, s)
+    prior = fill((0.5,.5), k)
+    LDGM(G, X, h, u, copy(efield), belief, s, prior)
 end
 
 function ldgm(n, k, nedges, Lambda, Rho, s=rand((-1,1),n); 
         efield=fill((0.5,0.5),n), 
         h=fill((0.5,.5),nedges), u=fill((0.5,.5),nedges),  
-        belief=fill((0.5,.5),k), kw...)
+        belief=fill((0.5,.5),k), prior = fill((0.5,.5), k), kw...)
     G = ldgm_matrix(n, k, nedges, Lambda, Rho; kw...)
     X = sparse(SparseMatrixCSC(size(G)...,G.colptr,G.rowval,collect(1:length(G.nzval)))')
-    LDGM(G, X, h, u, copy(efield), belief, s)
+    LDGM(G, X, h, u, copy(efield), belief, s, prior)
 end
 
 function ldgm_matrix(n::Int, k::Int, nedges::Int, Lambda, Rho;
@@ -44,7 +46,6 @@ function ldgm_matrix(n::Int, k::Int, nedges::Int, Lambda, Rho;
     end
     error("Could not build graph after $maxtrials trials: multi-edges were popping up")
 end
-
 
 function check_consistency_polynomials_ldgm(n,k,nedges,Lambda,Rho)
     for l in Lambda
@@ -67,14 +68,13 @@ msg_sum(u1::Tuple, u2::Tuple) = u1 .+ u2
 function update_var_bp!(bp::LDGM, i::Int; damp=0.0, rein=0.0)
     ε = 0.0
     ∂i = nzrange(bp.G, i)
-    b = (1.0,1.0)
+    b = bp.prior[i]
     for a in ∂i
-        hnew = (1.0,1.0)
+        hnew = bp.prior[i]
         for c in ∂i
             c==a && continue
             hnew = msg_mult(hnew, bp.u[c])
         end
-        # hnew = hnew .^rein
         hnew = hnew ./ sum(hnew)
         ε = max(ε, abs(hnew[1]-bp.h[a][1]), abs(hnew[2]-bp.h[a][2]))
         bp.h[a] = bp.h[a].*damp .+ hnew.*(1-damp)
@@ -82,7 +82,12 @@ function update_var_bp!(bp::LDGM, i::Int; damp=0.0, rein=0.0)
     end
     iszero(sum(b)) && return -1.0  # normaliz of belief is zero
     bp.belief[i] = b ./ sum(b) 
-    bp.efield[i] = bp.efield[i] .* bp.belief[i].*rein
+    try
+    bp.prior[i] = bp.prior[i] .* bp.belief[i].^rein
+    catch
+        @show bp.belief[i]
+        return -1
+    end
     ε
 end
 
@@ -105,9 +110,9 @@ end
 function update_var_ms!(bp::LDGM, i::Int; damp=0.0, rein=0.0)
     ε = 0.0
     ∂i = nzrange(bp.G, i)
-    b = (0.0,0.0)
+    b = bp.prior[i]
     for a in ∂i
-        hnew = (0.0,0.0)
+        hnew = bp.prior[i]
         for c in ∂i
             c==a && continue
             hnew = msg_sum(hnew, bp.u[c])
@@ -119,7 +124,7 @@ function update_var_ms!(bp::LDGM, i::Int; damp=0.0, rein=0.0)
     end
     isnan(sum(b)) && return -1.0  # normaliz of belief is zero
     bp.belief[i] = b .- maximum(b) 
-    bp.efield[i] = bp.efield[i] .+ rein.*bp.belief[i]
+    bp.prior[i] = bp.prior[i] .+ rein.*bp.belief[i]
     ε
 end
 
@@ -143,9 +148,8 @@ end
 function iteration!(bp::LDGM; maxiter=10^3, tol=1e-12, damp=0.0, rein=0.0, 
         update_f! = update_factor_bp!, update_v! = update_var_bp!,
         dist = fill(NaN,maxiter),
+        factor_neigs = [nonzeros(bp.X)[nzrange(bp.X, a)] for a = 1:size(bp.G,1)],
         callback=(x...)->false)
-    # pre-allocate memory for the indices of neighbors
-    factor_neigs = [nonzeros(bp.X)[nzrange(bp.X, a)] for a = 1:size(bp.G,1)]
     ε = 0.0
     for it = 1:maxiter
         ε = 0.0
@@ -159,7 +163,7 @@ function iteration!(bp::LDGM; maxiter=10^3, tol=1e-12, damp=0.0, rein=0.0,
             errv == -1 && return -1,it
             ε = max(ε, errv)
         end
-        # dist[it] = performance(bp)[2]
+        dist[it] = performance(bp)[2]
         callback(it, ε, bp) && return ε,it
         ε < tol && return ε, it
     end
@@ -175,12 +179,12 @@ function performance(bp::LDGM)
     ovl, dist
 end
 
-function avg_dist(bp::LDGM, s::AbstractVector)
+function avg_dist(bp::LDGM)
     ovl = 0.0
     n = nfactors(bp)
     Gt = sparse(bp.G')
     for a in 1:n
-        σ = s[a]
+        σ = bp.s[a]
         ∂a = rowvals(Gt)[nzrange(Gt, a)]
         for i in ∂a
             σ *= (bp.belief[i][1]-bp.belief[i][2])
@@ -188,5 +192,83 @@ function avg_dist(bp::LDGM, s::AbstractVector)
         ovl += σ
     end
     0.5*(1-ovl/n)
+end
+
+#### DECIMATION
+
+# try Tmax times to reach zero unsat with decimation
+# returns nunsat, ovl, dist
+function decimate!(bp::LDGM, efield; Tmax=1, 
+        fair_decimation=false, 
+        
+        kw...)
+    freevars = falses(nvars(bp))
+    for t in 1:Tmax
+        ε, nunsat, ovl, dist, iters = decimate1!(bp, efield, freevars; 
+            fair_decimation = fair_decimation, factor_neigs = factor_neigs, kw...)
+        print("Trial $t of $Tmax: ")
+        ε == -1 && print("contradiction found. ")
+        nunsat == 0 && return nunsat, ovl, dist
+        freevars .= false
+    end
+    return -1, NaN, NaN
+end
+
+# 1 trial of decimation
+function decimate!(bp::LDGM, efield; 
+        u_init=fill((0.5,0.5), length(bp.u)), h_init=fill((0.5,0.5), length(bp.h)),
+        prior_init=fill((0.5,0.5),length(bp.prior)),
+        callback=(ε,nunsat,args...) -> (ε==-1||nunsat==0), 
+        factor_neigs = [nonzeros(bp.X)[nzrange(bp.X, a)] for a = 1:size(bp.G,1)],
+        fair_decimation = false, kw...)
+    freevars = trues(nvars(bp))
+    # reset messages
+    bp.h .= h_init; bp.u .= u_init; bp.prior .= prior_init
+    bp.efield .= efield; fill!(bp.belief, (0.5,0.5))
+    # warmup bp run
+    ε, iters = iteration!(bp; tol=1e-15, kw...) 
+    println("Avg distortion after 1st BP round: ", avg_dist(bp))
+    ovl, dist = performance(bp)
+    nfree = sum(freevars)
+    callback(ε, bp, nfree, ovl, dist, iters, 0, -Inf) && return ε, ovl, dist, iters
+
+    for t in 1:nfree
+        maxfield, tofix, newfield = find_most_biased(bp, freevars, 
+            fair_decimation = fair_decimation)
+        freevars[tofix] = false
+        # fix most decided variable by applying a strong field 
+        bp.prior[tofix] = newfield
+        ε, iters = iteration!(bp; kw...)
+        ovl, dist = performance(bp)
+        callback(ε, bp, nfree-t, ovl, dist, iters, t, maxfield) && return ε, ovl, dist, iters
+    end
+    ε, ovl, dist, iters
+end
+
+# returns max prob, idx of variable, sign of the belief
+function find_most_biased(bp::LDGM, freevars::BitArray{1}; 
+        fair_decimation=false)
+    m = -Inf; mi = 1; s = 0
+    newfields = [(1.0,0.0), (0.0,1.0)]
+    newfield = (0.5,0.5)
+    for (i,h) in pairs(bp.belief)
+        if freevars[i] && maximum(h)>m
+                m, q = findmax(h); mi = i
+                if fair_decimation
+                    # sample fixing field from the distribution given by the belief
+                    newfield = rand() < h[1] ? newfields[1] : newfields[2]
+                else
+                    # use as fixing field the one corresponding to max belief
+                    newfield = newfields[q]
+                end
+        end
+    end
+    m, mi, newfield
+end
+
+function cb_decimation(ε, bp::LDGM, nfree, ovl, dist, iters, step, maxfield, args...)
+    @printf(" Step  %3d. Free = %3d. Maxfield = %1.2E. ε = %6.2E. Ovl = %.3f. Iters %d\n", 
+            step, nfree, maxfield, ε, ovl, iters)
+    return ε==-1
 end
 

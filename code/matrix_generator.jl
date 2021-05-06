@@ -49,7 +49,8 @@ function check_consistency_polynomials(n,m,nedges,Lambda,Rho)
     end
     @assert isapprox(n*sum(i*l for (i,l) in pairs(Lambda)), nedges, atol=1e-8) 
     @assert isapprox(m*sum(j*r for (j,r) in pairs(Rho)), nedges, atol=1e-8)
-    @assert isapprox(sum(Lambda) == sum(Rho), 1, atol=1e-8)
+    @assert isapprox(sum(Lambda), 1, atol=1e-8)
+    @assert isapprox(sum(Rho), 1, atol=1e-8)
 end
 
 # switch between node and edge degree convention

@@ -111,6 +111,7 @@ function RSB(Λ, K;
             Q = eachcol(@view popQ[:, samplek()])
             iter_factor!((@view popP[:,i]), Q)
         end
+        popQ .= popQ ./ sum(popQ,dims=1)
         moments!(avp1, popP);
         err = maximum(abs.(avp .- avp1))
         if err < tol

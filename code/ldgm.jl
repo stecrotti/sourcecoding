@@ -194,6 +194,32 @@ function avg_dist(bp::LDGM)
     0.5*(1-ovl/n)
 end
 
+magnetiz(t) = (t[1]-t[2]) / 2
+function free_energy(bp::LDGM)
+    n,k = size(bp.G)
+    # fa
+    Fa = 0.0
+    for a in 1:n
+        ∂a = nonzeros(bp.X)[nzrange(bp.X, a)]
+        p = bp.s[a]*mapreduce(magnetiz, *, bp.h[∂a])
+        Fa += -1+2*(p<0)
+    end
+    # fi
+    Fi = 0.0
+    for i in 1:k
+        ∂i = nzrange(bp.G, i)
+        Fi += -abs(sum(magnetiz,u for u in bp.u[∂i]))
+        Fi += sum(abs(u) for u in magnetiz.(bp.u[∂i]))
+    end
+    #fai
+    Fai = 0.0
+    for ai in eachindex(bp.u)
+        Fai += -abs(magnetiz(bp.h[ai].+bp.u[ai])) + abs(magnetiz(bp.h[ai])) 
+            + abs(magnetiz(bp.u[ai]))
+    end
+    F = (Fi+Fa-Fai) / n
+end
+
 #### DECIMATION
 
 # try Tmax times to reach zero unsat with decimation

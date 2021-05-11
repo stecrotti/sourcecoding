@@ -227,6 +227,9 @@ function overlap1RSB(Λ, K;
         F = -1/y*(α*F_factor + F_var - mΛ*F_edge)/t
         ProgressMeter.next!(progress; showvalues = [(:F,F),(:O,O),(:D,(1-O)/2)])
     end
+    @show O_factor, F_factor/y
+    @show O_var, F_var/y
+    @show O_edge, F_edge/y
     O = -(α*O_factor + O_var - mΛ*O_edge)/samples
     F = -1/y*(α*F_factor + F_var - mΛ*F_edge)/samples
     C = y*(-O - F)

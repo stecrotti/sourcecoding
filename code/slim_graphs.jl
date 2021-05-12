@@ -52,13 +52,13 @@ function leaf_removal(H::SparseMatrixCSC, Ht = sparse(transpose(H)))
         i = popfirst!(Q)
         degs[i] == 0 && continue
         push!(dep, i)
-        ∂i = rowvals(H)[nzrange(H,i)]
-        ∂i = ∂i[facts[∂i]]
+        ∂i1 = @view rowvals(H)[nzrange(H,i)]
+        ∂i = ∂i1[facts[∂i1]]
         @assert length(∂i) == 1 # should be a residual leaf
         a = ∂i[1]
         facts[a] = false
         push!(rowperm, a) 
-        for j in rowvals(Ht)[nzrange(Ht,a)]
+        for j in @view rowvals(Ht)[nzrange(Ht,a)]
             degs[j] -= 1
             if j != i
                 if degs[j] == 0

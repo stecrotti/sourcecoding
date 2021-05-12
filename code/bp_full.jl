@@ -76,7 +76,6 @@ function iteration!(bp::BPFull; maxiter=10^3, tol=1e-12, damp=0.0, rein=0.0,
         update_f! = update_factor_bp!, update_v! = update_var_bp!,
         factor_neigs = [nonzeros(bp.X)[nzrange(bp.X, a)] for a = 1:size(bp.H,1)],
         callback=(x...)->false)
-    # pre-allocate memory for the indices of neighbors
     
     ε = 0.0
     for it = 1:maxiter

@@ -11,7 +11,7 @@ function readgraph(graph)
                 i,j = extrema((parse(Int, v[2])+1, parse(Int, v[3])+1))
                 push!(I, i)
                 push!(J, j)
-            end
+            end 
         end
     end
 
@@ -74,6 +74,28 @@ function leaf_removal(H::SparseMatrixCSC, Ht = sparse(transpose(H)))
 end
 
 isuppertriang(H::SparseMatrixCSC) = all(rowvals(H)[last(nzrange(H,i))] == i for i = 1:size(H,1))
+
+function ut2diagGF2(T::SparseMatrixCSC)
+    (m,n) = size(T)
+    # Check that the left part of T is unit upper triangular
+    @assert isuppertriang(T)
+    # Store the rows of the right part in a vector of sparse vectors
+    Tt = sparse(T')
+    R = [Tt[m+1:end,r] for r in 1:m]
+    # Loop over diagonal elements
+    for c in m:-1:2
+        # Loop over the elements above T[c,c]
+        for j in @view rowvals(T)[nzrange(T,c)]
+            if j < c
+                # R[j] .⊻= R[c]
+                for k in rowvals(R[c])
+                    R[j][k] = !R[j][k]
+                end
+            end
+        end
+    end
+    # U = sparse(reduce(hcat,R)')
+end
 
 function ut2diagGF2!(T::SparseMatrixCSC)
     (m,n) = size(T)

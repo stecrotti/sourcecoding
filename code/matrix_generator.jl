@@ -4,8 +4,8 @@ using LinearAlgebra, Random
 #  assumes all of the parameters are consistent
 #  follows Luby, "Efficient erasure correcting codes", doi: 10.1109/18.910575.
 # polynomials are from the NODE POINT OF VIEW
-function ldpc_matrix(n::Int, m::Int, nedges::Int, Lambda, Rho,
-    edgesleft=zeros(Int, nedges), edgesright=copy(edgesleft);
+function ldpc_matrix(n::Integer, m::Integer, nedges::Integer, Lambda, Rho,
+    edgesleft=fill(zero(n), nedges), edgesright=copy(edgesleft);
     vperm = randperm(n), fperm = randperm(m),
     accept_multi_edges=true, maxtrials=1000)
 

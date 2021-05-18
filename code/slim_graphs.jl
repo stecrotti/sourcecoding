@@ -34,28 +34,23 @@ function readseeds(seeds, H)
     end
 end
 
-function leaf_removal(H::SparseMatrixCSC, Ht = sparse(transpose(H)))
+function leaf_removal(H::SparseMatrixCSC, Ht = sparse(H'))
     M, N = size(H)
     degs = vec(sum(H .!= 0, dims=1))
-    facts = fill(true, M)
-    rowperm = Int[]
-    Q = findall(degs .== 1)
-    indep = findall(degs .== 0)
-    dep = Int[]
+    facts = trues(M)
+    rowperm = Int32[]
+    Q = Int32.(findall(degs .== 1))
+    indep = Int32.(findall(degs .== 0))
+    dep = Int32[]
+    sizehint!(indep, N-M)
+    sizehint!(dep, M)
+    sizehint!(rowperm, M)
     while !isempty(Q)
-        # # introduce some randomness
-        # L = length(Q)
-        # if L > 1
-        #     r = rand(2:L)
-        #     Q[1], Q[r] = Q[r], Q[1]
-        # end
         i = popfirst!(Q)
         degs[i] == 0 && continue
         push!(dep, i)
-        ∂i1 = @view rowvals(H)[nzrange(H,i)]
-        ∂i = ∂i1[facts[∂i1]]
-        @assert length(∂i) == 1 # should be a residual leaf
-        a = ∂i[1]
+        ∂i = @view rowvals(H)[nzrange(H,i)]
+        a = ∂i[findfirst(b->facts[b], ∂i)]
         facts[a] = false
         push!(rowperm, a) 
         for j in @view rowvals(Ht)[nzrange(Ht,a)]
@@ -70,32 +65,10 @@ function leaf_removal(H::SparseMatrixCSC, Ht = sparse(transpose(H)))
         end
     end
     all(degs .==  0) || @warn "non-empty core"
-    rowperm, [dep; indep]
+    rowperm, dep, indep
 end
 
 isuppertriang(H::SparseMatrixCSC) = all(rowvals(H)[last(nzrange(H,i))] == i for i = 1:size(H,1))
-
-function ut2diagGF2(T::SparseMatrixCSC)
-    (m,n) = size(T)
-    # Check that the left part of T is unit upper triangular
-    @assert isuppertriang(T)
-    # Store the rows of the right part in a vector of sparse vectors
-    Tt = sparse(T')
-    R = [Tt[m+1:end,r] for r in 1:m]
-    # Loop over diagonal elements
-    for c in m:-1:2
-        # Loop over the elements above T[c,c]
-        for j in @view rowvals(T)[nzrange(T,c)]
-            if j < c
-                # R[j] .⊻= R[c]
-                for k in rowvals(R[c])
-                    R[j][k] = !R[j][k]
-                end
-            end
-        end
-    end
-    # U = sparse(reduce(hcat,R)')
-end
 
 function ut2diagGF2!(T::SparseMatrixCSC)
     (m,n) = size(T)
@@ -114,6 +87,57 @@ function ut2diagGF2!(T::SparseMatrixCSC)
         end
     end
     dropzeros!(T)
+end
+
+function ut2diagGF2(Tdep, Tindep)
+    m = size(Tdep,1)
+    @assert isuppertriang(Tdep)
+    # Store the rows of the right part in a vector of sparse vectors
+    Tt = permutedims(Tindep)
+    R = [Tt[:,r] for r in 1:m]
+    # Loop over diagonal elements
+    @inbounds for c in m:-1:2
+        # Loop over the elements above T[c,c]
+        for j in @view rowvals(Tdep)[nzrange(Tdep,c)[1:end-1]]
+            R[j] .⊻= R[c]
+        end
+    end
+    #U = reduce(hcat,R)
+    R
+end
+
+function ut2diagGF2(Hdep, Hindep, rowperm)
+    m = length(rowperm)
+    invrowperm = invperm(rowperm)
+    # Store the rows of the right part in a vector of sparse vectors
+    Hindep_t = permutedims(Hindep)
+    R = [Hindep_t[:,r] for r in rowperm]
+    # Loop over diagonal elements
+    @inbounds for c in m:-1:2
+        # Loop over the elements above T[c,c]
+        for j in @view invrowperm[rowvals(Hdep)[nzrange(Hdep,c)]]
+            j!=c && (R[j] .⊻= @view R[c])
+        end
+    end
+    #U = reduce(hcat,R)
+    R
+end
+
+function echelonize(H, Ht, rowperm, colperm)
+    m = size(H,1)
+    # @assert isuppertriang(H[rowperm, colperm])
+    # Store the rows of the right part in a vector of sparse vectors
+    R = [Ht[:,r] for r in 1:m]
+    # Loop over diagonal elements
+    for c in m:-1:2
+        # Loop over the elements above T[c,c]
+        for j in @view rowvals(H)[nzrange(H,colperm[c])]
+            if j ≠ rowperm[c]
+                R[j] .⊻= R[rowperm[c]]
+            end
+        end
+    end
+    R
 end
 
 function findbasis(H, Ht = sparse(transpose(H)))

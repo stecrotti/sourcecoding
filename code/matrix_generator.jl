@@ -37,7 +37,7 @@ function one_ldpc_matrix(n, m, nedges, Lambda, Rho, edgesleft, edgesright;
             f += 1; r += j
         end
     end
-    sparse(edgesleft, edgesright, trues(nedges))
+    sparse(edgesleft, edgesright, trues(nedges), n, m)
 end
 
 function check_consistency_polynomials(n,m,nedges,Lambda,Rho)

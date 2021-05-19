@@ -1,4 +1,4 @@
-using LinearAlgebra, Random
+using LinearAlgebra, Random, SparseArrays
 
 # build a parity check matrix given degree profile, size and number of edges
 #  assumes all of the parameters are consistent

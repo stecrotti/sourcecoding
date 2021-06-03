@@ -69,7 +69,7 @@ end
 
 # build a valid degree profile as close as possible to the given one
 function valid_degrees(Prows, Pcols, A::Int=2*3*5*7; B::Int=1,
-        verbose=false)
+        verbose=false, tol=1e-2)
     # convert to rationals
     Pr = Rational.(round.(Int, Prows*A), A)
     Pc = Rational.(round.(Int, Pcols*A), A)
@@ -88,6 +88,7 @@ function valid_degrees(Prows, Pcols, A::Int=2*3*5*7; B::Int=1,
     Pc_new = float(Pc)
     if verbose
         err = max(maximum(abs,Prows.-Pr_new), maximum(abs,Pcols.-Pc_new))
+        err > tol && error("Discrepancy with given degree profile larger than tol $tol")
         println("Max discrepancy with given degree profile: err=",err)
     end
     return nrows, ncols, nedges, Pr_new, Pc_new

@@ -17,9 +17,10 @@ nvars(bp::BPFull) = size(bp.H,2)
 function BPFull(H::SparseMatrixCSC, efield = fill((0.5,0.5), size(H,2)))
     n = size(H,2)
     X = sparse(SparseMatrixCSC(size(H)...,H.colptr,H.rowval,collect(1:length(H.nzval)))')
-    h = fill((0.5,.5),nnz(H))
-    u = fill((0.5,.5),nnz(H))
-    belief = fill((0.5,.5),n)
+    neutralel = eltype(efield[1])==Int ? (0,0) : (0.5,0.5)
+    h = fill(neutralel,nnz(H))
+    u = fill(neutralel,nnz(H))
+    belief = fill(neutralel,n)
     BPFull(H, X, h, u, copy(efield), belief)
 end
 

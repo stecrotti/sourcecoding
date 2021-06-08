@@ -141,7 +141,8 @@ function echelonize(H, Ht, rowperm, colperm)
 end
 
 function findbasis(H, Ht = sparse(transpose(H)))
-    rowperm, colperm = leaf_removal(H, Ht)
+    rowperm, dep, indep = leaf_removal(H, Ht)
+    colperm = [dep; indep]
     Hnew = H[rowperm, colperm]
     ut2diagGF2!(Hnew)
     B = [Hnew[:, size(Hnew, 1)+1:end]; I]

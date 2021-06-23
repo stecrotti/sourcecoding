@@ -6,20 +6,22 @@ using LinearAlgebra, Random, SparseArrays
 # polynomials are from the NODE POINT OF VIEW
 function ldpc_matrix(n::Integer, m::Integer, nedges::Integer, Lambda, Rho,
     edgesleft=fill(zero(n), nedges), edgesright=copy(edgesleft);
-    vperm = randperm(n), fperm = randperm(m),
+    rng = MersenneTwister(0),
+    vperm = randperm(rng, n), fperm = randperm(rng, m),
     accept_multi_edges=true, maxtrials=1000)
 
     check_consistency_polynomials(n,m,nedges,Lambda,Rho)
     for t in 1:maxtrials
         H = one_ldpc_matrix(n, m, nedges, Lambda, Rho, edgesleft, edgesright,
-            vperm=vperm, fperm=fperm)
+            rng=rng, vperm=vperm, fperm=fperm)
         (nnz(H) == nedges || accept_multi_edges) && return H
     end
     error("Could not build graph after $maxtrials trials: multi-edges were popping up")
 end
 
 function one_ldpc_matrix(n, m, nedges, Lambda, Rho, edgesleft, edgesright;
-    vperm = randperm(n), fperm = randperm(m))
+    rng = MersenneTwister(0),
+    vperm = randperm(rng, n), fperm = randperm(rng, m))
     v = r = 1
     for i = 1:lastindex(Lambda)
         ni = Int(round(n*Lambda[i], digits=10))
@@ -28,7 +30,7 @@ function one_ldpc_matrix(n, m, nedges, Lambda, Rho, edgesleft, edgesright;
             v += 1; r += i
         end
     end
-    shuffle!(edgesleft)
+    shuffle!(rng, edgesleft)
     f = r = 1
     for j = 1:lastindex(Rho)
         nj = Int(round(m*Rho[j], digits=10))

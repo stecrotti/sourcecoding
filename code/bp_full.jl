@@ -73,10 +73,16 @@ function update_factor_bp!(bp::BPFull, a::Int,
     ε
 end
 
+# alias for calling `iteration!` with maxsum updates
+function iteration_ms!(ms::BPFull; kw...)
+    iteration!(ms; update_f! = update_factor_ms!, 
+        update_v! = update_var_ms!, kw...)
+end
+
 function iteration!(bp::BPFull; maxiter=10^3, tol=1e-12, damp=0.0, rein=0.0, 
         update_f! = update_factor_bp!, update_v! = update_var_bp!,
         factor_neigs = [nonzeros(bp.X)[nzrange(bp.X, a)] for a = 1:size(bp.H,1)],
-        callback=(x...)->false)
+        callback=(it, ε, bp)->false)
     
     ε = 0.0
     for it = 1:maxiter
@@ -99,6 +105,10 @@ end
 
 function parity(bp::BPFull, x::AbstractVector)
     z = sum(bp.H*x .% 2)
+    return z 
+end
+function parity(H::SparseMatrixCSC, x::AbstractVector)
+    z = sum(H*x .% 2)
     return z 
 end
 function distortion(x::AbstractVector, y::AbstractVector)

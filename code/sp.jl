@@ -1,6 +1,7 @@
 using SparseArrays, Random
 
 include("cavity.jl")
+include("rsb.jl")
 
 mutable struct SurveyPropagation{F,M}
     H :: SparseMatrixCSC{F,Int}

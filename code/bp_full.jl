@@ -17,7 +17,7 @@ nvars(bp::BPFull) = size(bp.H,2)
 function BPFull(H::SparseMatrixCSC, efield = fill((0.5,0.5), size(H,2)))
     n = size(H,2)
     X = sparse(SparseMatrixCSC(size(H)...,H.colptr,H.rowval,collect(1:length(H.nzval)))')
-    neutralel = eltype(efield[1])==Int ? (0,0) : (0.5,0.5)
+    neutralel = eltype(efield[1][1])==Int ? (0,0) : (0.5,0.5)
     h = fill(neutralel,nnz(H))
     u = fill(neutralel,nnz(H))
     belief = fill(neutralel,n)
@@ -25,15 +25,14 @@ function BPFull(H::SparseMatrixCSC, efield = fill((0.5,0.5), size(H,2)))
 end
 
 function bp_full(n, m, nedges, Lambda, Rho, efield=fill((0.5,0.5),n), 
-        h=fill((0.5,.5),nedges), u=fill((0.5,.5),nedges),  
-        belief=fill((0.5,.5),n), args...; kw...)
+        args...; kw...)
     H = sparse(ldpc_matrix(n, m, nedges, Lambda, Rho, args...; kw...)')
-    X = sparse(SparseMatrixCSC(size(H)...,H.colptr,H.rowval,collect(1:length(H.nzval)))')
-    BPFull(H, X, h, u, copy(efield), belief)
+    BPFull(H, copy(efield))
 end
 
 msg_conv(h1::Tuple, h2::Tuple) = (h1[1]*h2[1]+h1[2]*h2[2], h1[1]*h2[2]+h1[2]*h2[1]) 
 msg_mult(u1::Tuple, u2::Tuple) = u1 .* u2
+normalize_prob(u::Tuple) = u ./ sum(u)
 
 
 function update_var_bp!(bp::BPFull, i::Int; damp=0.0, rein=0.0)
@@ -46,13 +45,13 @@ function update_var_bp!(bp::BPFull, i::Int; damp=0.0, rein=0.0)
             c==a && continue
             hnew = msg_mult(hnew, bp.u[c])
         end
-        hnew = hnew ./ sum(hnew)
+        hnew = normalize_prob(hnew)
         ε = max(ε, abs(hnew[1]-bp.h[a][1]), abs(hnew[2]-bp.h[a][2]))
         bp.h[a] = bp.h[a].*damp .+ hnew.*(1-damp)
         b = msg_mult(b, bp.u[a]) 
     end
     iszero(sum(b)) && return -1.0  # normaliz of belief is zero
-    bp.belief[i] = b ./ sum(b) 
+    bp.belief[i] = normalize_prob(b) 
     bp.efield[i] = bp.efield[i] .+ rein.*bp.belief[i]
     ε
 end
@@ -66,7 +65,7 @@ function update_factor_bp!(bp::BPFull, a::Int,
             j==i && continue
             unew = msg_conv(unew, bp.h[j])
         end
-        unew = unew ./ sum(unew)    # should not be needed
+        unew = normalize_prob(unew)    # should not be needed
         ε = max(ε, abs(unew[1]-bp.u[i][1]), abs(unew[2]-bp.u[i][2]))
         bp.u[i] = bp.u[i].*damp .+ unew.*(1-damp)
     end
@@ -118,8 +117,9 @@ function distortion(x::AbstractVector, y::AbstractVector)
     end
     d/length(x)
 end
-function performance(bp::BPFull, s::AbstractVector)
-    x = argmax.(bp.belief) .== 2
+function performance(bp::BPFull, s::AbstractVector,
+        x=falses(length(s)))
+    x .= argmax.(bp.belief) .== 2
     nunsat = parity(bp, x)
     y = s .== -1
     dist = mean(x .!= y)
@@ -133,6 +133,165 @@ function avg_dist(bp::BPFull, s::AbstractVector)
     end
     0.5(1-ovl/nvars(bp))
 end
+
+
+#### DECIMATION
+
+# try Tmax times to reach zero unsat with decimation
+# returns nunsat, ovl, dist
+function decimate!(bp::BPFull, efield, indep, s; Tmax=1, 
+        fair_decimation=false, 
+        factor_neigs = [nonzeros(bp.X)[nzrange(bp.X, a)] for a = 1:size(bp.H,1)],
+        kw...)
+    freevars = falses(nvars(bp)); freevars[indep] .= true
+    for t in 1:Tmax
+        ε, nunsat, ovl, dist, iters = decimate1!(bp, efield, freevars, s; 
+            fair_decimation = fair_decimation, factor_neigs = factor_neigs, kw...)
+        print("Trial $t of $Tmax: ")
+        ε == -1 && print("contradiction found. ")
+        println(nunsat, " unsat. Dist = ", round(dist,digits=3))
+        nunsat == 0 && return nunsat, ovl, dist
+        freevars .= false; freevars[indep] .= true
+    end
+    return -1, NaN, NaN
+end
+
+# 1 trial of decimation
+function decimate1!(bp::BPFull, efield, freevars::BitArray{1}, s; 
+        u_init=fill((0.5,0.5), length(bp.u)), h_init=fill((0.5,0.5), length(bp.h)),
+        callback=(ε,nunsat,args...) -> (ε==-1||nunsat==0), 
+        fair_decimation = false, kw...)
+    # reset messages
+    bp.h .= h_init; bp.u .= u_init
+    bp.efield .= efield; fill!(bp.belief, (0.5,0.5))
+    # warmup bp run
+    ε, iters = iteration!(bp; tol=1e-15, kw...) 
+    println("Avg distortion after 1st BP round: ", avg_dist(bp,s))
+    nunsat, ovl, dist = performance(bp, s)
+    nfree = sum(freevars)
+    callback(ε, nunsat, bp, nfree, ovl, dist, iters, 0, -Inf) && return ε, nunsat, ovl, dist, iters
+
+    for t in 1:nfree
+        maxfield, tofix, newfield = find_most_biased(bp, freevars, 
+            fair_decimation = fair_decimation)
+        freevars[tofix] = false
+        # fix most decided variable by applying a strong field 
+        bp.efield[tofix] = newfield
+        ε, iters = iteration!(bp; kw...)
+        nunsat, ovl, dist = performance(bp, s)
+        callback(ε, nunsat, bp, nfree-t, ovl, dist, iters, t, maxfield) && return ε, nunsat, ovl, dist, iters
+    end
+    ε, nunsat, ovl, dist, iters
+end
+
+# returns max prob, idx of variable, sign of the belief
+function find_most_biased(bp::BPFull, freevars::BitArray{1}; 
+        fair_decimation=false)
+    m = -Inf; mi = 1; s = 0
+    newfields = [(1.0,0.0), (0.0,1.0)]
+    newfield = (0.5,0.5)
+    for (i,h) in pairs(bp.belief)
+       if freevars[i] && maximum(h)>m
+            m, q = findmax(h); mi = i
+            if fair_decimation
+                # sample fixing field from the distribution given by the belief
+                newfield = rand() < h[1] ? newfields[1] : newfields[2]
+            else
+                # use as fixing field the one corresponding to max belief
+                newfield = newfields[q]
+            end
+       end
+    end
+    m, mi, newfield
+end
+
+function cb_decimation(ε, nunsat, bp::BPFull, nfree, ovl, dist, iters, step, maxfield, args...)
+    @printf(" Step  %3d. Free = %3d. Maxfield = %1.2E. ε = %6.2E. Unsat = %3d. Ovl = %.3f. Iters %d\n", 
+            step, nfree, maxfield, ε, nunsat,  ovl, iters)
+    return ε==-1 || nunsat==0
+end
+
+
+#### MAX-SUM 
+msg_maxconv(h1::Tuple, h2::Tuple) = (max(h1[1]+h2[1],h1[2]+h2[2]), max(h1[1]+h2[2],h1[2]+h2[1])) 
+msg_sum(u1::Tuple, u2::Tuple) = u1 .+ u2
+normalize_max(h::Tuple) = h .- maximum(h)
+
+function update_var_ms!(bp::BPFull, i::Int; damp=0.0, rein=0.0)
+    ε = 0.0
+    ∂i = nzrange(bp.H, i)
+    b = bp.efield[i] 
+    for a in ∂i
+        hnew = bp.efield[i] 
+        for c in ∂i
+            c==a && continue
+            hnew = msg_sum(hnew, bp.u[c])
+        end
+        hnew = normalize_max(hnew)
+        ε = max(ε, abs(hnew[1]-bp.h[a][1]), abs(hnew[2]-bp.h[a][2]))
+        bp.h[a] = bp.h[a].*damp .+ hnew.*(1-damp)
+        b = msg_sum(b, bp.u[a]) 
+    end
+    isnan(sum(b)) && return -1.0  # normaliz of belief is zero
+    bp.belief[i] = normalize_max(b) 
+    bp.efield[i] = bp.efield[i] .+ rein.*bp.belief[i]
+    ε
+end
+
+function update_factor_ms!(bp::BPFull, a::Int, 
+        ∂a = nonzeros(bp.X)[nzrange(bp.X, a)]; damp=0.0)
+    ε = 0.0
+    for i in ∂a
+        unew = (0.0,-Inf)
+        for j in ∂a
+            j==i && continue
+            unew = msg_maxconv(unew, bp.h[j])
+        end
+        unew = normalize_max(unew)    
+        ε = max(ε, abs(unew[1]-bp.u[i][1]), abs(unew[2]-bp.u[i][2]))
+        bp.u[i] = bp.u[i].*damp .+ unew.*(1-damp)
+    end
+    ε
+end
+
+
+### VANISHING FIELDS
+Msg{T,M} = Tuple{Tuple{T,T}, Tuple{M,M}}
+
+function msg_maxconv(h1::Msg{T,M}, h2::Msg{T,M}) where {T,M}
+    u = msg_maxconv(h1[1], h2[1])
+    utilde_plus = (u[1]==h1[1][1]+h2[1][1])*h1[2][1]*h2[2][1] +
+                  (u[1]==h1[1][1]+h2[1][2])*h1[2][2]*h2[2][2]
+    utilde_minus = (u[2]==h1[1][2]+h2[1][2])*h1[2][2]*h2[2][1] +
+                   (u[2]==h1[1][2]+h2[1][1])*h1[2][2]*h2[2][1]
+    (u, (utilde_plus,utilde_minus))::Msg{T,M}
+end
+
+function msg_sum(u1::Msg{T,M}, u2::Msg{T,M}) where {T,M}
+    h = u1[1] .+ u2[1]
+    htilde = u1[2] .* u2[2]
+    (h, htilde)::Msg{T,M}
+end
+
+function normalize_max(h::Msg{T,M}) where {T,M}
+    hnew = normalize_max(h[1])
+    hnewtilde = normalize_prob(h[2])
+    (hnew, hnewtilde)::Msg{T,M}
+end
+
+function ms_full_vanishing(H::SparseMatrixCSC, 
+    efield::Vector{Tuple{Tuple{T,T},Tuple{M,M}}}) where {T,M}
+    n = size(H,2)
+    X = sparse(SparseMatrixCSC(size(H)...,H.colptr,H.rowval,collect(1:length(H.nzval)))')
+    neutralel = ((zero(T),zero(T)), (zero(M), zero(M)))
+    h = fill(neutralel,nnz(H))
+    u = fill(neutralel,nnz(H))
+    belief = fill(neutralel,n)
+    BPFull(H, X, h, u, copy(efield), belief)
+end
+
+
+### OBSERVABLES
 function normalize_bp!(bp::BPFull)
     nor(t) = t ./ sum(t)
     bp.belief .= nor.(bp.belief)
@@ -222,124 +381,6 @@ function free_energy_energetic(ms::BPFull)
     end
     F = fi + fa - fai
     f = F / nvars(ms)
-end
-
-#### DECIMATION
-
-# try Tmax times to reach zero unsat with decimation
-# returns nunsat, ovl, dist
-function decimate!(bp::BPFull, efield, indep, s; Tmax=1, 
-        fair_decimation=false, 
-        factor_neigs = [nonzeros(bp.X)[nzrange(bp.X, a)] for a = 1:size(bp.H,1)],
-        kw...)
-    freevars = falses(nvars(bp)); freevars[indep] .= true
-    for t in 1:Tmax
-        ε, nunsat, ovl, dist, iters = decimate1!(bp, efield, freevars, s; 
-            fair_decimation = fair_decimation, factor_neigs = factor_neigs, kw...)
-        print("Trial $t of $Tmax: ")
-        ε == -1 && print("contradiction found. ")
-        println(nunsat, " unsat. Dist = ", round(dist,digits=3))
-        nunsat == 0 && return nunsat, ovl, dist
-        freevars .= false; freevars[indep] .= true
-    end
-    return -1, NaN, NaN
-end
-
-# 1 trial of decimation
-function decimate1!(bp::BPFull, efield, freevars::BitArray{1}, s; 
-        u_init=fill((0.5,0.5), length(bp.u)), h_init=fill((0.5,0.5), length(bp.h)),
-        callback=(ε,nunsat,args...) -> (ε==-1||nunsat==0), 
-        fair_decimation = false, kw...)
-    # reset messages
-    bp.h .= h_init; bp.u .= u_init
-    bp.efield .= efield; fill!(bp.belief, (0.5,0.5))
-    # warmup bp run
-    ε, iters = iteration!(bp; tol=1e-15, kw...) 
-    println("Avg distortion after 1st BP round: ", avg_dist(bp,s))
-    nunsat, ovl, dist = performance(bp, s)
-    nfree = sum(freevars)
-    callback(ε, nunsat, bp, nfree, ovl, dist, iters, 0, -Inf) && return ε, nunsat, ovl, dist, iters
-
-    for t in 1:nfree
-        maxfield, tofix, newfield = find_most_biased(bp, freevars, 
-            fair_decimation = fair_decimation)
-        freevars[tofix] = false
-        # fix most decided variable by applying a strong field 
-        bp.efield[tofix] = newfield
-        ε, iters = iteration!(bp; kw...)
-        nunsat, ovl, dist = performance(bp, s)
-        callback(ε, nunsat, bp, nfree-t, ovl, dist, iters, t, maxfield) && return ε, nunsat, ovl, dist, iters
-    end
-    ε, nunsat, ovl, dist, iters
-end
-
-# returns max prob, idx of variable, sign of the belief
-function find_most_biased(bp::BPFull, freevars::BitArray{1}; 
-        fair_decimation=false)
-    m = -Inf; mi = 1; s = 0
-    newfields = [(1.0,0.0), (0.0,1.0)]
-    newfield = (0.5,0.5)
-    for (i,h) in pairs(bp.belief)
-       if freevars[i] && maximum(h)>m
-            m, q = findmax(h); mi = i
-            if fair_decimation
-                # sample fixing field from the distribution given by the belief
-                newfield = rand() < h[1] ? newfields[1] : newfields[2]
-            else
-                # use as fixing field the one corresponding to max belief
-                newfield = newfields[q]
-            end
-       end
-    end
-    m, mi, newfield
-end
-
-function cb_decimation(ε, nunsat, bp::BPFull, nfree, ovl, dist, iters, step, maxfield, args...)
-    @printf(" Step  %3d. Free = %3d. Maxfield = %1.2E. ε = %6.2E. Unsat = %3d. Ovl = %.3f. Iters %d\n", 
-            step, nfree, maxfield, ε, nunsat,  ovl, iters)
-    return ε==-1 || nunsat==0
-end
-
-
-#### MAX-SUM 
-msg_maxconv(h1::Tuple, h2::Tuple) = (max(h1[1]+h2[1],h1[2]+h2[2]), max(h1[1]+h2[2],h1[2]+h2[1])) 
-msg_sum(u1::Tuple, u2::Tuple) = u1 .+ u2
-
-function update_var_ms!(bp::BPFull, i::Int; damp=0.0, rein=0.0)
-    ε = 0.0
-    ∂i = nzrange(bp.H, i)
-    b = bp.efield[i] 
-    for a in ∂i
-        hnew = bp.efield[i] 
-        for c in ∂i
-            c==a && continue
-            hnew = msg_sum(hnew, bp.u[c])
-        end
-        hnew = hnew .- maximum(hnew)
-        ε = max(ε, abs(hnew[1]-bp.h[a][1]), abs(hnew[2]-bp.h[a][2]))
-        bp.h[a] = bp.h[a].*damp .+ hnew.*(1-damp)
-        b = msg_sum(b, bp.u[a]) 
-    end
-    isnan(sum(b)) && return -1.0  # normaliz of belief is zero
-    bp.belief[i] = b .- maximum(b) 
-    bp.efield[i] = bp.efield[i] .+ rein.*bp.belief[i]
-    ε
-end
-
-function update_factor_ms!(bp::BPFull, a::Int, 
-        ∂a = nonzeros(bp.X)[nzrange(bp.X, a)]; damp=0.0)
-    ε = 0.0
-    for i in ∂a
-        unew = (0.0,-Inf)
-        for j in ∂a
-            j==i && continue
-            unew = msg_maxconv(unew, bp.h[j])
-        end
-        unew = unew .- maximum(unew)    
-        ε = max(ε, abs(unew[1]-bp.u[i][1]), abs(unew[2]-bp.u[i][2]))
-        bp.u[i] = bp.u[i].*damp .+ unew.*(1-damp)
-    end
-    ε
 end
 
 #### SLOW VERSIONS

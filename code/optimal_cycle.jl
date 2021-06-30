@@ -96,7 +96,7 @@ function neutralize_leaves!(H::AbstractMatrix)
 end
 
 function findsol(HH::SparseMatrixCSC, x0::BitVector, 
-    x::BitVector=falses(size(H,2)); weights=zeros(Int, size(x)),
+    x::BitVector=falses(size(HH,2)); weights=zeros(Int, size(x)),
     maxiter::Int=50,verbose::Bool=true) 
 
     # Close leaves in a loop
@@ -127,8 +127,6 @@ function findsol(HH::SparseMatrixCSC, x0::BitVector,
     end
     return Inf, dist, x
 end
-
-
 
 
 

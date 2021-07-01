@@ -50,38 +50,27 @@ function variables_from_cycle(cy::Array{Tuple{Int64,Int64},1}, m::Int)
     return cy_    
 end
 
-# Full adjacency matrix with weights:
-#  +1: edges corresponding to variables which have the same value as in the src
-#  -1: otherwise
-# Optional argument `weights` forces variables to be flipped (large negative
-#  weight), or not (large positive weight)
-function weighted_full_adjmat!(A::SparseMatrixCSC, H::SparseMatrixCSC, x, x0;
-        weights=zeros(size(x)))
+# Full adjacency matrix with weights: negative weights favour flipping
+function weighted_full_adjmat!(A::SparseMatrixCSC, H::SparseMatrixCSC, σ, efield)
     m,n = size(H)
     for i in 1:n
-        if x[i] != x0[i]
-            A[m+i,:] .*= -1
-            A[:,m+i] .*= -1
-        end
-        if weights[i] != 0  
-            A[m+i,:] .= abs.(A[m+i,:])*weights[i]
-            A[:,m+i] .= abs.(A[:,m+i])*weights[i]
-        end
+        A[m+i,:] .*= efield[i]*σ[i]
+        A[:,m+i] .*= efield[i]*σ[i]
     end
     return dropzeros!(A)
 end
 
-function one_loop_flip!(A::SparseMatrixCSC, H::SparseMatrixCSC, x, x0;
-        weights=zeros(size(x)))
+function one_loop_flip!(A::SparseMatrixCSC, H::SparseMatrixCSC, σ, efield)
     m,n = size(H)
     # reset adjacency matrix to all +1's
     A.nzval .= 1
-    weighted_full_adjmat!(A, H, x, x0, weights=weights)
+    weighted_full_adjmat!(A, H, σ, efield)
+    # weighted_full_adjmat!(A, H, x, x0, weights=weights)
     op_, w = optimal_cycle(float.(A))
     op = variables_from_cycle(op_, m)
     to_flip = unique!([tup[2] for tup in op])
-    x[to_flip] .⊻= 1
-    if parity(H,x) != 0
+    σ[to_flip] .*= -1
+    if parity(H,(σ.==-1)) != 0
         only_the_flipped = zeros(Int, n)
         only_the_flipped[to_flip] .= 1
         error("Error: parity non zero")
@@ -96,39 +85,58 @@ function neutralize_leaves!(H::AbstractMatrix)
 end
 
 function findsol(HH::SparseMatrixCSC, x0::BitVector, 
-    x::BitVector=falses(size(HH,2)); weights=zeros(Int, size(x)),
+        x::BitVector=falses(size(HH,2)); kw...)
+    σ = (-1) .^ x
+    efield = (-1) .^ x0
+    findsol(HH, efield, σ; kw...)
+end
+function findsol(H::SparseMatrixCSC, efield::Vector{<:Real}, 
+    src::Vector{Int}=efield,
+    σ::Vector{Int}=ones(Int,size(H,2)); # pre-allocate
     maxiter::Int=50,verbose::Bool=true) 
 
     # Close leaves in a loop
-    H = copy(HH)
     neutralize_leaves!(H)
     m,n = size(H)
-    A = full_adjmat(H)
-    dist = fill(NaN, maxiter)
-    E = sum(x .!= x0)
+    A = full_adjmat(H, eltype(efield))
+    ovl = fill(NaN, maxiter)
+    E = -σ'efield
     # Loop maxiter only as a precaution in case something goes wrong and the 
     #  procedure doesn't stop
     for it in 1:maxiter
-        if it == 2
-            weights .= abs.(weights)
-        end
-        op,to_flip, w = one_loop_flip!(A, H, x, x0, weights=weights)
-        Enew = sum(x .!= x0)
-        dist[it] = Enew / n
+        op,to_flip, w = one_loop_flip!(A, H, σ, efield)
+        Enew = -σ'efield
+        ovl[it] = σ'src / n
         ΔE = Enew - E   
-        verbose && println("Iter ", it, ". Distortion ", 
+        verbose && println("Iter ", it, ". Overlap ", 
             round(Enew / n, digits=4), ". Cycle weight ", round(w,digits=4),
             ". Energy shift ", ΔE)     
         if ΔE == 0
-            return Enew/n, dist, x
+            return -Enew/n, ovl, σ
         else
             E = Enew
         end
     end
-    return Inf, dist, x
+    return -Inf, ovl, σ
 end
 
 
+# function weighted_full_adjmat_old!(A::SparseMatrixCSC, H::SparseMatrixCSC, 
+#     x::BitVector, x0::BitVector;
+#     weights=zeros(size(x)))
+# m,n = size(H)
+# for i in 1:n
+#     if x[i] != x0[i]
+#         A[m+i,:] .*= -1
+#         A[:,m+i] .*= -1
+#     end
+#     if weights[i] != 0  
+#         A[m+i,:] .= abs.(A[m+i,:])*weights[i]
+#         A[:,m+i] .= abs.(A[:,m+i])*weights[i]
+#     end
+# end
+# return dropzeros!(A)
+# end
 
 # function one_loop_flip(lm::LossyModel)
 #     H = weighted_full_adjmat(lm)

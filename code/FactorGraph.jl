@@ -131,10 +131,10 @@ function add_factor(fg::FactorGraph, fneigs::Vector{Int}=varleaves(fg),
 end
 
 # Returns the proper square adjacency matrix
-function full_adjmat(H::SparseMatrixCSC)
+function full_adjmat(H::SparseMatrixCSC, T::Type)
     m,n = size(H)
-    A = [zeros(Int,m,m) H;
-         permutedims(H) zeros(Int,n,n)]
+    A = [zeros(T,m,m) H;
+         permutedims(H) zeros(T,n,n)]
     return A
 end
 full_adjmat(fg::FactorGraph) = full_adjmat(fg.H)

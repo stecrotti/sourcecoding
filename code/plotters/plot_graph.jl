@@ -9,10 +9,11 @@ function full_adjmat(H::SparseMatrixCSC)
 end
 
 function Plots.plot(H::SparseMatrixCSC; varnames=1:size(H,2), 
-    factnames=1:size(H,1), method=:spring,
+    source::BitVector=falses(size(H,2)), factnames=1:size(H,1), method=:spring,
     randseed::Int=abs(rand(Int)), plt_kw...)
     
-    Plots.pyplot()
+    # Plots.pyplot()
+    # Plots.gr()
     m,n = size(H)
     g = SimpleGraph(full_adjmat(H))
     if ne(g) == 0
@@ -21,11 +22,14 @@ function Plots.plot(H::SparseMatrixCSC; varnames=1:size(H,2),
     end
     nodenames = [""*string(i)*"" for i in [factnames; varnames]]
     node_idx = [ones(Int,m); 2*ones(Int,n)]
-    shapes = [:rect, :circle, :rect, :circle]
+    shapes = [:rect, :circle]
     nodeshape = shapes[node_idx]
+    cols = [:white, :yellow]
+    nodecolor = cols[vcat(ones(Int,m), source.+1)]
         
     Random.seed!(randseed)  # control random layout changes
-    return graphplot(g, curves=false, names=nodenames,
+    return graphplot(g, curves=false, names=nodenames, 
+        markercolor=nodecolor,
         nodeshape = nodeshape, method=method, nodesize=0.15, fontsize=7;
         plt_kw...)
 end

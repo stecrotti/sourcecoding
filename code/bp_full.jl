@@ -184,6 +184,7 @@ function decimate1!(bp::BPFull, efield, freevars::BitArray{1}, s;
     ε, nunsat, ovl, dist, iters
 end
 
+
 # returns max prob, idx of variable, sign of the belief
 function find_most_biased(bp::BPFull, freevars::BitArray{1}; 
         fair_decimation=false)

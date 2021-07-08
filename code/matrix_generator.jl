@@ -95,3 +95,53 @@ function valid_degrees(Prows, Pcols, A::Int=2*3*5*7; B::Int=1,
     end
     return nrows, ncols, nedges, Pr_new, Pc_new
 end
+
+function full_adjmat(H::SparseMatrixCSC, T::Type)
+    m,n = size(H)
+    A = [zeros(T,m,m) H;
+         permutedims(H) zeros(T,n,n)]
+    return A
+end
+
+
+#### GF(q)
+
+function ldpc_matrix_gfq(Q::Integer, n::Integer, m::Integer, nedges::Integer, 
+    Lambda, Rho, edgesleft=fill(zero(n), nedges), edgesright=copy(edgesleft);
+    rng = MersenneTwister(0),
+    vperm = randperm(rng, n), fperm = randperm(rng, m),
+    accept_multi_edges=true, maxtrials=1000)
+
+    check_consistency_polynomials(n,m,nedges,Lambda,Rho)
+    for t in 1:maxtrials
+        H = one_ldpc_matrix_gfq(Q, n, m, nedges, Lambda, Rho, edgesleft, edgesright,
+            rng=rng, vperm=vperm, fperm=fperm)
+        (nnz(H) == nedges || accept_multi_edges) && return H
+    end
+    error("Could not build graph after $maxtrials trials: multi-edges were popping up")
+end
+
+function one_ldpc_matrix_gfq(Q, n, m, nedges, Lambda, Rho, edgesleft, edgesright;
+    rng = MersenneTwister(0),
+    vperm = randperm(rng, n), fperm = randperm(rng, m))
+    v = r = 1
+    for i = 1:lastindex(Lambda)
+        ni = Int(round(n*Lambda[i], digits=10))
+        for _ in 1:ni
+            edgesleft[r:r+i-1] .= vperm[v]
+            v += 1; r += i
+        end
+    end
+    shuffle!(rng, edgesleft)
+    f = r = 1
+    for j = 1:lastindex(Rho)
+        nj = Int(round(m*Rho[j], digits=10))
+        for _ in 1:nj
+            edgesright[r:r+j-1] .= fperm[f]
+            f += 1; r += j
+        end
+    end
+    nz = rand(rng, 1:Q-1, nedges)
+    combine(x,y) = rand(rng, (x,y))     # manages duplicates 
+    sparse(edgesleft, edgesright, nz, n, m, combine)
+end

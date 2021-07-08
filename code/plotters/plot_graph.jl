@@ -9,7 +9,8 @@ function full_adjmat(H::SparseMatrixCSC)
 end
 
 function Plots.plot(H::SparseMatrixCSC; varnames=1:size(H,2), 
-    source::BitVector=falses(size(H,2)), factnames=1:size(H,1), method=:spring,
+    highlighted_nodes::BitVector=falses(size(H,2)), factnames=1:size(H,1), 
+    method=:spring,
     randseed::Int=abs(rand(Int)), plt_kw...)
     
     # Plots.pyplot()
@@ -25,7 +26,7 @@ function Plots.plot(H::SparseMatrixCSC; varnames=1:size(H,2),
     shapes = [:rect, :circle]
     nodeshape = shapes[node_idx]
     cols = [:white, :yellow]
-    nodecolor = cols[vcat(ones(Int,m), source.+1)]
+    nodecolor = cols[vcat(ones(Int,m), highlighted_nodes.+1)]
         
     Random.seed!(randseed)  # control random layout changes
     return graphplot(g, curves=false, names=nodenames, 

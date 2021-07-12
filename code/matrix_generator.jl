@@ -108,21 +108,21 @@ end
 
 function ldpc_matrix_gfq(Q::Integer, n::Integer, m::Integer, nedges::Integer, 
     Lambda, Rho, edgesleft=fill(zero(n), nedges), edgesright=copy(edgesleft);
-    rng = MersenneTwister(0),
+    rng = MersenneTwister(0), T::Type=Int,
     vperm = randperm(rng, n), fperm = randperm(rng, m),
     accept_multi_edges=true, maxtrials=1000)
 
     check_consistency_polynomials(n,m,nedges,Lambda,Rho)
     for t in 1:maxtrials
         H = one_ldpc_matrix_gfq(Q, n, m, nedges, Lambda, Rho, edgesleft, edgesright,
-            rng=rng, vperm=vperm, fperm=fperm)
+            rng=rng, T=T, vperm=vperm, fperm=fperm)
         (nnz(H) == nedges || accept_multi_edges) && return H
     end
     error("Could not build graph after $maxtrials trials: multi-edges were popping up")
 end
 
 function one_ldpc_matrix_gfq(Q, n, m, nedges, Lambda, Rho, edgesleft, edgesright;
-    rng = MersenneTwister(0),
+    rng = MersenneTwister(0), T::Type=Int,
     vperm = randperm(rng, n), fperm = randperm(rng, m))
     v = r = 1
     for i = 1:lastindex(Lambda)
@@ -141,7 +141,7 @@ function one_ldpc_matrix_gfq(Q, n, m, nedges, Lambda, Rho, edgesleft, edgesright
             f += 1; r += j
         end
     end
-    nz = rand(rng, 1:Q-1, nedges)
+    nz = rand(rng, convert.(T,1:Q-1), nedges)
     combine(x,y) = rand(rng, (x,y))     # manages duplicates 
     sparse(edgesleft, edgesright, nz, n, m, combine)
 end

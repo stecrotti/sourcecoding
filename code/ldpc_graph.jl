@@ -270,175 +270,175 @@ function polyn(fg::FactorGraph)
 end
 
 
-function gftables(q::Int, arbitrary_mult::Bool=false)
-    if q==2
-        elems = [0,1]
-    else
-        G,x = GaloisField(q,:x)
-        elems = collect(G)
-    end
-    ##########
-    # What if q = p^1 ?
-    #########
-    M = [findfirst(isequal(x*y),elems)-1 for x in elems, y in elems]
-    gfmult = OffsetArray(M, 0:q-1, 0:q-1)
-    if arbitrary_mult
-        gfinv = zeros(Int, q-1)
-        # gfinv[1] = 1
-        # for r in 2:q-1
-        #     if gfinv[r] == 0
-        #         gfinv[r] = rand(findall(gfinv .== 0))
-        #         gfinv[gfinv[r]] = r
-        #     end
-        # end
-        #
-        # for r in 2:q-1
-        #     mult[r, gfinv[r]] = 1
-        #     others = [i for i in 2:q-1 if i!=r]
-        #     mult[r, [2:gfinv[r]-1; gfinv[r]+1:q-1] ] = shuffle(others)
-        # end
-        for r in 1:q-1
-        # for c in 2:q-1
-            gfmult[r, [1:r-1; r+1:q-1]] .= shuffle(gfmult[r, [1:r-1; r+1:q-1]])
-            # gfmult[1:q-1,c] .= shuffle(gfmult[1:q-1,c])
-        end
+# function gftables(q::Int, arbitrary_mult::Bool=false)
+#     if q==2
+#         elems = [0,1]
+#     else
+#         G,x = GaloisField(q,:x)
+#         elems = collect(G)
+#     end
+#     ##########
+#     # What if q = p^1 ?
+#     #########
+#     M = [findfirst(isequal(x*y),elems)-1 for x in elems, y in elems]
+#     gfmult = OffsetArray(M, 0:q-1, 0:q-1)
+#     if arbitrary_mult
+#         gfinv = zeros(Int, q-1)
+#         # gfinv[1] = 1
+#         # for r in 2:q-1
+#         #     if gfinv[r] == 0
+#         #         gfinv[r] = rand(findall(gfinv .== 0))
+#         #         gfinv[gfinv[r]] = r
+#         #     end
+#         # end
+#         #
+#         # for r in 2:q-1
+#         #     mult[r, gfinv[r]] = 1
+#         #     others = [i for i in 2:q-1 if i!=r]
+#         #     mult[r, [2:gfinv[r]-1; gfinv[r]+1:q-1] ] = shuffle(others)
+#         # end
+#         for r in 1:q-1
+#         # for c in 2:q-1
+#             gfmult[r, [1:r-1; r+1:q-1]] .= shuffle(gfmult[r, [1:r-1; r+1:q-1]])
+#             # gfmult[1:q-1,c] .= shuffle(gfmult[1:q-1,c])
+#         end
 
-    else
-        gfinv = [findfirst(isequal(1), gfmult[r,1:end]) for r in 1:q-1]
-    end
+#     else
+#         gfinv = [findfirst(isequal(1), gfmult[r,1:end]) for r in 1:q-1]
+#     end
 
-    gfdiv = OffsetArray(zeros(Int, q,q-1), 0:q-1,1:q-1)
-    for r in 1:q-1
-        for c in 1:q-1
-            gfdiv[r,c] = findfirst(isequal(r), [gfmult[c,k] for k in 1:q-1])
-        end
-    end
+#     gfdiv = OffsetArray(zeros(Int, q,q-1), 0:q-1,1:q-1)
+    # for r in 1:q-1
+    #     for c in 1:q-1
+    #         gfdiv[r,c] = findfirst(isequal(r), [gfmult[c,k] for k in 1:q-1])
+    #     end
+    # end
 
-    return gfmult, gfinv, gfdiv
-end
-
-# Hamming distance, works when q is a power of 2
-function hd(x::Int,y::Int)::Int
-    z = xor(x,y)
-    return count_ones(z)
-end
-
-function hd(x::BitArray{1}, y::BitArray{1})::Int
-    d = 0
-    for (a,b) in zip(x,y)
-        d += xor(a,b)
-    end
-    return d
-end
-function hd(x::AbstractVector, y::AbstractVector)::Int
-    d = 0
-    for (a,b) in zip(x,y)
-        d += count_ones(xor(a,b))
-    end
-    return d
-end
-
-
-hw(v::Vector{Int})::Int = sum(count_ones, v)
-hw(v::Array{Int,2})::Int = hw(vec(v))
-
-# Parity-check for the adjacency matrix of a factor graph
-function paritycheck(fg::FactorGraph, x::AbstractVector=guesses(fg))
-    return gfmatrixmult(fg.H, x, fg.q, fg.mult)
-end
-# function paritycheck(fg::FactorGraph, x::AbstractArray{Int,2})
-#     return gfmatrixmult(fg.H, vec(x), fg.q, fg.mult)
+#     return gfmult, gfinv, gfdiv
 # end
-function paritycheck(fg::FactorGraphGF2, x::AbstractVector=guesses(fg))
-    z = zeros(Int, fg.m)
-    for f in eachindex(fg.Fneigs)
-        if fg.Fneigs[f] != []
-            z[f] = sum(x[v] for v in fg.Fneigs[f]) % 2
-        end
-    end
-    return z
-end
 
-parity(fg::FactorGraph, args...) = hw(paritycheck(fg, args...))
-function parity(fg::FactorGraphGF2, x::AbstractVector=guesses(fg))
-    z = p = 0
-    for f in fg.Fneigs
-        for v in f
-            p += x[v]
-        end
-        z += p % 2  
-        p = 0
-    end
-    return z 
-end
+# # Hamming distance, works when q is a power of 2
+# function hd(x::Int,y::Int)::Int
+#     z = xor(x,y)
+#     return count_ones(z)
+# end
 
-function free_energy(fg::FactorGraphGF2)
-    O = 0.0
-    # Loop only on factors with neighbors
-     for (a_idx,a) in enumerate(fg.Fneigs)
-        a == [] && continue
-        F = [fg.fields[i] - fg.mfv[a_idx][i_idx] for (i_idx,i) in enumerate(a)]
-        O += sum(abs,F) - (prod(F)<0)*2*minimum(abs,F) 
-     end
-     O -= sum(abs,fg.fields)
-     E = 0.5*(fg.n-O)
-     return E
- end
+# function hd(x::BitArray{1}, y::BitArray{1})::Int
+#     d = 0
+#     for (a,b) in zip(x,y)
+#         d += xor(a,b)
+#     end
+#     return d
+# end
+# function hd(x::AbstractVector, y::AbstractVector)::Int
+#     d = 0
+#     for (a,b) in zip(x,y)
+#         d += count_ones(xor(a,b))
+#     end
+#     return d
+# end
 
-# Groups bits together to transform GF(2)->GF(2^k)
-function gf2toq(H::AbstractArray{Int,2}, k::Int=1)
-    m,n = size(H)
-    nnew = div(n,k)
-    Hnew = zeros(Int, m, nnew)
-    for f in 1:m
-        Hnew[f,:] = gf2toq(H[f,:], k)
-    end
-    return Hnew
-end
 
-function gf2toq(x::Vector{Int}, k::Int=1)
-    mod(length(x),k) != 0 && error("Length of vector x must be a multiple of k")
-    newlen = div(length(x),k)
-    return [bits2int(x[k*(v-1)+1:k*(v-1)+k]) for v in 1:newlen]
-end
+# hw(v::Vector{Int})::Int = sum(count_ones, v)
+# hw(v::Array{Int,2})::Int = hw(vec(v))
 
-function bits2int(x::Vector{Int})
-    bitcheck = prod(in.(x, Ref([0,1])))
-    !bitcheck && error("Input vector x must be made of bits")
-    return sum(y*2^(i-1) for (i,y) in enumerate(reverse(x)))
-end
+# # Parity-check for the adjacency matrix of a factor graph
+# function paritycheck(fg::FactorGraph, x::AbstractVector=guesses(fg))
+#     return gfmatrixmult(fg.H, x, fg.q, fg.mult)
+# end
+# # function paritycheck(fg::FactorGraph, x::AbstractArray{Int,2})
+# #     return gfmatrixmult(fg.H, vec(x), fg.q, fg.mult)
+# # end
+# function paritycheck(fg::FactorGraphGF2, x::AbstractVector=guesses(fg))
+#     z = zeros(Int, fg.m)
+#     for f in eachindex(fg.Fneigs)
+#         if fg.Fneigs[f] != []
+#             z[f] = sum(x[v] for v in fg.Fneigs[f]) % 2
+#         end
+#     end
+#     return z
+# end
 
-function int2bits(x::Int, pad::Int=ceil(Int,log2(x+1)))
-    x > 2^pad && error("Input $x is too large to fit in a bit vector of length $pad")
-    return reverse(digits(x, base=2, pad=pad))
-end
+# parity(fg::FactorGraph, args...) = hw(paritycheck(fg, args...))
+# function parity(fg::FactorGraphGF2, x::AbstractVector=guesses(fg))
+#     z = p = 0
+#     for f in fg.Fneigs
+#         for v in f
+#             p += x[v]
+#         end
+#         z += p % 2  
+#         p = 0
+#     end
+#     return z 
+# end
 
-function gfqto2(y::Vector{Int}, k::Int)
-    z = zeros(Int, length(y)*k)
-    for (i,s) in enumerate(y)
-        z[k*(i-1)+1:k*(i-1)+k] = int2bits(s,k)
-    end
-    return z
-end
+# function free_energy(fg::FactorGraphGF2)
+#     O = 0.0
+#     # Loop only on factors with neighbors
+#      for (a_idx,a) in enumerate(fg.Fneigs)
+#         a == [] && continue
+#         F = [fg.fields[i] - fg.mfv[a_idx][i_idx] for (i_idx,i) in enumerate(a)]
+#         O += sum(abs,F) - (prod(F)<0)*2*minimum(abs,F) 
+#      end
+#      O -= sum(abs,fg.fields)
+#      E = 0.5*(fg.n-O)
+#      return E
+#  end
 
-function gfqto2(H::AbstractArray{Int,2}, k::Int=1)
-    m,n = size(H)
-    nnew = n*k
-    Hnew = zeros(Int, m, nnew)
-    for f in 1:m
-        Hnew[f,:] = gfqto2(H[f,:], k)
-    end
-    return Hnew
-end
+# # Groups bits together to transform GF(2)->GF(2^k)
+# function gf2toq(H::AbstractArray{Int,2}, k::Int=1)
+#     m,n = size(H)
+#     nnew = div(n,k)
+#     Hnew = zeros(Int, m, nnew)
+#     for f in 1:m
+#         Hnew[f,:] = gf2toq(H[f,:], k)
+#     end
+#     return Hnew
+# end
 
-function int2gfq(x::Int, k::Int=1, pad::Int=ndigits(x,base=2^k))
-    # x > 2^pad && error("Input x is too large to fit in a bit vector of length $pad")
-    return reverse(digits(x, base=2^k, pad=pad))
-end
+# function gf2toq(x::Vector{Int}, k::Int=1)
+#     mod(length(x),k) != 0 && error("Length of vector x must be a multiple of k")
+#     newlen = div(length(x),k)
+#     return [bits2int(x[k*(v-1)+1:k*(v-1)+k]) for v in 1:newlen]
+# end
 
-function int2gfq(y::Vector{Int}, k::Int=1, pad::Int=ndigits(maximum(y),base=2^k))
-    return [int2gfq(x, k, pad) for x in y]
-end
+# function bits2int(x::Vector{Int})
+#     bitcheck = prod(in.(x, Ref([0,1])))
+#     !bitcheck && error("Input vector x must be made of bits")
+#     return sum(y*2^(i-1) for (i,y) in enumerate(reverse(x)))
+# end
+
+# function int2bits(x::Int, pad::Int=ceil(Int,log2(x+1)))
+#     x > 2^pad && error("Input $x is too large to fit in a bit vector of length $pad")
+#     return reverse(digits(x, base=2, pad=pad))
+# end
+
+# function gfqto2(y::Vector{Int}, k::Int)
+#     z = zeros(Int, length(y)*k)
+#     for (i,s) in enumerate(y)
+#         z[k*(i-1)+1:k*(i-1)+k] = int2bits(s,k)
+#     end
+#     return z
+# end
+
+# function gfqto2(H::AbstractArray{Int,2}, k::Int=1)
+#     m,n = size(H)
+#     nnew = n*k
+#     Hnew = zeros(Int, m, nnew)
+#     for f in 1:m
+#         Hnew[f,:] = gfqto2(H[f,:], k)
+#     end
+#     return Hnew
+# end
+
+# function int2gfq(x::Int, k::Int=1, pad::Int=ndigits(x,base=2^k))
+#     # x > 2^pad && error("Input x is too large to fit in a bit vector of length $pad")
+#     return reverse(digits(x, base=2^k, pad=pad))
+# end
+
+# function int2gfq(y::Vector{Int}, k::Int=1, pad::Int=ndigits(maximum(y),base=2^k))
+#     return [int2gfq(x, k, pad) for x in y]
+# end
 
 ####### SUBROUTINES
 function _check_consistency_polynomials_edges(lambda, rho, nedges, n, m)

@@ -181,7 +181,7 @@ end
 # alias for calling `iteration!` with maxsum updates
 function iteration_ms!(ms::BPFull{F,SVector{Q,T}}; kw...) where {F,Q,T}
     iteration!(ms; update_f! = update_factor_ms!, 
-        update_v! = update_var_ms!, kw...)
+        update_v! = update_var_ms!, uaux = -Inf*ones(MVector{Q}), kw...)
 end
 
 function parity(bp::BPFull{F,SVector{Q,T}}, x::Vector{<:Integer}, 

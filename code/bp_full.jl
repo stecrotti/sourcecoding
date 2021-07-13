@@ -2,7 +2,7 @@ include("slim_graphs.jl")
 include("cavity.jl")
 include("matrix_generator.jl")
 
-using OffsetArrays, Statistics, Printf
+using OffsetArrays, Statistics, Printf, Plots
 
 struct BPFull{F,M}
     H :: SparseMatrixCSC{F,Int}     # size (nfactors,nvars)

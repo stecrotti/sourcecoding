@@ -55,6 +55,8 @@ function update_var!(sp::SurveyPropagation, i; damp = 0.0, rein=0.0)
     for h in eachindex(qfull)
          sp.survey[i][clamp(h,-J,J)] += qfull[h] * exp(sp.y*abs(h))
     end
+    ss = sum(sp.survey[i])
+    ss < 1.1 && @show ss, i
     sp.survey[i] ./= sum(sp.survey[i])
 
     qnew = fill(0.0, -J:J)

@@ -270,52 +270,52 @@ function polyn(fg::FactorGraph)
 end
 
 
-# function gftables(q::Int, arbitrary_mult::Bool=false)
-#     if q==2
-#         elems = [0,1]
-#     else
-#         G,x = GaloisField(q,:x)
-#         elems = collect(G)
-#     end
-#     ##########
-#     # What if q = p^1 ?
-#     #########
-#     M = [findfirst(isequal(x*y),elems)-1 for x in elems, y in elems]
-#     gfmult = OffsetArray(M, 0:q-1, 0:q-1)
-#     if arbitrary_mult
-#         gfinv = zeros(Int, q-1)
-#         # gfinv[1] = 1
-#         # for r in 2:q-1
-#         #     if gfinv[r] == 0
-#         #         gfinv[r] = rand(findall(gfinv .== 0))
-#         #         gfinv[gfinv[r]] = r
-#         #     end
-#         # end
-#         #
-#         # for r in 2:q-1
-#         #     mult[r, gfinv[r]] = 1
-#         #     others = [i for i in 2:q-1 if i!=r]
-#         #     mult[r, [2:gfinv[r]-1; gfinv[r]+1:q-1] ] = shuffle(others)
-#         # end
-#         for r in 1:q-1
-#         # for c in 2:q-1
-#             gfmult[r, [1:r-1; r+1:q-1]] .= shuffle(gfmult[r, [1:r-1; r+1:q-1]])
-#             # gfmult[1:q-1,c] .= shuffle(gfmult[1:q-1,c])
-#         end
+function gftables(q::Int, arbitrary_mult::Bool=false)
+    if q==2
+        elems = [0,1]
+    else
+        G,x = GaloisField(q,:x)
+        elems = collect(G)
+    end
+    ##########
+    # What if q = p^1 ?
+    #########
+    M = [findfirst(isequal(x*y),elems)-1 for x in elems, y in elems]
+    gfmult = OffsetArray(M, 0:q-1, 0:q-1)
+    if arbitrary_mult
+        gfinv = zeros(Int, q-1)
+        # gfinv[1] = 1
+        # for r in 2:q-1
+        #     if gfinv[r] == 0
+        #         gfinv[r] = rand(findall(gfinv .== 0))
+        #         gfinv[gfinv[r]] = r
+        #     end
+        # end
+        #
+        # for r in 2:q-1
+        #     mult[r, gfinv[r]] = 1
+        #     others = [i for i in 2:q-1 if i!=r]
+        #     mult[r, [2:gfinv[r]-1; gfinv[r]+1:q-1] ] = shuffle(others)
+        # end
+        for r in 1:q-1
+        # for c in 2:q-1
+            gfmult[r, [1:r-1; r+1:q-1]] .= shuffle(gfmult[r, [1:r-1; r+1:q-1]])
+            # gfmult[1:q-1,c] .= shuffle(gfmult[1:q-1,c])
+        end
 
-#     else
-#         gfinv = [findfirst(isequal(1), gfmult[r,1:end]) for r in 1:q-1]
-#     end
+    else
+        gfinv = [findfirst(isequal(1), gfmult[r,1:end]) for r in 1:q-1]
+    end
 
-#     gfdiv = OffsetArray(zeros(Int, q,q-1), 0:q-1,1:q-1)
-    # for r in 1:q-1
-    #     for c in 1:q-1
-    #         gfdiv[r,c] = findfirst(isequal(r), [gfmult[c,k] for k in 1:q-1])
-    #     end
-    # end
+    gfdiv = OffsetArray(zeros(Int, q,q-1), 0:q-1,1:q-1)
+    for r in 1:q-1
+        for c in 1:q-1
+            gfdiv[r,c] = findfirst(isequal(r), [gfmult[c,k] for k in 1:q-1])
+        end
+    end
 
-#     return gfmult, gfinv, gfdiv
-# end
+    return gfmult, gfinv, gfdiv
+end
 
 # # Hamming distance, works when q is a power of 2
 # function hd(x::Int,y::Int)::Int

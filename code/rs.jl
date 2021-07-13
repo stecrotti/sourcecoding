@@ -62,11 +62,15 @@ function RS(Pk, Λ; N=100, tol=1e-5, maxiter=100, damp=0.9)
     α = sum(d*Λ[d] for d=ds) / sum(k*Pk[k] for k=ks)
     
     q = sum(d*Λ[d]*iter_var(p, d-1) for d=ds); #fia
+    Fia = -sum(abs(f)*q[f] for f=eachindex(q)); @show Fia
     O = sum(abs(f)*q[f] for f=eachindex(q))
     q2 = sum((d-1)*Λ[d]*iter_var(p, d) for d=ds); #fi
+    Fi = sum(abs(f)*q2[f] for f=eachindex(q2)); @show Fi
     O -= sum(abs(f)*q2[f] for f=eachindex(q2))
     q ./= sum(q)
     O -= α*sum(Pk[k]*overlap_factor(q,k) for k=ks) #fa
+    Fa = α*sum(Pk[k]*overlap_factor(q,k) for k=ks); @show Fa
+
     1-α, (1-O)/2, p  
 end
 

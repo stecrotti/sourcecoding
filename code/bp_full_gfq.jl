@@ -84,39 +84,40 @@ function update_var_bp!(bp::BPFull{F,SVector{Q,T}}, i::Int; damp=0.0, rein=0.0) 
         bp.h[a] = bp.h[a].^damp .* hnew.^(1-damp)
         b = msg_mult(b, bp.u[a]) 
     end
-    iszero(sum(b)) && return -1.0  # normaliz of belief is zero
+    iszero(sum(b)) && return Inf  # normaliz of belief is zero
     bp.belief[i] = normalize_prob(b) 
     bp.efield[i] = bp.efield[i] .* bp.belief[i].^rein
     ε
 end
 
 
-
-
 function iteration!(bp::BPFull{F,SVector{Q,T}}; maxiter=10^3, tol=1e-12, 
         damp=0.0, rein=0.0, 
         update_f! = update_factor_bp!, update_v! = update_var_bp!,
         factor_neigs = [nonzeros(bp.X)[nzrange(bp.X, a)] for a = 1:size(bp.H,1)],
-        gftab = gftables(Val(getQ(bp))), uaux=zero(MVector{Q,T}),
+        gftab = gftables(Val(getQ(bp))), uaux=fill(zero(MVector{Q,T}),nfactors(bp)),
         callback=(it, ε, bp)->false) where {F,Q,T}
 
-    ε = 0.0
+    ep = 0.0
+    ε = zeros(Threads.nthreads())
     for it = 1:maxiter
-        ε = 0.0
-        for i = 1:size(bp.H,2)
-            errv = update_v!(bp, i, damp=damp, rein=rein)
-            errv == -1 && return -1,it
-            ε = max(ε, errv)
+        Threads.@threads for i = 1:size(bp.H,2)
+            local errv = update_v!(bp, i, damp=damp, rein=rein)
+            errv == Inf && @warn "Contradiction found updating var $i"
+            ε[Threads.threadid()] = max(ε[Threads.threadid()], errv)
         end
         for a = 1:size(bp.H,1)
-            errf = update_f!(bp, a, gftab..., factor_neigs[a], uaux=uaux, damp=damp)
-            errf == -1 && return -1,it
-            ε = max(ε, errf)
+            local errf = update_f!(bp, a, gftab..., factor_neigs[a], uaux=uaux[a], 
+                damp=damp)
+            # ε = max(ε, errf)
+            ε[Threads.threadid()] = max(ε[Threads.threadid()], errf)
         end
-        callback(it, ε, bp) && return ε,it
-        ε < tol && return ε, it
+        # controllare epsilon alla fine
+        ep = maximum(ε)
+        callback(it, ep, bp) && return ε,it
+        ep < tol && return ep, it
     end
-    ε, maxiter
+    ep, maxiter
 end
 
 ### MAX-SUM
@@ -129,9 +130,15 @@ end
 function msg_maxconv_gfq!(u::MVector{Q,T}, h1::SVector{Q,T}, h2::SVector{Q,T}) where {Q,T}
     for x1 in eachindex(h1), x2 in eachindex(h2)
         # adjust for indices starting at 1 instead of 0
-        u[((x1-1) ⊻ (x2-1)) + 1] = max(u[((x1-1) ⊻ (x2-1)) + 1], h1[x1]+h2[x2])
+        x = ((x1-1) ⊻ (x2-1)) + 1
+        v = h1[x1]+h2[x2]
+        v > u[x] && (u[x]=v)
     end
     SVector(u)
+end
+function msg_maxconv_gfq(h1::SVector{Q,T}, h2::SVector{Q,T}) where {Q,T}
+    u = -Inf*ones(MVector{Q,T})
+    msg_maxconv_gfq!(u,h1,h2)
 end
 
 function update_factor_ms!(bp::BPFull{F,SVector{Q,T}}, a::Int, 
@@ -172,7 +179,7 @@ function update_var_ms!(bp::BPFull{F,SVector{Q,T}}, i::Int; damp=0.0, rein=0.0) 
         bp.h[a] = bp.h[a].*damp .+ hnew.*(1-damp)
         b = msg_sum(b, bp.u[a]) 
     end
-    iszero(sum(b)) && return -1.0  # normaliz of belief is zero
+    isnan(sum(b)) && return Inf  # normaliz of belief is zero
     bp.belief[i] = normalize_max(b) 
     bp.efield[i] = bp.efield[i] .+ rein.*bp.belief[i]
     ε
@@ -181,10 +188,11 @@ end
 # alias for calling `iteration!` with maxsum updates
 function iteration_ms!(ms::BPFull{F,SVector{Q,T}}; kw...) where {F,Q,T}
     iteration!(ms; update_f! = update_factor_ms!, 
-        update_v! = update_var_ms!, uaux = -Inf*ones(MVector{Q}), kw...)
+        update_v! = update_var_ms!, 
+        uaux = fill(-Inf*ones(MVector{Q}), nfactors(ms)), kw...)
 end
 
-function parity(bp::BPFull{F,SVector{Q,T}}, x::Vector{<:Integer}, 
+function parity(bp::BPFull{F,SVector{Q,T}}, x::Vector{<:Integer}=argmax.(bp.belief), 
         Ht = permutedims(bp.H),
         gfmult=gftables(Val(Q))[1]) where {F,Q,T}
 
@@ -264,6 +272,129 @@ function gf2toq(x::BitVector, Q::Int; T::Type=Int)
     xnew
 end
 
+### In-place, linear-time cavity updates. Damping not possible!
+# alias for calling `iteration!` with quick updates
+function iteration_bp_quick!(bp::BPFull{F,SVector{Q,T}}; kw...) where {F,Q,T}
+    iteration!(bp; update_f! = update_factor_bp!, 
+        update_v! = update_var_bp_quick!, 
+        uaux = fill(zero(MVector{Q}), nfactors(bp)), kw...)
+end
+
+function update_var_bp_quick!(bp::BPFull{F,SVector{Q,T}}, i::Int; 
+        damp=0.0, rein=0.0) where {F,Q,T}
+    ε = 0.0
+    ∂i = nzrange(bp.H, i)
+    # sweep forward
+    bp.h[∂i[1]] = bp.efield[i]
+    for a in 2:length(∂i)
+        bp.h[∂i[a]] = msg_mult(bp.h[∂i[a-1]], bp.u[∂i[a-1]])
+    end
+    bp.h[∂i[end]] = normalize_prob(bp.h[∂i[end]])
+    b = msg_mult(bp.h[∂i[end]], bp.u[∂i[end]])
+    # sweep backward
+    h = bp.u[∂i[end]]
+    for a in length(∂i)-1:-1:1
+        bp.h[∂i[a]] = msg_mult(bp.h[∂i[a]], h)
+        bp.h[∂i[a]] = normalize_prob(bp.h[∂i[a]])
+        h = msg_mult(bp.u[∂i[a]], h)
+    end
+    iszero(sum(b)) && return Inf  # normaliz of belief is zero
+    b = normalize_prob(b)
+    ε = maximum(abs, bp.belief[i] .- b)
+    bp.efield[i] = bp.efield[i] .* b.^rein
+    bp.belief[i] = b
+    ε
+end
+
+function update_factor_bp_quick!(bp::BPFull{F,SVector{Q,T}}, a::Int, 
+        gfmult::SMatrix{Q,Q,<:Integer,L}, gfdiv::SMatrix{Q,Q,<:Integer,L},
+        ∂a = nonzeros(bp.X)[nzrange(bp.X, a)]; uaux=zero(MVector{Q,T}),
+        damp=0.0) where {F,Q,T,L}
+    
+    bp.u[∂a[1]] = neutral_prob_bp(Q)
+    for i in 2:length(∂a)
+        j = ∂a[i-1]
+        h_tilde = bp.h[j][SVector{Q}(gfdiv[:,nonzeros(bp.H)[j]+1])] 
+        uaux .= zero(T)
+        bp.u[∂a[i]] = msg_conv_gfq!(uaux, bp.u[j], h_tilde)
+    end
+    u = bp.h[∂a[end]][SVector{Q}(gfdiv[:,nonzeros(bp.H)[∂a[end]]+1])] 
+    for i in length(∂a)-1:-1:1
+        uaux .= zero(T)
+        bp.u[∂a[i]] = msg_conv_gfq!(uaux, bp.u[∂a[i]], u)
+        h_tilde = bp.h[∂a[i]][SVector{Q}(gfdiv[:,nonzeros(bp.H)[∂a[i]]+1])] 
+        uaux .= zero(T)
+        u = msg_conv_gfq!(uaux, h_tilde, u)
+    end
+    # adjust for weights
+    for i in ∂a
+        bp.u[i] = bp.u[i][SVector{Q}(gfmult[:,nonzeros(bp.H)[i]+1])]
+        bp.u[i] = normalize_prob(bp.u[i])
+    end
+    -Inf
+end
+
+# alias for calling `iteration!` with quick updates
+function iteration_ms_quick!(ms::BPFull{F,SVector{Q,T}}; kw...) where {F,Q,T}
+    iteration!(ms; update_f! = update_factor_ms_quick!, 
+        update_v! = update_var_ms_quick!, 
+        uaux = fill(-Inf*ones(MVector{Q}),nfactors(ms)), kw...)
+end
+
+
+function update_factor_ms_quick!(bp::BPFull{F,SVector{Q,T}}, a::Int, 
+        gfmult::SMatrix{Q,Q,<:Integer,L}, gfdiv::SMatrix{Q,Q,<:Integer,L},
+        ∂a = nonzeros(bp.X)[nzrange(bp.X, a)]; uaux=-Inf*ones(MVector{Q,T}),
+        damp=0.0) where {F,Q,T,L}
+
+    bp.u[∂a[1]] = neutral_prob_ms(Q)
+    for i in 2:length(∂a)
+        j = ∂a[i-1]
+        h_tilde = bp.h[j][SVector{Q}(gfdiv[:,nonzeros(bp.H)[j]+1])] 
+        uaux .= -Inf
+        bp.u[∂a[i]] = msg_maxconv_gfq!(uaux, bp.u[j], h_tilde)
+    end
+    u = bp.h[∂a[end]][SVector{Q}(gfdiv[:,nonzeros(bp.H)[∂a[end]]+1])] 
+    for i in length(∂a)-1:-1:1
+        uaux .= -Inf
+        bp.u[∂a[i]] = msg_maxconv_gfq!(uaux, bp.u[∂a[i]], u)
+        h_tilde = bp.h[∂a[i]][SVector{Q}(gfdiv[:,nonzeros(bp.H)[∂a[i]]+1])] 
+        uaux .= -Inf
+        u = msg_maxconv_gfq!(uaux, h_tilde, u)
+    end
+    # adjust for weights
+    for i in ∂a
+        bp.u[i] = bp.u[i][SVector{Q}(gfmult[:,nonzeros(bp.H)[i]+1])]
+        bp.u[i] = normalize_max(bp.u[i])
+    end
+    -Inf
+end
+
+function update_var_ms_quick!(bp::BPFull{F,SVector{Q,T}}, i::Int; 
+        damp=0.0, rein=0.0) where {F,Q,T}
+    ε = 0.0
+    ∂i = nzrange(bp.H, i)
+    # sweep forward
+    bp.h[∂i[1]] = bp.efield[i]
+    for a in 2:length(∂i)
+        bp.h[∂i[a]] = msg_sum(bp.h[∂i[a-1]], bp.u[∂i[a-1]])
+    end
+    bp.h[∂i[end]] = normalize_max(bp.h[∂i[end]])
+    b = msg_sum(bp.h[∂i[end]], bp.u[∂i[end]])
+    # sweep backward
+    h = bp.u[∂i[end]]
+    for a in length(∂i)-1:-1:1
+        bp.h[∂i[a]] = msg_sum(bp.h[∂i[a]], h)
+        bp.h[∂i[a]] = normalize_max(bp.h[∂i[a]])
+        h = msg_sum(bp.u[∂i[a]], h)
+    end
+    isnan(sum(b)) && return Inf  # normaliz of belief is zero
+    b = normalize_max(b)
+    ε = maximum(abs, bp.belief[i] .- b)
+    bp.efield[i] = bp.efield[i] .+ b.*rein
+    bp.belief[i] = b
+    ε
+end
 
 
 function gftables(Q::Val{2})
@@ -409,72 +540,3 @@ function gftables(Q::Val{32})
                 0  32  30  23  29  18  12  17  15  20  27   7  24  21   9  16   8   6  28  10  14  31   4  13  26  25  11  19   5   3  22   2]
     gfmult, gfdiv
 end
-
-### In-place, linear-time cavity updates. Todo: fix weighted convolution
-
-function update_var_bp_quick!(bp::BPFull{F,SVector{Q,T}}, i::Int; rein=0.0) where {F,Q,T}
-    ε = 0.0
-    ∂i = nzrange(bp.H, i)
-
-    bp.h[∂i[1]] = bp.efield[i]
-    for a in 2:length(∂i)
-        bp.h[∂i[a]] = msg_mult(bp.h[∂i[a-1]], bp.u[∂i[a-1]])
-    end
-    bp.h[∂i[end]] = normalize_prob(bp.h[∂i[end]])
-    b = msg_mult(bp.h[∂i[end-1]], bp.u[∂i[end]])
-
-    h = bp.u[∂i[end]]
-    for a in length(∂i):-1:1
-        bp.h[∂i[a]] = msg_mult(bp.h[∂i[a]], h)
-        bp.h[∂i[a]] = normalize_prob(bp.h[∂i[a]])
-        h = msg_mult(bp.u[∂i[a]], h)
-    end
-    iszero(sum(b)) && return -1.0  # normaliz of belief is zero
-    b = normalize_prob(b)
-    ε = maximum(abs, bp.belief[i] .- b)
-    bp.efield[i] = bp.efield[i] .* b.^rein
-    bp.belief[i] = b
-    ε
-end
-
-# function update_factor_bp_quick!(bp::BPFull{F,SVector{Q,T}}, a::Int, 
-#         gfmult::SMatrix{Q,Q,<:Integer,L}, gfdiv::SMatrix{Q,Q,<:Integer,L},
-#         ∂a = nonzeros(bp.X)[nzrange(bp.X, a)]; uaux=zero(MVector{Q,T})) where {F,Q,T,L}
-    
-#     bp.u[∂a[1]] = neutral_prob_bp(Q)
-#     for i in 2:length(∂a)
-#         j = ∂a[i-1]
-#         h_tilde = bp.h[j][SVector{Q}(gfdiv[:,nonzeros(bp.H)[j]+1])] 
-#         uaux .= zero(T)
-#         bp.u[∂a[i]] = msg_conv_gfq!(uaux, bp.u[∂a[i-1]], h_tilde)
-#     end
-#     bp.u[∂a[end]] = normalize_prob(bp.u[∂a[end]])
-
-#     u = bp.u[∂a[end]]
-#     for i in length(∂a):-1:1
-
-#         uaux .= zero(T)
-#         bp.u[∂a[i]] = msg_conv_gfq!(uaux, )
-#     end
-    
-    
-    
-    
-#         ε = 0.0
-#     for i in ∂a
-#         unew = neutral_prob_bp(Q)
-#         for j in ∂a
-#             j==i && continue
-#             # adjust for convolution weights
-#             hj_tilde = bp.h[j][SVector{Q}(gfdiv[:,nonzeros(bp.H)[j]+1])] 
-#             uaux .= zero(T)
-#             unew = msg_conv_gfq!(uaux, unew, hj_tilde)
-#         end
-#         # adjust result for convolution weights
-#         unew = unew[SVector{Q}(gfmult[:,nonzeros(bp.H)[i]+1])]
-#         unew = normalize_prob(unew)    # should not be needed
-#         ε = max(ε, maximum(abs,unew-bp.u[i]))
-#         bp.u[i] = bp.u[i].^damp .* unew.^(1-damp)
-#     end
-#     ε
-# end

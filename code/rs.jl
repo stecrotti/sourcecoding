@@ -70,6 +70,7 @@ function RS(Pk, Λ; N=100, tol=1e-5, maxiter=100, damp=0.9)
     q ./= sum(q)
     O -= α*sum(Pk[k]*overlap_factor(q,k) for k=ks) #fa
     Fa = α*sum(Pk[k]*overlap_factor(q,k) for k=ks); @show Fa
+    @show O
 
     1-α, (1-O)/2, p, q
 end

@@ -31,7 +31,7 @@ function update_var(popP, Q::Int, wΛ)
     idx = rand(1:N, SVector{d-1})
     us = @view popP[idx]
     h = iter_var_ms(us, s, Q)
-    any(isnan, h) && error("nan in update var. non-norm h=$h")
+    any(isnan, h.- maximum(h)) && error("nan in update var. non-norm h=$h")
     h .- maximum(h)
 end
 function update_factor(popQ, Q::Int, wP, gfmult, gfdiv; 
@@ -41,14 +41,20 @@ function update_factor(popQ, Q::Int, wP, gfmult, gfdiv;
     H0 = rand(2:Q)
     idx = rand(1:N, SVector{k-1})
     hs = @view popQ[idx]
-    u = iter_factor_ms(hs, Hs, H0, gfmult, gfdiv, Q)
-    any(isnan, u) && error("nan in update factor. non-norm u=$u")
-    u .- maximum(u)
+    u = iter_factor_ms(hs, Hs, H0, gfmult, gfdiv, Q, uaux=uaux)
+    if any(isnan, u.- maximum(u)) 
+        @show hs, Hs, H0
+        hs_tilde = [h[SVector{Q}(gfdiv[:,H])] for (h,H) in zip(hs,Hs)]
+        @show hs_tilde
+        @show uaux
+        error("nan in update factor. non-norm u=$u")
+    end
+        u .- maximum(u)
 end
 
 
 function RS_gfq!(popP, popQ, Λ, Pk, Q, gfmult, gfdiv; maxiter=10^2, tol=1e-5, 
-        toliter=(length(popP)/Q)^(-1), showprogress=true, cb=(x...)->nothing) 
+        toliter=(length(popP)/Q)^(-1/2), showprogress=true, cb=(x...)->nothing) 
     Λ_red = Λ.*eachindex(Λ)
     Pk_red = Pk.*eachindex(Pk)
     wΛ = StatsBase.weights(Λ_red)
@@ -64,7 +70,7 @@ function RS_gfq!(popP, popQ, Λ, Pk, Q, gfmult, gfdiv; maxiter=10^2, tol=1e-5,
             popQ[i] = update_var(popP, Q, wΛ)
         end
         # update P(u)
-        Threads.@threads for i in rand(1:N, N÷2)
+        for i in rand(1:N, N÷2)
             popP[i] = update_factor(popQ, Q, wP, gfmult, gfdiv, 
                 uaux=uauxs[Threads.threadid()])
         end
@@ -122,8 +128,9 @@ function freenrj(Λ, Pk, Q, popP, popQ, gfmult, gfdiv; nsamples=10^3,
             uaux=uaux[Threads.threadid()])
         Fi = freenrj_var(wΛ, popP, Q)
         Fia = freenrj_edge(popP, popQ, Q)
+        isinf(Fa) && (@show Fa; error("Infinite free energy"))
         F[t] = Fi + α*Fa - mΛ*Fia
-        cb(t, F, Fa, Fi, Fia)
+        cb(t, F)
         ProgressMeter.next!(prog)
     end
     mean(F)

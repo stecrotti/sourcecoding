@@ -99,21 +99,23 @@ function iteration!(bp::BPFull{F,SVector{Q,T}}; maxiter=10^3, tol=1e-12,
         callback=(it, ε, bp)->false) where {F,Q,T}
 
     ε = 0.0
+    err = zeros(Threads.nthreads())
     m,n = size(bp.H)
     for it = 1:maxiter
         ε = 0.0
         # for i = 1:size(bp.H,2)
-        for i = rand(1:n, n÷3*2) 
+        Threads.@threads for i = rand(1:n, n÷3*2) 
             errv = update_v!(bp, i, damp=damp, rein=rein)
             errv == Inf && @warn "Contradiction found updating var $i"
-            ε = max(ε, errv)
+            err[Threads.threadid()] = max(err[Threads.threadid()],errv)
         end
         # for a = 1:size(bp.H,1)
         for a = rand(1:m, m÷3*2)
-            errf = update_f!(bp, a, gftab..., factor_neigs[a], uaux=uaux[a], 
+            errf = update_f!(bp, a, gftab..., factor_neigs[a], #uaux=uaux[a], 
                 damp=damp)
-            ε = max(ε, errf)
+            err[Threads.threadid()] = max(err[Threads.threadid()],errf)
         end
+        ε = maximum(err)
         callback(it, ε, bp) && return ε,it
         ε < tol && return ε, it
     end
@@ -536,7 +538,6 @@ function gftables(Q::Val{32})
                 0  32  30  23  29  18  12  17  15  20  27   7  24  21   9  16   8   6  28  10  14  31   4  13  26  25  11  19   5   3  22   2]
     gfmult, gfdiv
 end
-
 function gftables(Q::Val{64})
     wd = pwd()
     cd(@__DIR__)

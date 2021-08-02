@@ -91,7 +91,7 @@ function findsol(HH::SparseMatrixCSC, x0::BitVector,
     findsol(HH, efield, σ; kw...)
 end
 function findsol(H::SparseMatrixCSC, efield::Vector{<:Real}, 
-    src::Vector{Int}=efield,
+    src::Vector{Int}=Int.(sign.(efield)),
     σ::Vector{Int}=ones(Int,size(H,2)); # pre-allocate
     maxiter::Int=50,verbose::Bool=true) 
 

@@ -388,7 +388,7 @@ function free_energy_energetic(ms::BPFull)
 end
 
 # PLOTTING
-function plot_rdb(; f30=true, f3=true) 
+function plot_rdb(; f30=true, f3=false) 
     DD = 0.001:0.01:0.5
     RR = 1 .+ DD.*log2.(DD) + (1 .- DD).*log2.(1 .- DD)
     pl = Plots.plot(RR, DD, label="Information bound")

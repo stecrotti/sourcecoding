@@ -110,13 +110,17 @@ function ldpc_matrix_gfq(Q::Integer, n::Integer, m::Integer, nedges::Integer,
     Lambda, Rho, edgesleft=fill(zero(n), nedges), edgesright=copy(edgesleft);
     rng = MersenneTwister(0), T::Type=Int,
     vperm = randperm(rng, n), fperm = randperm(rng, m),
-    accept_multi_edges=true, maxtrials=1000)
+    accept_multi_edges=true, maxtrials=1000, verbose=false)
 
     check_consistency_polynomials(n,m,nedges,Lambda,Rho)
     for t in 1:maxtrials
         H = one_ldpc_matrix_gfq(Q, n, m, nedges, Lambda, Rho, edgesleft, edgesright,
             rng=rng, T=T, vperm=vperm, fperm=fperm)
-        (nnz(H) == nedges || accept_multi_edges) && return H
+        found = (nnz(H) == nedges || accept_multi_edges) 
+        if found
+           verbose && println("Factor graph generated after $t trials") 
+           return H
+        end
     end
     error("Could not build graph after $maxtrials trials: multi-edges were popping up")
 end

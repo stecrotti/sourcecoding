@@ -19,7 +19,7 @@ end
 # Convolution with clamping
 function convolve(p1, p2)
     N = max(lastindex(p1), lastindex(p2))
-    q = fill(0.0,-N:N)
+    q = fill(zero(promote_type(eltype(p1),eltype(p2))),-N:N)
     for f1 ∈ eachindex(p1)
         for f2 ∈ eachindex(p2)
             q[clamp(f1+f2, -N, N)] += p1[f1]*p2[f2]
@@ -46,11 +46,11 @@ end
 
 # RS COMPUTATION
 
-function RS(Pk, Λ; N=100, tol=1e-5, maxiter=100, damp=0.9)
+function RS(Pk, Λ; N=100, tol=1e-5, maxiter=100, damp=0.9, T=Float64)
     ks = [k for k in eachindex(Pk) if Pk[k] > tol]
     ds = [d for d in eachindex(Λ) if Λ[d] > tol]
     @assert sum(Pk[ks]) ≈ 1 && sum(Λ[ds]) ≈ 1
-    p = fill(1.0, -N:N); p ./= sum(p)
+    p = fill(one(T), -N:N); p ./= sum(p)
     for iter=1:maxiter
         q = sum(d*Λ[d]*iter_var(p, d-1) for d=ds)
         q ./= sum(q)

@@ -84,12 +84,15 @@ function neutralize_leaves!(H::AbstractMatrix)
     H
 end
 
+# for source in bit format
 function findsol(HH::SparseMatrixCSC, x0::BitVector, 
         x::BitVector=falses(size(HH,2)); kw...)
     σ = (-1) .^ x
     efield = (-1) .^ x0
     findsol(HH, efield, σ; kw...)
 end
+
+# for source in spin format
 function findsol(H::SparseMatrixCSC, efield::Vector{<:Real}, 
     src::Vector{Int}=Int.(sign.(efield)),
     σ::Vector{Int}=ones(Int,size(H,2)); # pre-allocate

@@ -22,6 +22,7 @@ ns
 
 for (j,R) in enumerate(Rs)
     for (i,n) in enumerate(ns)
+        println("Size $i of $(length(ns)). n=$n")
         H = Bool.(cycle_code(Q, n, R; maxtrials=5*10^4, verbose=false))
         prog = Progress(navg[i])
         Threads.@threads for k in 1:navg[i]

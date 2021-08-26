@@ -86,7 +86,6 @@ function iteration!(bp::BPFull; maxiter=10^3, tol=1e-12, damp=0.0, rein=0.0,
     
     ε = 0.0
     for it = 1:maxiter
-        ε = 0.0
         for i = 1:size(bp.H,2)
             errv = update_v!(bp, i, damp=damp, rein=rein)
             errv == -1 && return -1,it
@@ -99,14 +98,12 @@ function iteration!(bp::BPFull; maxiter=10^3, tol=1e-12, damp=0.0, rein=0.0,
         end
         callback(it, ε, bp) && return ε,it
         ε < tol && return ε, it
+        ε = 0.0
     end
     ε, maxiter
 end
 
-function parity(bp::BPFull{Bool,T} where T, x::AbstractVector)
-    z = sum(bp.H*x .% 2)
-    return z 
-end
+parity(bp::BPFull{Bool,T} where T, x::AbstractVector=(argmax.(bp.belief) .== 2)) = parity(bp.H, x)
 function parity(H::SparseMatrixCSC{Bool,Int}, x::AbstractVector)
     z = sum(H*x .% 2)
     return z 
@@ -217,9 +214,23 @@ end
 #### MAX-SUM 
 msg_maxconv(h1::Tuple, h2::Tuple) = (max(h1[1]+h2[1],h1[2]+h2[2]), max(h1[1]+h2[2],h1[2]+h2[1])) 
 msg_sum(u1::Tuple, u2::Tuple) = u1 .+ u2
-normalize_max(h::Tuple) = h .- maximum(h)
+function normalize_max(h::Tuple)
+    m = maximum(h)
+    return isinf(m) ? h : h .- maximum(h)
+end
+# we want Inf-Inf=0
+myabsdiff(x,y) = x==y ? 0 : abs(x-y)
+maxabsdiff(t1::Tuple, t2::Tuple, ε=0.0) = max(myabsdiff.(t1,t2)..., ε)
+function damping(tnew::Tuple, told::Tuple, damp::Real)
+    t = tnew.*(1-damp)
+    if damp != 0
+        t = t .+ told.*damp
+    end
+    t
+end
+ 
 
-function update_var_ms!(ms::BPFull{F,M}, i::Int; damp=0.0, rein=0.0) where 
+function update_var_ms!(bp::BPFull{F,M}, i::Int; damp=0.0, rein=0.0) where 
     {F, M<:Tuple{Real,Real}}
     ε = 0.0
     ∂i = nzrange(bp.H, i)
@@ -230,18 +241,24 @@ function update_var_ms!(ms::BPFull{F,M}, i::Int; damp=0.0, rein=0.0) where
             c==a && continue
             hnew = msg_sum(hnew, bp.u[c])
         end
+        any(isnan, normalize_max(hnew)) && @warn "NaN in message $hnew"
         hnew = normalize_max(hnew)
-        ε = max(ε, abs(hnew[1]-bp.h[a][1]), abs(hnew[2]-bp.h[a][2]))
-        bp.h[a] = bp.h[a].*damp .+ hnew.*(1-damp)
+        ε = maxabsdiff(hnew, bp.h[a], ε)
+        isnan(ε) && @show hnew, bp.h[a]
+        # bp.h[a] = bp.h[a].*damp .+ hnew.*(1-damp)
+        # bp.h[a] = hnew
+        bp.h[a] = damping(hnew, bp.h[a], damp)
+        any(isnan, bp.h[a]) && @warn "NaN in message $a"
         b = msg_sum(b, bp.u[a]) 
     end
-    isnan(sum(b)) && return -1.0  # normaliz of belief is zero
+    any(isnan, normalize_max(b)) && return -1.0  # normaliz of belief is zero
     bp.belief[i] = normalize_max(b) 
     bp.efield[i] = bp.efield[i] .+ rein.*bp.belief[i]
+    ε == -1 && println("Error in var $i")
     ε
 end
 
-function update_factor_ms!(ms::BPFull{F,M}, a::Int, 
+function update_factor_ms!(bp::BPFull{F,M}, a::Int, 
     ∂a = nonzeros(bp.X)[nzrange(bp.X, a)]; damp=0.0) where {F, M<:Tuple{Real,Real}}
     ε = 0.0
     for i in ∂a
@@ -250,10 +267,15 @@ function update_factor_ms!(ms::BPFull{F,M}, a::Int,
             j==i && continue
             unew = msg_maxconv(unew, bp.h[j])
         end
+        any(isnan, normalize_max(unew)) && @warn "NaN in message $unew"
         unew = normalize_max(unew)    
-        ε = max(ε, abs(unew[1]-bp.u[i][1]), abs(unew[2]-bp.u[i][2]))
-        bp.u[i] = bp.u[i].*damp .+ unew.*(1-damp)
+        ε = maxabsdiff(unew, bp.u[i], ε)
+        # bp.u[i] = bp.u[i].*damp .+ unew.*(1-damp)
+        # bp.u[i] = unew
+        bp.u[i] = damping(unew, bp.u[i], damp)
+        any(isnan, bp.u[i]) && @warn "NaN in message $i. unew=$unew. Nneigs=$(length(∂a))"
     end
+    ε == -1 && println("Error in factor $a")
     ε
 end
 
@@ -389,7 +411,7 @@ end
 
 # PLOTTING
 function plot_rdb(; f30=true, f3=false) 
-    DD = 0.001:0.001:0.5
+    DD = 0.0001:0.001:0.5
     RR = 1 .+ DD.*log2.(DD) + (1 .- DD).*log2.(1 .- DD)
     pl = Plots.plot(RR, DD, label="Information bound")
     Plots.plot!(pl, RR, 0.5*(1 .- RR), label="Naive compression")

@@ -112,7 +112,7 @@ function findsol(H::SparseMatrixCSC, efield::Vector{<:Real},
         ovl[it] = σ'src / n
         ΔE = Enew - E   
         verbose && println("Iter ", it, ". Overlap ", 
-            round(Enew / n, digits=4), ". Cycle weight ", round(w,digits=4),
+            round(ovl[it], digits=4), ". Cycle weight ", round(w,digits=4),
             ". Energy shift ", ΔE)     
         if ΔE == 0
             return -Enew/n, ovl, σ
@@ -120,6 +120,7 @@ function findsol(H::SparseMatrixCSC, efield::Vector{<:Real},
             E = Enew
         end
     end
+    @warn "Optmal cycle: did not use all iters. Consider increasing `maxiter`"
     return -Inf, ovl, σ
 end
 

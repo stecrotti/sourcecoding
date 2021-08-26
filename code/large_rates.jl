@@ -12,11 +12,13 @@ end
 
 const Q = 2
 ns = [2400,9600,9600*4,9600*16,9600*16*4]
+ns = 1000 .* (2 .^ (0:7))
 Rs = 0.55:0.02:0.9
 Rs = [0.9]
 N = length(ns)
 Nr = length(Rs)
 navg = [40*16*4, 40*16, 40*4, 40, 10]
+navg = reverse(50 .* (2 .^ (0:7)))
 ds = [[fill(0.0,navg[i]) for _ in 1:Nr] for i in 1:N];
 ns
 
@@ -25,7 +27,7 @@ for (j,R) in enumerate(Rs)
         println("Size $i of $(length(ns)). n=$n")
         H = Bool.(cycle_code(Q, n, R; maxtrials=5*10^4, verbose=false))
         prog = Progress(navg[i])
-        Threads.@threads for k in 1:navg[i]
+        for k in 1:navg[i]
             s = rand((-1,1), n)
             ener, ovl, σ = findsol(H, s, verbose=false)
             ds[i][j][k] = mean(σ .!= s)
@@ -43,5 +45,5 @@ p1 = plot(1 ./ns, mean.(D), yerr=std.(D)./sqrt.(navg), m=:o, label="Exact algo",
 xlabel!("1/n"); ylabel!("dist")
 p2 = deepcopy(p1)
 hline!(p2, [D_RS], label="RS", legend=:right)
-plot(p1,p2, size=(700,300), margin=5Plots.mm)
+plot(p1,p2, size=(700,300), margin=15Plots.mm)
 savefig("plot.png")

@@ -96,7 +96,7 @@ function valid_degrees(Prows, Pcols, A::Int=2*3*5*7; B::Int=1,
     return nrows, ncols, nedges, Pr_new, Pc_new
 end
 
-function full_adjmat(H::SparseMatrixCSC, T::Type)
+function full_adjmat(H::SparseMatrixCSC, T::Type=eltype(H))
     m,n = size(H)
     A = [zeros(T,m,m) H;
          permutedims(H) zeros(T,n,n)]

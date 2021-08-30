@@ -34,7 +34,7 @@ function readseeds(seeds, H)
     end
 end
 
-function leaf_removal(H::SparseMatrixCSC, Ht = sparse(H'))
+function leaf_removal(H::SparseMatrixCSC, Ht = permutedims(H))
     M, N = size(H)
     degs = vec(sum(H .!= 0, dims=1))
     facts = trues(M)

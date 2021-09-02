@@ -53,7 +53,7 @@ function update_var_bp!(bp::BPFull{F,M}, i::Int; damp=0.0, rein=0.0) where
     end
     iszero(sum(b)) && return -1.0  # normaliz of belief is zero
     bp.belief[i] = normalize_prob(b) 
-    bp.efield[i] = bp.efield[i] .+ rein.*bp.belief[i]
+    bp.efield[i] = bp.efield[i] .* bp.belief[i].^rein
     ε
 end
 
@@ -128,7 +128,7 @@ end
 function performance(bp::BPFull, s::AbstractVector,
         x=falses(length(s)))
     x .= argmax.(bp.belief) .== 2
-    nunsat = parity(bp, x)
+    nunsat = parity(bp.H, x)
     y = s .== -1
     dist = mean(x .!= y)
     ovl = 1-2*dist
@@ -215,21 +215,25 @@ end
 
 # try Tmax times to reach zero unsat with decimation
 # returns nunsat, ovl, dist
-function decimate!(bp::BPFull, efield, indep, s; Tmax=1, 
+function decimate!(bp::BPFull, efield, indep, s, B; Tmax=1, 
         fair_decimation=false, 
         factor_neigs = [nonzeros(bp.X)[nzrange(bp.X, a)] for a = 1:size(bp.H,1)],
         kw...)
     freevars = falses(nvars(bp)); freevars[indep] .= true
+    dist = zeros(Tmax)
     for t in 1:Tmax
-        ε, nunsat, ovl, dist, iters = decimate1!(bp, efield, freevars, s; 
+        ε, nunsat, ovl, d, iters = decimate1!(bp, efield, freevars, s; 
             fair_decimation = fair_decimation, factor_neigs = factor_neigs, kw...)
+        x = argmax.(bp.belief) .== 2
+        σ = fix_indep!(x, B, indep)   
+        dist[t] = distortion(σ,s)
         print("Trial $t of $Tmax: ")
         ε == -1 && print("contradiction found. ")
-        println(nunsat, " unsat. Dist = ", round(dist,digits=3))
-        nunsat == 0 && return nunsat, ovl, dist
+        println(nunsat, " unsat. Dist = ", round(dist[t],digits=3))
+        # nunsat == 0 && return nunsat, ovl, dist
         freevars .= false; freevars[indep] .= true
     end
-    return -1, NaN, NaN
+    return minimum(dist)
 end
 
 # 1 trial of decimation
@@ -242,7 +246,7 @@ function decimate1!(bp::BPFull, efield, freevars::BitArray{1}, s;
     bp.efield .= efield; fill!(bp.belief, (0.5,0.5))
     # warmup bp run
     ε, iters = iteration!(bp; tol=1e-15, kw...) 
-    println("Avg distortion after 1st BP round: ", avg_dist(bp,s))
+    # println("Avg distortion after 1st BP round: ", avg_dist(bp,s))
     nunsat, ovl, dist = performance(bp, s)
     nfree = sum(freevars)
     callback(ε, nunsat, bp, nfree, ovl, dist, iters, 0, -Inf) && return ε, nunsat, ovl, dist, iters

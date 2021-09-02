@@ -54,25 +54,25 @@ end
 
 
 function RS_gfq!(popP, popQ, Λ, Pk, Q, gfmult, gfdiv; maxiter=10^2, tol=1e-5, 
-        toliter=(length(popP)/Q)^(-1/2), showprogress=true, cb=(x...)->nothing) 
+        toliter=(length(popP)/Q)^(-1/2), showprogress=true, cb=(x...)->nothing,
+        idx_q=rand(1:length(popQ), length(popQ)÷2),
+        idx_p=rand(1:length(popP), length(popP)÷2))
     Λ_red = Λ.*eachindex(Λ)
     Pk_red = Pk.*eachindex(Pk)
     wΛ = StatsBase.weights(Λ_red)
     wP = StatsBase.weights(Pk_red)
     N = length(popP)
     avgP = mean(popP)
-    uauxs = fill(-Inf*ones(MVector{Q,Float64}),Threads.nthreads())
     err = -Inf
     prog = ProgressMeter.Progress(maxiter, showprogress ? 1 : Inf)
     for it in 1:maxiter
         # update Q(h)
-        Threads.@threads for i in rand(1:N, N÷2)
+        Threads.@threads for i in idx_q
             popQ[i] = update_var(popP, Q, wΛ)
         end
         # update P(u)
-        for i in rand(1:N, N÷2)
-            popP[i] = update_factor(popQ, Q, wP, gfmult, gfdiv, 
-                uaux=uauxs[Threads.threadid()])
+        Threads.@threads for i in idx_p
+            popP[i] = update_factor(popQ, Q, wP, gfmult, gfdiv)
         end
         avgP_old = avgP
         avgP = mean(popP)
@@ -82,6 +82,8 @@ function RS_gfq!(popP, popQ, Λ, Pk, Q, gfmult, gfdiv; maxiter=10^2, tol=1e-5,
         if err < toliter
             break
         end
+        idx_q .= rand(1:length(popQ), length(popQ)÷2)
+        idx_p .= rand(1:length(popP), length(popP)÷2)
     end
     err
 end

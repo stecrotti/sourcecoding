@@ -142,7 +142,7 @@ function parity(bp::BeliefPropagation, x::AbstractVector)
     return z 
 end
 function distortion(x::AbstractVector, y::AbstractVector)
-    d = 0
+    d = 0.0
     for (xx,yy) in zip(x,y)
         d += sign(xx)!=sign(yy)
     end

@@ -24,7 +24,7 @@ function one_ldpc_matrix(n, m, nedges, Lambda, Rho, edgesleft, edgesright;
     vperm = randperm(rng, n), fperm = randperm(rng, m))
     v = r = 1
     for i = 1:lastindex(Lambda)
-        ni = Int(round(n*Lambda[i], digits=10))
+        ni = Int(round(n*Lambda[i], digits=8))
         for _ in 1:ni
             edgesleft[r:r+i-1] .= vperm[v]
             v += 1; r += i
@@ -44,10 +44,10 @@ end
 
 function check_consistency_polynomials(n,m,nedges,Lambda,Rho)
     for l in Lambda
-        @assert isinteger(round(n*l, digits=10))
+        @assert isinteger(round(n*l, digits=8))
     end
     for r in Rho
-        @assert isinteger(round(m*r, digits=10))
+        @assert isinteger(round(m*r, digits=8))
     end
     @assert isapprox(n*sum(i*l for (i,l) in pairs(Lambda)), nedges, atol=1e-8) 
     @assert isapprox(m*sum(j*r for (j,r) in pairs(Rho)), nedges, atol=1e-8)

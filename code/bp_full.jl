@@ -1,6 +1,7 @@
 include("slim_graphs.jl")
 include("cavity.jl")
 include("matrix_generator.jl")
+include("bp.jl")
 
 using OffsetArrays, Statistics, Printf, Plots
 
@@ -216,7 +217,7 @@ end
 # try Tmax times to reach zero unsat with decimation
 # returns nunsat, ovl, dist
 function decimate!(bp::BPFull, efield, indep, s, B; Tmax=1, 
-        fair_decimation=false, 
+        fair_decimation=false, verbose=true,
         factor_neigs = [nonzeros(bp.X)[nzrange(bp.X, a)] for a = 1:size(bp.H,1)],
         kw...)
     freevars = falses(nvars(bp)); freevars[indep] .= true
@@ -227,9 +228,9 @@ function decimate!(bp::BPFull, efield, indep, s, B; Tmax=1,
         x = argmax.(bp.belief) .== 2
         σ = fix_indep!(x, B, indep)   
         dist[t] = distortion(σ,s)
-        print("Trial $t of $Tmax: ")
+        verbose && print("Trial $t of $Tmax: ")
         ε == -1 && print("contradiction found. ")
-        println(nunsat, " unsat. Dist = ", round(dist[t],digits=3))
+        verbose && println(nunsat, " unsat. Dist = ", round(dist[t],digits=3))
         # nunsat == 0 && return nunsat, ovl, dist
         freevars .= false; freevars[indep] .= true
     end
@@ -291,6 +292,8 @@ function cb_decimation(ε, nunsat, bp::BPFull, nfree, ovl, dist, iters, step, ma
             step, nfree, maxfield, ε, nunsat,  ovl, iters)
     return ε==-1 || nunsat==0
 end
+
+
 
 
 

@@ -96,6 +96,11 @@ function valid_degrees(Prows, Pcols, A::Int=2*3*5*7; B::Int=1,
     return nrows, ncols, nedges, Pr_new, Pc_new
 end
 
+function rate(Λ::AbstractVector, K::AbstractVector)
+    α = (Λ'eachindex(Λ)) / (K'eachindex(K))
+    1 - α
+end
+
 function full_adjmat(H::SparseMatrixCSC, T::Type=eltype(H))
     m,n = size(H)
     A = [zeros(T,m,m) H;

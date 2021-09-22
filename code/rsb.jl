@@ -179,7 +179,8 @@ function overlap1RSB(Λ, K;
         popP, 
         popQ, 
         samples=size(popP,2), 
-        y=0.0)
+        y=0.0,
+        callback=(t,popP,popQ,O,F,y)->nothing)
     mt = MersenneTwister()
     function Sampler(P, R)
         idx = fill(0,10)
@@ -226,10 +227,28 @@ function overlap1RSB(Λ, K;
         F_edge += f
         O = -(α*O_factor + O_var - mΛ*O_edge)/t
         F = -1/y*(α*F_factor + F_var - mΛ*F_edge)/t
+        callback(t,popP,popQ,O,F,y)
         ProgressMeter.next!(progress; showvalues = [(:F,F),(:O,O),(:D,(1-O)/2)])
     end
     O = -(α*O_factor + O_var - mΛ*O_edge)/samples
     F = -1/y*(α*F_factor + F_var - mΛ*F_edge)/samples
     C = y*(-O - F)
     O,F,C
+end
+
+# Store the whole history of free energy and overlap.
+# Finally compute average and (empirical) stdev
+# To save the whole history, pass `f,o,c` as arguments
+function overlap1RSB_errorbars(Λ, K; popP, popQ, samples=size(popP,2), y=0.0, 
+        f = zeros(samples), o = zeros(samples), c = zeros(samples))
+    function callback(t,popP,popQ,O,F,y)
+        f[t] = F
+        o[t] = O
+        c[t] = y*(-O - F)
+    end
+    overlap1RSB(Λ, K; popP=popP, popQ=popQ, samples=samples, y=y,
+        callback=callback)
+    Favg = mean(f); Oavg = mean(o); Cavg = mean(c)
+    Fstd = std(f, mean=Favg); Ostd = std(o, mean=Oavg); Cstd = std(c, mean=Cavg)
+    Favg, Oavg, Cavg, Fstd, Ostd, Cstd
 end

@@ -160,6 +160,13 @@ function damping(tnew::Tuple, told::Tuple, damp::Real)
     end
     t
 end
+function reinforcement_ms(oldfield::Tuple, belief::Tuple, rein::Real)
+    newfield = oldfield
+    if rein != 0
+        newfield = newfield .+ rein .* belief 
+    end
+    newfield
+end
  
 function update_var_ms!(bp::BPFull{F,M}, i::Int; damp=0.0, rein=0.0) where 
     {F, M<:Tuple{Real,Real}}
@@ -172,10 +179,10 @@ function update_var_ms!(bp::BPFull{F,M}, i::Int; damp=0.0, rein=0.0) where
             c==a && continue
             hnew = msg_sum(hnew, bp.u[c])
         end
-        any(isnan, normalize_max(hnew)) && @warn "NaN in message $hnew"
+        any(isnan, normalize_max(hnew)) && @warn "NaN in h-message $a: $hnew"
         hnew = normalize_max(hnew)
         ε = maxabsdiff(hnew, bp.h[a], ε)
-        isnan(ε) && @show hnew, bp.h[a]
+        # isnan(ε) && @show hnew, bp.h[a]
         # bp.h[a] = bp.h[a].*damp .+ hnew.*(1-damp)
         # bp.h[a] = hnew
         bp.h[a] = damping(hnew, bp.h[a], damp)
@@ -184,7 +191,8 @@ function update_var_ms!(bp::BPFull{F,M}, i::Int; damp=0.0, rein=0.0) where
     end
     any(isnan, normalize_max(b)) && return -1.0  # normaliz of belief is zero
     bp.belief[i] = normalize_max(b)
-    bp.efield[i] = bp.efield[i] .+ rein.*bp.belief[i]
+    # bp.efield[i] = bp.efield[i] .+ rein.*bp.belief[i]
+    bp.efield[i] = reinforcement_ms(bp.efield[i], bp.belief[i], rein)
     ε == -1 && println("Error in var $i")
     ε
 end
@@ -198,7 +206,7 @@ function update_factor_ms!(bp::BPFull{F,M}, a::Int,
             j==i && continue
             unew = msg_maxconv(unew, bp.h[j])
         end
-        any(isnan, normalize_max(unew)) && @warn "NaN in message $unew"
+        any(isnan, normalize_max(unew)) && @warn "NaN in u-message $unew"
         unew = normalize_max(unew)    
         ε = maxabsdiff(unew, bp.u[i], ε)
         # bp.u[i] = bp.u[i].*damp .+ unew.*(1-damp)

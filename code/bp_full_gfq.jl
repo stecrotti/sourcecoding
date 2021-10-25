@@ -568,3 +568,101 @@ function gftables(Q::Val{256})
     cd(wd)
     gfmult, gfdiv
 end
+
+
+# GF(q) values here go from 0 to q-1
+function gfdot(x::AbstractVector{Int}, y::AbstractVector{Int}, q::Int;
+        mult::AbstractArray{Int,2}=gftables(Val(q))[1])
+    z = 0
+    for (xx,yy) in zip(x,y)
+        if xx!=0 && yy!=0
+            z = xor(z, mult[xx+1,yy+1]-1)
+        end
+    end
+    z
+end
+
+function gfmult(A::AbstractArray{Int,2}, x::AbstractVector{Int}, q::Int;
+        mult::AbstractArray{Int,2}=gftables(Val(q))[1])
+    m, n = size(A)
+    @assert length(x)==n
+    b = zeros(Int, m)
+    for i in eachindex(b)
+        b[i] = gfdot(A[i,:], x, q; mult=mult)
+    end
+    b
+end
+
+function gfmult(A::AbstractArray{Int,2}, B::AbstractArray{Int,2}, q::Int;
+        mult::AbstractArray{Int,2}=gftables(Val(q))[1])
+    m, n = size(A)
+    a, b = size(B)
+    @assert a==n
+    C = zeros(Int, m, b)
+    for j in 1:b 
+        for i in 1:m
+            C[i,j] = gfdot(A[i,:], B[:,j], q; mult=mult)
+        end
+    end
+    C
+end
+
+
+# Here the matrix elements range in 0:q-1
+function gfrref!(H::AbstractArray{Int,2}, q::Int;
+        gftab = gftables(Val(q)))
+    mult, gfdiv = gftab 
+    m, n = size(H)
+    # Initialize pivot to zero
+    dep = Int[]
+    p = 0
+    for c = 1:n
+        nz = findfirst(!iszero, @view H[p+1:end,c])
+        if nz === nothing
+            continue
+        else
+            p += 1
+            push!(dep, c)
+            if nz != 1
+                H[p,:], H[p+nz-1,:] = H[nz+p-1,:], H[p,:]
+            end
+            pvt = H[p,c] + 1
+            # normalize row `p` so that pivot equal 1
+            for j in c:n
+                H[p,j] = gfdiv[H[p,j]+1, pvt] - 1
+            end
+            for r = 1:m
+                r==p && continue
+                # adjust row `r` to have all zeros below pivot
+                if H[r,c] != 0
+                    k = H[r,c]
+                    for j in c:n
+                        H[r,j] = xor(H[r,j], mult[k+1,H[p,j]+1]-1)
+                    end
+                end
+            end
+            if p == m 
+                break
+            end
+        end
+    end
+    issparse(H) && dropzeros!(H)
+    return H, dep
+end
+gfrref(H::AbstractArray{Int,2}, q::Int; gftab = gftables(Val(q))) = 
+    gfrref!(copy(H), q, gftab=gftab)
+
+function findbasis_slow(H::AbstractArray{Int,2}, q::Int; 
+        gftab = gftables(Val(q)))
+    H = Matrix(H)
+    A, dep = gfrref(H, q, gftab=gftab)
+    indep = setdiff(1:size(H,2), dep)
+    colperm = [dep; indep]
+    B = [A[1:length(dep),indep];I]
+    B .= B[invperm(colperm),:]
+    B, indep
+end
+
+function fix_indep!(x, B, indep, q::Int)
+    x .= gfmult(B, x[indep], q)
+end

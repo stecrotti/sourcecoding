@@ -6,7 +6,7 @@ using LinearAlgebra, Random, SparseArrays
 # polynomials are from the NODE POINT OF VIEW
 function ldpc_matrix(n::Integer, m::Integer, nedges::Integer, Lambda, Rho,
     edgesleft=fill(zero(n), nedges), edgesright=copy(edgesleft);
-    rng = MersenneTwister(0),
+    rng = MersenneTwister(rand(UInt)),
     vperm = randperm(rng, n), fperm = randperm(rng, m),
     accept_multi_edges=true, maxtrials=1000)
 
@@ -113,7 +113,7 @@ end
 
 function ldpc_matrix_gfq(Q::Integer, n::Integer, m::Integer, nedges::Integer, 
     Lambda, Rho, edgesleft=fill(zero(n), nedges), edgesright=copy(edgesleft);
-    rng = MersenneTwister(0), T::Type=Int,
+    rng = MersenneTwister(rand(UInt)), T::Type=Int,
     vperm = randperm(rng, n), fperm = randperm(rng, m),
     accept_multi_edges=true, maxtrials=1000, verbose=false)
 
@@ -153,4 +153,18 @@ function one_ldpc_matrix_gfq(Q, n, m, nedges, Lambda, Rho, edgesleft, edgesright
     nz = rand(rng, convert.(T,1:Q-1), nedges)
     combine(x,y) = rand(rng, (x,y))     # manages duplicates 
     sparse(edgesleft, edgesright, nz, n, m, combine)
+end
+
+function cycle_code(q::Int, n::Int, R::Real; kw...)
+    Lambda = [0,1]
+    nedges = 2n
+    α = 1-R
+    m = Int(round(α*n,digits=10))
+    k = floor(Int, 2/α)
+    s = k+1-2/α
+    K = [fill(0,k-1); s; 1-s]
+    K .*= K .> 1e-10
+    K ./ sum(K)
+    H = permutedims(ldpc_matrix_gfq(q, n, m, nedges, Lambda, K, 
+        accept_multi_edges=false; kw...))
 end

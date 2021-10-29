@@ -617,3 +617,9 @@ function update_factor_bp_new!(bp::BPFull, a::Int; damp=0.0)
     end
     ε
 end
+
+# set the dependent variables in x according to the indep ones and 
+#  a basis B
+function fix_indep!(x, B, indep)
+    x .= B * x[indep] .% 2
+end

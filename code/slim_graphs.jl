@@ -89,6 +89,32 @@ function ut2diagGF2!(T::SparseMatrixCSC)
     dropzeros!(T)
 end
 
+function ut2diagGFQ!(T::SparseMatrixCSC, q::Int; gftab = gftables(Val(q)))
+    mult, gfdiv = gftab
+    m, n = size(T)
+    # Check that the left part of T is upper triangular
+    @assert isuppertriang(T)
+    # Loop over diagonal elements
+    for c in m:-1:1
+        # Normalize the c-th row so that T[c,c]=1
+        Tcc = T[c,c] + 1
+        # normalize row `p` so that pivot equal 1
+        for k in rowvals(T[c,c:end]).+c.-1
+            T[c,k] = gfdiv[T[c,k]+1, Tcc] - 1
+        end
+        # Find non-zero elements above T[c,c] and perform row operations to 
+        #  cancel them out
+        for (j,v) in @views zip(rowvals(T[:,c]),nonzeros(T[:,c]))
+            if v != 0 && j < c
+                for k in rowvals(T[c,c:end]).+c.-1
+                    T[j,k] = xor( T[j,k], mult[v+1,T[c,k]+1]-1 ) 
+                end
+            end
+        end
+    end
+    dropzeros!(T)
+end
+
 function ut2diagGF2(Tdep, Tindep)
     m = size(Tdep,1)
     @assert isuppertriang(Tdep)
@@ -140,7 +166,7 @@ function echelonize(H, Ht, rowperm, colperm)
     R
 end
 
-function findbasis(H, Ht = sparse(transpose(H)))
+function findbasis(H, Ht = permutedims(H))
     rowperm, dep, indep = leaf_removal(H, Ht)
     colperm = [dep; indep]
     Hnew = H[rowperm, colperm]
@@ -149,6 +175,16 @@ function findbasis(H, Ht = sparse(transpose(H)))
     indep = colperm[size(H,1)+1:end]
     B[invperm(colperm),:], indep
 end 
+
+function findbasis(H, q::Int, Ht = permutedims(H); gftab = gftables(Val(q)))
+    rowperm, dep, indep = leaf_removal(H, Ht)
+    colperm = [dep; indep]
+    Hnew = H[rowperm, colperm]
+    ut2diagGFQ!(Hnew, q; gftab = gftab)
+    B = [Hnew[:, size(Hnew, 1)+1:end]; I]
+    indep = colperm[size(H,1)+1:end]
+    B[invperm(colperm),:], indep
+end
 
 function gfrrefGF2!(H::AbstractArray{<:Number,2})
     (m,n) = size(H)

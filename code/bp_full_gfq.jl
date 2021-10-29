@@ -13,7 +13,7 @@ function bp_full_gfq(H::SparseMatrixCSC, Q::Integer, src::Vector{<:Integer}, HH:
         neutralel=1/Q*ones(SVector{Q}))
     
     n = size(H,2)
-    efield = [SVector{Q}(ntuple(x->exp(-HH*(count_ones((x-1)⊻(s[i]-1)))),Q)) for i in 1:n]
+    efield = [SVector{Q}(ntuple(x->exp(-HH*(count_ones((x-1)⊻(src[i]-1)))),Q)) for i in 1:n]
     X = sparse(SparseMatrixCSC(size(H)...,H.colptr,H.rowval,collect(1:length(H.nzval)))')
     h = fill(neutralel,nnz(H))
     u = fill(neutralel,nnz(H))
@@ -26,7 +26,7 @@ function ms_full_gfq(H::SparseMatrixCSC, Q::Int, src::Vector{<:Integer};
 
     n = size(H,2)
     efield = [SVector{Q}(ntuple(
-        x->-float(count_ones((x-1)⊻(s[i]-1))),Q)) for i in 1:n]
+        x->-float(count_ones((x-1)⊻(src[i]-1))),Q)) for i in 1:n]
     X = sparse(SparseMatrixCSC(size(H)...,H.colptr,H.rowval,collect(1:length(H.nzval)))')
     h = fill(neutralel,nnz(H))
     u = fill(neutralel,nnz(H))
@@ -96,6 +96,8 @@ function iteration!(bp::BPFull{F,SVector{Q,T}}; maxiter=10^3, tol=1e-12,
         update_f! = update_factor_bp!, update_v! = update_var_bp!,
         factor_neigs = [nonzeros(bp.X)[nzrange(bp.X, a)] for a = 1:size(bp.H,1)],
         gftab = gftables(Val(getQ(bp))), uaux=fill(zero(MVector{Q,T}),nfactors(bp)),
+        vars=rand(1:size(bp.H,2), size(bp.H,2)÷2), 
+        factors=rand(1:size(bp.H,1), size(bp.H,1)÷2),
         callback=(it, ε, bp)->false) where {F,Q,T}
 
     ε = 0.0
@@ -104,13 +106,13 @@ function iteration!(bp::BPFull{F,SVector{Q,T}}; maxiter=10^3, tol=1e-12,
     for it = 1:maxiter
         ε = 0.0
         # for i = 1:size(bp.H,2)
-        Threads.@threads for i = rand(1:n, n÷3*2) 
+        Threads.@threads for i in vars
             errv = update_v!(bp, i, damp=damp, rein=rein)
             errv == Inf && @warn "Contradiction found updating var $i"
             err[Threads.threadid()] = max(err[Threads.threadid()],errv)
         end
         # for a = 1:size(bp.H,1)
-        for a = rand(1:m, m÷3*2)
+        for a in factors
             errf = update_f!(bp, a, gftab..., factor_neigs[a], #uaux=uaux[a], 
                 damp=damp)
             err[Threads.threadid()] = max(err[Threads.threadid()],errf)
@@ -118,6 +120,8 @@ function iteration!(bp::BPFull{F,SVector{Q,T}}; maxiter=10^3, tol=1e-12,
         ε = maximum(err)
         callback(it, ε, bp) && return ε,it
         ε < tol && return ε, it
+        vars .= rand(1:size(bp.H,2), length(vars))
+        factors .= rand(1:size(bp.H,1), length(factors))
     end
     ε, maxiter
 end
@@ -607,7 +611,6 @@ function gfmult(A::AbstractArray{Int,2}, B::AbstractArray{Int,2}, q::Int;
     C
 end
 
-
 # Here the matrix elements range in 0:q-1
 function gfrref!(H::AbstractArray{Int,2}, q::Int;
         gftab = gftables(Val(q)))
@@ -663,6 +666,8 @@ function findbasis_slow(H::AbstractArray{Int,2}, q::Int;
     B, indep
 end
 
+# set the dependent variables in x according to the indep ones and 
+#  a basis B
 function fix_indep!(x, B, indep, q::Int)
     x .= gfmult(B, x[indep], q)
 end

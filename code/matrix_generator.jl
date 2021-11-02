@@ -8,13 +8,14 @@ function ldpc_matrix(n::Integer, m::Integer, nedges::Integer, Lambda, Rho,
     edgesleft=fill(zero(n), nedges), edgesright=copy(edgesleft);
     rng = Random.GLOBAL_RNG,
     vperm = randperm(rng, n), fperm = randperm(rng, m),
-    accept_multi_edges=true, maxtrials=1000)
+    accept_multi_edges=true, maxtrials=1000,
+    isacceptable = (H, nedges)->(nnz(H) == nedges || accept_multi_edges))
 
     check_consistency_polynomials(n,m,nedges,Lambda,Rho)
     for t in 1:maxtrials
         H = one_ldpc_matrix(n, m, nedges, Lambda, Rho, edgesleft, edgesright,
             rng=rng, vperm=vperm, fperm=fperm)
-        (nnz(H) == nedges || accept_multi_edges) && return H
+        isacceptable = (H, nedges) && return H
     end
     error("Could not build graph after $maxtrials trials: multi-edges were popping up")
 end
@@ -115,13 +116,14 @@ function ldpc_matrix_gfq(Q::Integer, n::Integer, m::Integer, nedges::Integer,
     Lambda, Rho, edgesleft=fill(zero(n), nedges), edgesright=copy(edgesleft);
     rng = Random.GLOBAL_RNG, T::Type=Int,
     vperm = randperm(rng, n), fperm = randperm(rng, m),
-    accept_multi_edges=true, maxtrials=1000, verbose=false)
+    accept_multi_edges=true, maxtrials=1000, verbose=false,
+    isacceptable = (H, nedges)->(nnz(H) == nedges || accept_multi_edges))
 
     check_consistency_polynomials(n,m,nedges,Lambda,Rho)
     for t in 1:maxtrials
         H = one_ldpc_matrix_gfq(Q, n, m, nedges, Lambda, Rho, edgesleft, edgesright,
             rng=rng, T=T, vperm=vperm, fperm=fperm)
-        found = (nnz(H) == nedges || accept_multi_edges) 
+        found = isacceptable(H, nedges)
         if found
            verbose && println("Factor graph generated after $t trials") 
            return H

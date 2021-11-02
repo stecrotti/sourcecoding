@@ -1,5 +1,7 @@
 using LinearAlgebra, Random, SparseArrays
 
+has_multi_edges(H, nedges) = ( nnz(H) != nedges )
+
 # build a parity check matrix given degree profile, size and number of edges
 #  assumes all of the parameters are consistent
 #  follows Luby, "Efficient erasure correcting codes", doi: 10.1109/18.910575.
@@ -8,14 +10,14 @@ function ldpc_matrix(n::Integer, m::Integer, nedges::Integer, Lambda, Rho,
     edgesleft=fill(zero(n), nedges), edgesright=copy(edgesleft);
     rng = Random.GLOBAL_RNG,
     vperm = randperm(rng, n), fperm = randperm(rng, m),
-    accept_multi_edges=true, maxtrials=1000,
-    isacceptable = (H, nedges)->(nnz(H) == nedges || accept_multi_edges))
+    maxtrials=1000,
+    isacceptable = !has_multi_edges)
 
     check_consistency_polynomials(n,m,nedges,Lambda,Rho)
     for t in 1:maxtrials
         H = one_ldpc_matrix(n, m, nedges, Lambda, Rho, edgesleft, edgesright,
             rng=rng, vperm=vperm, fperm=fperm)
-        isacceptable = (H, nedges) && return H
+        isacceptable(H, nedges) && return H
     end
     error("Could not build graph after $maxtrials trials: multi-edges were popping up")
 end
@@ -109,6 +111,10 @@ function full_adjmat(H::SparseMatrixCSC, T::Type=eltype(H))
     return A
 end
 
+function isfullcore(H::SparseMatrixCSC, Ht=permutedims(H))
+    rowperm, dep, indep = leaf_removal(H)
+    length(rowperm) == size(H, 1)
+end
 
 #### GF(q)
 
@@ -117,7 +123,7 @@ function ldpc_matrix_gfq(Q::Integer, n::Integer, m::Integer, nedges::Integer,
     rng = Random.GLOBAL_RNG, T::Type=Int,
     vperm = randperm(rng, n), fperm = randperm(rng, m),
     accept_multi_edges=true, maxtrials=1000, verbose=false,
-    isacceptable = (H, nedges)->(nnz(H) == nedges || accept_multi_edges))
+    isacceptable = !has_multi_edges)
 
     check_consistency_polynomials(n,m,nedges,Lambda,Rho)
     for t in 1:maxtrials
@@ -181,6 +187,5 @@ function cycle_code(n::Int, R::Real; kw...)
     K = [fill(0,k-1); s; 1-s]
     K .*= K .> 1e-10
     K ./ sum(K)
-    H = permutedims(ldpc_matrix(n, m, nedges, Lambda, K, 
-        accept_multi_edges=false; kw...))
+    H = permutedims(ldpc_matrix(n, m, nedges, Lambda, K; kw...))
 end

@@ -46,24 +46,21 @@ function one_ldpc_matrix(n, m, nedges, Lambda, Rho, edgesleft, edgesright;
 end
 
 function check_consistency_polynomials(n,m,nedges,Lambda,Rho)
+    @assert all(x->x≥0, Lambda) "Variable degrees must be non-negative"
+    @assert all(x->x≥0, Rho) "Factor degrees must be non-negative"
+
     for (i,l) in pairs(Lambda)
         if !isinteger(round(n*l, digits=8))
-           println("Non integer number of variables with degree i: got ", n*l) 
+            @show n*Lambda
+           error("Non integer number of variables with degree i: got $(n*l)") 
         end
     end
     for (j,r) in pairs(Rho)
         if !isinteger(round(m*r, digits=8))
-            println("Non integer number of factors with degree j: got ", m*r) 
+            @show m*Rho
+            error("Non integer number of factors with degree j: got $(m*r)") 
          end
     end
-    nedges_variables = n*sum(i*l for (i,l) in pairs(Lambda))
-    nedges_factors = m*sum(j*r for (j,r) in pairs(Rho))
-    if nedges_variables == nedges_factors
-        nedges = nedges_variables
-    else
-        
-    end
-
     @assert isapprox(n*sum(i*l for (i,l) in pairs(Lambda)), nedges, atol=1e-1) 
     @assert isapprox(m*sum(j*r for (j,r) in pairs(Rho)), nedges, atol=1e-1)
     @assert isapprox(sum(Lambda), 1, atol=1e-8)

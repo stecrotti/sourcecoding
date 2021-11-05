@@ -250,5 +250,5 @@ function overlap1RSB_errorbars(Λ, K; popP, popQ, samples=size(popP,2), y=0.0,
         callback=callback)
     Favg = mean(f); Oavg = mean(o); Cavg = mean(c)
     Fstd = std(f, mean=Favg); Ostd = std(o, mean=Oavg); Cstd = std(c, mean=Cavg)
-    Favg, Oavg, Cavg, Fstd, Ostd, Cstd
+    Oavg, Favg, Cavg, Ostd, Fstd, Cstd
 end

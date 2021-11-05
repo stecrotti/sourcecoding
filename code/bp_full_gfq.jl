@@ -113,7 +113,7 @@ function iteration!(bp::BPFull{F,SVector{Q,T}}; maxiter=10^3, tol=1e-12,
         end
         # for a = 1:size(bp.H,1)
         for a in factors
-            errf = update_f!(bp, a, gftab..., factor_neigs[a], #uaux=uaux[a], 
+            errf = update_f!(bp, a, gftab..., factor_neigs[a], uaux=uaux[a], 
                 damp=damp)
             err[Threads.threadid()] = max(err[Threads.threadid()],errf)
         end

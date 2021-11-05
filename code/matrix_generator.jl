@@ -46,14 +46,26 @@ function one_ldpc_matrix(n, m, nedges, Lambda, Rho, edgesleft, edgesright;
 end
 
 function check_consistency_polynomials(n,m,nedges,Lambda,Rho)
-    for l in Lambda
-        @assert isinteger(round(n*l, digits=8))
+    for (i,l) in pairs(Lambda)
+        if !isinteger(round(n*l, digits=8))
+           println("Non integer number of variables with degree i: got ", n*l) 
+        end
     end
-    for r in Rho
-        @assert isinteger(round(m*r, digits=8))
+    for (j,r) in pairs(Rho)
+        if !isinteger(round(m*r, digits=8))
+            println("Non integer number of factors with degree j: got ", m*r) 
+         end
     end
-    @assert isapprox(n*sum(i*l for (i,l) in pairs(Lambda)), nedges, atol=1e-8) 
-    @assert isapprox(m*sum(j*r for (j,r) in pairs(Rho)), nedges, atol=1e-8)
+    nedges_variables = n*sum(i*l for (i,l) in pairs(Lambda))
+    nedges_factors = m*sum(j*r for (j,r) in pairs(Rho))
+    if nedges_variables == nedges_factors
+        nedges = nedges_variables
+    else
+        
+    end
+
+    @assert isapprox(n*sum(i*l for (i,l) in pairs(Lambda)), nedges, atol=1e-1) 
+    @assert isapprox(m*sum(j*r for (j,r) in pairs(Rho)), nedges, atol=1e-1)
     @assert isapprox(sum(Lambda), 1, atol=1e-8)
     @assert isapprox(sum(Rho), 1, atol=1e-8)
 end
@@ -112,8 +124,13 @@ function full_adjmat(H::SparseMatrixCSC, T::Type=eltype(H))
 end
 
 function isfullcore(H::SparseMatrixCSC, Ht=permutedims(H))
-    rowperm, dep, indep = leaf_removal(H)
+    rowperm, dep, indep = leaf_removal(H, Ht)
     length(rowperm) == size(H, 1)
+end
+
+function isfullrank(H::SparseMatrixCSC, Ht=permutedims(H))
+    B, indep = findbasis_slow(BitMatrix(H))
+    length(indep) == size(H,2) - size(H,1)
 end
 
 #### GF(q)

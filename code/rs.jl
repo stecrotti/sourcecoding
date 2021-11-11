@@ -41,22 +41,25 @@ end
 # OVERLAP
 
 function overlap_factor(q,k) 
-    2^k * sum(h*(sum(q[h:end])^k-sum(q[h+1:end])^k) for h=1:lastindex(q))
+    sum(h*((2sum(q[h:end]))^k-(2sum(q[h+1:end]))^k) for h=1:lastindex(q))
 end
 
 # RS COMPUTATION
 
 function RS(Pk, Λ; N=100, tol=1e-5, maxiter=100, damp=0.9, T=Float64)
-    ks = [k for k in eachindex(Pk) if Pk[k] > tol]
+    ks = [k for k in eachindex(Pk) if Pk[k] > tolù]
     ds = [d for d in eachindex(Λ) if Λ[d] > tol]
-    @assert sum(Pk[ks]) ≈ 1 && sum(Λ[ds]) ≈ 1
+    # @assert sum(Pk[ks]) ≈ 1 && sum(Λ[ds]) ≈ 1
     p = fill(one(T), -N:N); p ./= sum(p)
+    q = copy(p)
     for iter=1:maxiter
+        q1 = copy(q)
         q = sum(d*Λ[d]*iter_var(p, d-1) for d=ds)
         q ./= sum(q)
         p1 = sum(k*Pk[k]*iter_factor(q, k-1) for k=ks)
         p1 ./= sum(p1)
-        err = maximum(abs, p1 - p); err < tol && (@show err iter; break)
+        err = max(maximum(abs, q1 - q), maximum(abs, p1 - p))
+        err < tol && (@show err iter; break)
         p .= p .* damp .+ p1 .* (1-damp)
     end
     α = sum(d*Λ[d] for d=ds) / sum(k*Pk[k] for k=ks)

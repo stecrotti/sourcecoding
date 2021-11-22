@@ -34,9 +34,9 @@ function readseeds(seeds, H)
     end
 end
 
-function leaf_removal(H::SparseMatrixCSC, Ht = permutedims(H))
+function leaf_removal(H::SparseMatrixCSC, Ht = permutedims(H);
+        degs = vec(sum(H .!= 0, dims=1)))
     M, N = size(H)
-    degs = vec(sum(H .!= 0, dims=1))
     facts = trues(M)
     rowperm = Int32[]
     Q = Int32.(findall(degs .== 1))

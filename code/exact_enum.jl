@@ -141,27 +141,27 @@ function exact_wef_fast(B, indep, sources;
     m
 end
 
-function plot_wef(h::Vector{Int}; normalize=true, rescale=true, kw...)
+function plot_wef!(pl::Plots.Plot, h::Vector{<:Real}; 
+        label="WEF", plotmin=true, seriestype=:bar, kw...)
     n = length(h) - 1
     ff = findfirst(!iszero, h)
     ff === nothing && error("WEF vector is empty")
     m = ff - 1
     x = 0:n
-    xlab = "distortion"; ylab = "counts"
-    if normalize 
-        h = h ./ sum(h)
-        ylab = "normalized counts"
-    end
-    if rescale 
-        x = x ./ n
-        m = m / n
-        xlab = "distortion / n"
-    end
-    pl = Plots.bar(x, h, label="WEF", xlabel=xlab, ylabel=ylab)
-    Plots.vline!(pl, [m], label="min=$m")
-    Plots.plot!(pl; kw...)
+    h = h ./ sum(h) .* n
+    ylab = "normalized counts"
+    x = x ./ n
+    m = m / n
+    xlab = "distortion"
+    Plots.plot!(pl, x, h, label=label, xlabel=xlab, ylabel=ylab, st=seriestype; kw...)
+    plotmin && Plots.vline!(pl, [m], label="min=$m")
     pl
 end
+
+function plot_wef(h::Vector{Int}; kw...)
+    pl = Plots.plot()
+    plot_wef!(pl, h; kw...)
+end 
 
 function plot_wef_prob(h::Vector{Int}, β::Real, kw...)
     n = length(h) - 1

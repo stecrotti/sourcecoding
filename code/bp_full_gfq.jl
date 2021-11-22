@@ -543,33 +543,28 @@ function gftables(Q::Val{32})
     gfmult, gfdiv
 end
 function gftables(Q::Val{64})
-    wd = pwd()
-    cd(@__DIR__)
-    m = readdlm("tables_gfq/gf64_mul.txt", Int)
+    str = @__DIR__
+    m = readdlm(str*"/tables_gfq/gf64_mul.txt", Int)
     gfmult = SMatrix{64,64,Int}(m)
-    d = readdlm("tables_gfq/gf64_div.txt", Int)
+    d = readdlm(str*"/tables_gfq/gf64_div.txt", Int)
     gfdiv = SMatrix{64,64,Int}(d)
-    cd(wd)
     gfmult, gfdiv
 end
+
 function gftables(Q::Val{128})
-    wd = pwd()
-    cd(@__DIR__)
-    m = readdlm("tables_gfq/gf128_mul.txt", Int)
+    str = @__DIR__
+    m = readdlm(str*"/tables_gfq/gf128_mul.txt", Int)
     gfmult = SMatrix{128,128,Int}(m)
-    d = readdlm("tables_gfq/gf128_div.txt", Int)
+    d = readdlm(str*"/tables_gfq/gf128_div.txt", Int)
     gfdiv = SMatrix{128,128,Int}(d)
-    cd(wd)
     gfmult, gfdiv
 end
 function gftables(Q::Val{256})
-    wd = pwd()
-    cd(@__DIR__)
-    m = readdlm("tables_gfq/gf256_mul.txt", Int)
+    str = @__DIR__
+    m = readdlm(str*"/tables_gfq/gf256_mul.txt", Int)
     gfmult = SMatrix{256,256,Int}(m)
-    d = readdlm("tables_gfq/gf256_div.txt", Int)
+    d = readdlm(str*"/tables_gfq/gf256_div.txt", Int)
     gfdiv = SMatrix{256,256,Int}(d)
-    cd(wd)
     gfmult, gfdiv
 end
 

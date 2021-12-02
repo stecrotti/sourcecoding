@@ -10,6 +10,8 @@ function distortion(x::BitVector, y::BitVector)
     d
 end
 
+distortion(x::Integer, y::Integer) = count_ones( xor(x, y) )
+
 function hamming_weight(x::BitVector)
     w = 0
     for xc in x.chunks
@@ -68,6 +70,8 @@ function bitmult!(y::BitVector, Bt::AbstractMatrix{Bool}, x::BitVector)
     y
 end
 
+
+
 # Given a basis `B` and a list of `sources`, computes the exact weight 
 #  enumeration function w.r.t the zero codeword (`h0`) and with the
 #  sources (`h`). Also returns the (normalized) minimum distortions for
@@ -77,27 +81,31 @@ function exact_wef(B, sources=BitVector[]; showprogress=true,
     x = BitVector(undef, size(B,2)),
     h0 = zeros(Int, size(B,1)+1),
     h = [zeros(Int, size(B,1)+1) for _ in sources],
-    mins = fill(size(B,1), length(sources)))
+    mins = fill(Inf, length(sources)),
+    argmins = fill(0, length(sources)))
 
     n, k = size(B)
+    @assert all(x->length(x)==n, sources)
     @assert k < 64 "Adjust code for k larger than 64" 
 
     r = 64 * ( floor(Int, n/64) + 1)
+    # extend B so that #rows is a multiple of 64 => easier for multiplication
     BB = [B; falses(r-n, k)]
-    # Bt = permutedims(B)
     
     dt = showprogress ? 1.0 : Inf
     prog = ProgressMeter.Progress(2^k, dt=dt)
     for i in 0:2^k-1
         x.chunks[1] = i 
-        # bitmult!(y, Bt, x)
         bitmult_fast!(y, BB, x)
         d = hamming_weight(y)
         h0[d+1] += 1
         for (j,s) in enumerate(sources)
             d = distortion(y, s)
             h[j][d+1] += 1
-            mins[j] = min(mins[j], d)
+            if d < mins[j]
+                mins[j] = d
+                argmins[j] = i
+            end
         end
         ProgressMeter.next!(prog)
     end
@@ -145,14 +153,18 @@ function plot_wef!(pl::Plots.Plot, h::Vector{<:Real};
         label="WEF", plotmin=true, seriestype=:bar, kw...)
     n = length(h) - 1
     ff = findfirst(!iszero, h)
-    ff === nothing && error("WEF vector is empty")
+    ylab = "normalized counts"
+    xlab = "distortion"
+    if ff === nothing 
+        @warn "WEF vector is empty"
+        plotmin = false
+        return Plots.plot!(pl, [0.5], [NaN], label=label, xlabel=xlab, ylabel=ylab; kw...)
+    end
     m = ff - 1
     x = 0:n
     h = h ./ sum(h) .* n
-    ylab = "normalized counts"
     x = x ./ n
     m = m / n
-    xlab = "distortion"
     Plots.plot!(pl, x, h, label=label, xlabel=xlab, ylabel=ylab, st=seriestype; kw...)
     plotmin && Plots.vline!(pl, [m], label="min=$m")
     pl

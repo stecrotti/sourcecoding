@@ -36,6 +36,7 @@ end
 
 function leaf_removal(H::SparseMatrixCSC, Ht = permutedims(H);
         degs = vec(sum(H .!= 0, dims=1)))
+    degs .= vec(sum(H .!= 0, dims=1))
     M, N = size(H)
     facts = trues(M)
     rowperm = Int32[]

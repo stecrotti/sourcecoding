@@ -3,11 +3,12 @@ include("slim_graphs.jl")
 using Plots
 
 function distortion(x::BitVector, y::BitVector)
+    @assert length(x) == length(y)
     d = 0
     for (xx, yy) in zip(x.chunks, y.chunks)
         d += count_ones( xor(xx, yy) )
     end
-    d
+    d / length(x)
 end
 
 distortion(x::Integer, y::Integer) = count_ones( xor(x, y) )
@@ -31,9 +32,17 @@ function hamming(A::BitArray, B::BitArray)
     return W
 end
 
+function augment_basis(B)
+    n, k = size(B)
+    @assert k < 64
+    r = 64 * ( floor(Int, n/64) + 1)
+    BB = [B; falses(r-n, k)]
+end
+
 function bitmult_fast!(y::BitVector, B::BitMatrix, x::BitVector)
     n, k = size(B)
     @assert k < 64 "Adjust code for k larger than 64" 
+    @assert mod(n, 64) == 0 "number of rows must be a multiple of 64. Can use `augment_basis`"
     fill!(y, false)
     nchunks = Int(length(B.chunks) / k)
     for j in eachindex(x)
@@ -43,34 +52,21 @@ function bitmult_fast!(y::BitVector, B::BitMatrix, x::BitVector)
             end
         end
     end
-
-end
-
-# multiplies B*x given the transpose of B 
-function bitmult!(y::BitVector, Bt::SparseMatrixCSC{Bool,Int}, x::BitVector)
-    rows = rowvals(Bt)
-    for j in 1:size(Bt, 2)
-        z = false
-        for k in nzrange(Bt, j)
-            i = rows[k]
-            z = xor(z, x[i]*Bt[i,j])
-        end
-        y[j] = z
-    end
-    y
-end
-function bitmult!(y::BitVector, Bt::AbstractMatrix{Bool}, x::BitVector)
-    for j in 1:size(Bt, 2)
-        z = false
-        for i in 1:size(Bt, 1)
-            z = xor(z, x[i]*Bt[i,j])
-        end
-        y[j] = z
-    end
     y
 end
 
+function bitmult_fast!(y::BitVector, B::BitMatrix, x::Integer)
+    @assert 0 <= x <= UInt64(2) ^ 64 - 1
+    z = falses(64)
+    z.chunks[1] = x
+    bitmult_fast!(y, B, z)
+end
 
+# WARNING: size of y is determined by size of B which must be a multiple of 64
+function bitmult_fast(B::BitMatrix, x)
+    y = falses(size(B,1))
+    bitmult_fast!(y, B, x)
+end
 
 # Given a basis `B` and a list of `sources`, computes the exact weight 
 #  enumeration function w.r.t the zero codeword (`h0`) and with the
@@ -187,6 +183,30 @@ function plot_wef_prob(h::Vector{Int}, β::Real, kw...)
     Plots.plot!(pl; kw...)
     pl
 end
+
+# multiplies B*x given the transpose of B 
+# function bitmult!(y::BitVector, Bt::SparseMatrixCSC{Bool,Int}, x::BitVector)
+#     rows = rowvals(Bt)
+#     for j in 1:size(Bt, 2)
+#         z = false
+#         for k in nzrange(Bt, j)
+#             i = rows[k]
+#             z = xor(z, x[i]*Bt[i,j])
+#         end
+#         y[j] = z
+#     end
+#     y
+# end
+# function bitmult!(y::BitVector, Bt::AbstractMatrix{Bool}, x::BitVector)
+#     for j in 1:size(Bt, 2)
+#         z = false
+#         for i in 1:size(Bt, 1)
+#             z = xor(z, x[i]*Bt[i,j])
+#         end
+#         y[j] = z
+#     end
+#     y
+# end
 
 
 #### BENCHMARK

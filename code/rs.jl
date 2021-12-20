@@ -47,7 +47,7 @@ end
 # RS COMPUTATION
 
 function RS(Pk, Λ; N=100, tol=1e-5, maxiter=100, damp=0.9, T=Float64)
-    ks = [k for k in eachindex(Pk) if Pk[k] > tolù]
+    ks = [k for k in eachindex(Pk) if Pk[k] > tol]
     ds = [d for d in eachindex(Λ) if Λ[d] > tol]
     # @assert sum(Pk[ks]) ≈ 1 && sum(Λ[ds]) ≈ 1
     p = fill(one(T), -N:N); p ./= sum(p)
@@ -74,6 +74,8 @@ function RS(Pk, Λ; N=100, tol=1e-5, maxiter=100, damp=0.9, T=Float64)
     O -= α*sum(Pk[k]*overlap_factor(q,k) for k=ks) #fa
     Fa = α*sum(Pk[k]*overlap_factor(q,k) for k=ks); @show Fa
     @show O
+
+    @show p[-1:1]
 
     1-α, (1-O)/2, p, q
 end

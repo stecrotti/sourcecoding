@@ -438,7 +438,7 @@ end
 
 # PLOTTING
 function plot_rdb(; f30=true, f3=false) 
-    DD = 0.0001:0.001:0.5
+    DD = 0.0001:0.000001:0.5
     RR = 1 .+ DD.*log2.(DD) + (1 .- DD).*log2.(1 .- DD)
     pl = Plots.plot(RR, DD, label="Information bound")
     Plots.plot!(pl, RR, 0.5*(1 .- RR), label="Naive compression")

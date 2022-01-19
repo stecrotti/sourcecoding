@@ -116,10 +116,9 @@ function _next(v::Integer)
     t | ((((t & -t) ÷ (v & -v)) >> 1) - 1)
 end
 
-function exact_wef_fast(B, indep, sources; 
+function exact_wef_fast(B, indep, s; 
     y = BitVector(undef, size(B,1)),
-    x = BitVector(undef, size(B,2)),
-    dist = zeros(sources))
+    x = BitVector(undef, size(B,2)))
 
     n, k = size(B)
     @assert k < 64 "Adjust code for k larger than 64" 
@@ -145,8 +144,19 @@ function exact_wef_fast(B, indep, sources;
     m
 end
 
+function merge_wefs(W::Vector{Vector{Int}})
+    L = maximum(length, W)
+    w = zeros(Int, L)
+    for i in eachindex(W)
+        li = length(W[i])
+        w[1:li] .+= W[i]
+    end
+    return w ./ length(W)
+end
+
 function plot_wef!(pl::Plots.Plot, h::Vector{<:Real}; 
-        label="WEF", plotmin=true, seriestype=:bar, kw...)
+        label="WEF", plotmin=true, seriestype=:bar, 
+        normalize=true, kw...)
     n = length(h) - 1
     ff = findfirst(!iszero, h)
     ylab = "normalized counts"
@@ -156,9 +166,11 @@ function plot_wef!(pl::Plots.Plot, h::Vector{<:Real};
         plotmin = false
         return Plots.plot!(pl, [0.5], [NaN], label=label, xlabel=xlab, ylabel=ylab; kw...)
     end
+    if normalize
+        h = h ./ sum(h) .* n
+    end
     m = ff - 1
     x = 0:n
-    h = h ./ sum(h) .* n
     x = x ./ n
     m = m / n
     Plots.plot!(pl, x, h, label=label, xlabel=xlab, ylabel=ylab, st=seriestype; kw...)
@@ -166,7 +178,7 @@ function plot_wef!(pl::Plots.Plot, h::Vector{<:Real};
     pl
 end
 
-function plot_wef(h::Vector{Int}; kw...)
+function plot_wef(h::Vector{<:Real}; kw...)
     pl = Plots.plot()
     plot_wef!(pl, h; kw...)
 end 
@@ -207,19 +219,24 @@ function islinearindep(B, v; Baux=[B v])
     return !all(iszero, Baux[:,end])
 end
 
-function lightest_basis(BB, n::Int; y = falses(n), x = falses(size(BB,2)))
+function lightest_basis(BB, indep, n::Int; y = falses(n), x = falses(size(BB,2)),
+        showprogress=true)
     nn, k = size(BB)
+    @assert length(indep) == k 
     @assert mod(nn, 64)==0 "nn=$nn"
-    Blight = falses(nn, 0)
-    prog = ProgressUnknown(desc="Finding lightest basis", dt=10)
+    Blight = falses(k, 0)
+    dt = showprogress ? 1.0 : Inf
+    prog = ProgressUnknown(desc="Finding lightest basis", dt=dt)
     for w in 1:n
         cws = cws_of_weight_w(BB, w, n; y=y, x=x)
         for c in cws 
-            z = bitmult_fast(BB, c)
+            z = bitmult_fast(BB, c)[indep]
             # try to add c to the basis
             islinearindep(Blight, z) && (Blight = [Blight z])
             # if basis complete, return
-            size(Blight, 2) == k && return Blight, w
+            if size(Blight, 2) == k
+                return Blight, w + 1 # the identity part adds weight 1 to each vector
+            end
         end
         next!(prog, showvalues=[("weight", w)])
     end

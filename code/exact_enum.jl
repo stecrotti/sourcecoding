@@ -12,7 +12,7 @@ distortion(x::Integer, y::Integer) = count_ones( xor(x, y) )
 function hamming(x::BitVector)
     w = 0
     xc = x.chunks
-    for i in 1:(length(xc)-1)
+    @inbounds for i in 1:(length(xc)-1)
         w += count_ones(xc[i])
     end
     w += count_ones(xc[end] & Base._msk_end(x))
@@ -23,7 +23,7 @@ function hamming(A::BitArray, B::BitArray)
     #size(A) == size(B) || throw(DimensionMismatch("sizes of A and B must match"))
     Ac,Bc = A.chunks, B.chunks
     W = 0
-    for i = 1:(length(Ac)-1)
+    @inbounds for i = 1:(length(Ac)-1)
         W += count_ones(Ac[i] ⊻ Bc[i])
     end
     W += count_ones(Ac[end] ⊻ Bc[end] & Base._msk_end(A))
@@ -43,7 +43,7 @@ function bitmult_fast!(y::BitVector, B::BitMatrix, x::BitVector)
     @assert mod(n, 64) == 0 "number of rows must be a multiple of 64. Can use `augment_basis`"
     fill!(y, false)
     nchunks = Int(length(B.chunks) / k)
-    for j in eachindex(x)
+    @inbounds for j in eachindex(x)
         if x[j] != 0
             for i in eachindex(y.chunks)
                 y.chunks[i] ⊻= B.chunks[i + (j-1)*nchunks]
@@ -203,7 +203,7 @@ function cws_of_weight_w(BB, w::Int, n::Int;
     @assert mod(nn, 64)==0 "nn=$nn"
     cws = typeof(x.chunks[1])[]
     for i in 0:2^k-1
-        x.chunks[1] = i 
+        @inbounds x.chunks[1] = i 
         bitmult_fast!(y, BB, x)
         d = hamming(y)
         if d == w
@@ -229,12 +229,12 @@ function lightest_basis(BB, indep, n::Int; y = falses(n), x = falses(size(BB,2))
     for w in 1:n
         cws = cws_of_weight_w(BB, w, n; y=y, x=x)
         for c in cws 
-            z = bitmult_fast(BB, c)[indep]
+            @inbounds z = bitmult_fast(BB, c)[indep]
             # try to add c to the basis
             islinearindep(Blight, z) && (Blight = [Blight z])
             # if basis complete, return
             if size(Blight, 2) == k
-                Blight_full = reduce(hcat, bitmult_fast(BB, Blight[:,j]) for j in 1:size(Blight,2))
+                @inbounds Blight_full = reduce(hcat, bitmult_fast(BB, Blight[:,j]) for j in 1:size(Blight,2))
                 return Blight_full, w # the identity part adds weight 1 to each vector
             end
         end

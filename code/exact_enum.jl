@@ -4,20 +4,18 @@ using Plots
 
 function distortion(x::BitVector, y::BitVector)
     @assert length(x) == length(y)
-    d = 0
-    for (xx, yy) in zip(x.chunks, y.chunks)
-        d += count_ones( xor(xx, yy) )
-    end
-    d / length(x)
+    hamming(x,y) / length(x)
 end
 
 distortion(x::Integer, y::Integer) = count_ones( xor(x, y) )
 
 function hamming(x::BitVector)
     w = 0
-    for xc in x.chunks
-        w += count_ones(xc)
+    xc = x.chunks
+    for i in 1:(length(xc)-1)
+        w += count_ones(xc[i])
     end
+    w += count_ones(xc[end] & Base._msk_end(x))
     w
 end
 

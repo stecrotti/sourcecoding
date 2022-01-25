@@ -198,6 +198,7 @@ end
 
 ### LIGHTEST BASIS    
 
+# list the numbers of all codewords with weight == w
 function cws_of_weight_w(BB, w::Int, n::Int; 
         y = falses(n), x = falses(size(BB,2)))
     nn, k = size(BB)
@@ -235,12 +236,22 @@ function lightest_basis(BB, indep, n::Int; y = falses(n), x = falses(size(BB,2))
             islinearindep(Blight, z) && (Blight = [Blight z])
             # if basis complete, return
             if size(Blight, 2) == k
-                return Blight, w + 1 # the identity part adds weight 1 to each vector
+                Blight_full = reduce(hcat, bitmult_fast(BB, Blight[:,j]) for j in 1:size(Blight,2))
+                return Blight_full, w # the identity part adds weight 1 to each vector
             end
         end
         next!(prog, showvalues=[("weight", w)])
     end
     error("Something went wrong")
+end
+
+# compute WEF only for basis vectors B
+function basis_wef(B, w=zeros(Int, size(B,1)))    
+    for j in 1:size(B,2)
+        x = sum(B[:,j])
+        w[x] += 1
+    end
+    w
 end
 
 ### STUFF FOR CLUSTER EXPLORATION 2 NOTEBOOK

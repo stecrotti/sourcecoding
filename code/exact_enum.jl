@@ -218,6 +218,7 @@ function islinearindep(B, v; Baux=[B v])
     return !all(iszero, Baux[:,end])
 end
 
+# BB is an "augmented" basis with zeros at the bottom to get #rows multiple of 64
 function lightest_basis(BB, indep, n::Int; y = falses(n), x = falses(size(BB,2)),
         showprogress=true)
     nn, k = size(BB)

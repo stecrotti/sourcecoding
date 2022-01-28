@@ -228,23 +228,28 @@ function findbasis_slow(H)
     B, indep
 end
 
-function gfrcefGF2!(H::AbstractArray{<:Number,2})
+function gfrcefGF2!(H::AbstractArray{<:Number,2}; dep = Int[])
     (n,m) = size(H)
     # Initialize pivot to zero
-    dep = Int[]
     p = 0
+    empty!(dep)
     for r = 1:n
-        nz = findfirst(!iszero, H[r,p+1:end])
+        nz = findfirst(!iszero, @view H[r,p+1:end])
         if nz === nothing
             continue
         else
             p += 1
             push!(dep, r)
             if nz != 1
-                H[:,p], H[:,p+nz-1] = H[:,p+nz-1], H[:,p]
+                # H[:,p], H[:,p+nz-1] = @views H[:,p+nz-1], H[:,p]
+                # swap columns p and p+nz-1
+                for i in 1:n
+                    H[i,p], H[i,p+nz-1] = H[i,p+nz-1], H[i,p]
+                end
             end
             # Apply colum-wise xor to rows left and right of the pivot
-            for c = [1:p-1; p+1:m]
+            for c in 1:m
+                c == p && continue
                 if H[r,c] != 0
                     for rr in r:n
                         H[rr,c] = xor(H[rr,c], H[rr,p])

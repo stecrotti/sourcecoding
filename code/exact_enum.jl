@@ -213,8 +213,8 @@ function cws_of_weight_w(BB, w::Int, n::Int;
     cws
 end
 
-function islinearindep(B, v; Baux=[B v])
-    gfrcefGF2!(Baux)
+function islinearindep(B, v; Baux=[B v], dep=Int[])
+    gfrcefGF2!(Baux, dep=dep)
     return !all(iszero, Baux[:,end])
 end
 
@@ -227,16 +227,17 @@ function lightest_basis(BB, indep, n::Int; y = falses(n), x = falses(size(BB,2))
     Blight = falses(k, 0)
     dt = showprogress ? 1.0 : Inf
     prog = ProgressUnknown(desc="Finding lightest basis", dt=dt)
+    dep=Int[]
     for w in 1:n
         cws = cws_of_weight_w(BB, w, n; y=y, x=x)
         for c in cws 
             @inbounds z = bitmult_fast(BB, c)[indep]
             # try to add c to the basis
-            islinearindep(Blight, z) && (Blight = [Blight z])
+            islinearindep(Blight, z, dep=dep) && (Blight = [Blight z])
             # if basis complete, return
             if size(Blight, 2) == k
                 @inbounds Blight_full = reduce(hcat, bitmult_fast(BB, Blight[:,j]) for j in 1:size(Blight,2))
-                return Blight_full, w # the identity part adds weight 1 to each vector
+                return Blight_full[1:n,:], w
             end
         end
         next!(prog, showvalues=[("weight", w)])
@@ -245,8 +246,8 @@ function lightest_basis(BB, indep, n::Int; y = falses(n), x = falses(size(BB,2))
 end
 
 
-function islinearindep!(Baux)
-    gfrcefGF2!(Baux)
+function islinearindep!(Baux; dep=Int[])
+    gfrcefGF2!(Baux, dep=dep)
     return !all(iszero, Baux[:,end])
 end
 
@@ -260,23 +261,24 @@ function lightest_basis2(BB, indep, n::Int; y = falses(n), x = falses(size(BB,2)
     dt = showprogress ? 1.0 : Inf
     prog = ProgressUnknown(desc="Finding lightest basis", dt=dt)
     c = copy(x)
+    dep = Int[]
     for w in 1:n
-        #cws = cws_of_weight_w(BB, w, n; y=y, x=x)
         for i in 0:2^k-1
             c.chunks[1] = i
             bitmult_fast!(y, BB, c)
             d = hamming(y)
             d == w || continue
-
-            # z = y[indep]
             # try to add c to the basis
             Blight[:,end] .= c
             Baux .= Blight
-            islinearindep!(Baux) && (Blight = [Blight falses(k)]; Baux=copy(Blight))
-            # if basis complete, return
-            if size(Blight, 2) == k
-                Blight_full = reduce(hcat, bitmult_fast(BB, Blight[:,j]) for j in 1:size(Blight,2))
-                return Blight_full, w # the identity part adds weight 1 to each vector
+            if islinearindep!(Baux, dep=dep) 
+                Blight = [Blight falses(k)]
+                Baux = copy(Blight)
+                # if basis complete, return
+                if size(Blight, 2) == k + 1
+                    Blight_full = reduce(hcat, bitmult_fast(BB, Blight[:,j]) for j in 1:size(Blight,2)-1)
+                    return Blight_full[1:n,:], w 
+                end
             end
         end
         next!(prog, showvalues=[("weight", w)])

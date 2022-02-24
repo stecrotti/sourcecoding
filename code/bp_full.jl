@@ -87,21 +87,24 @@ function iteration!(bp::BPFull; maxiter=10^3, tol=1e-12, damp=0.0, rein=0.0,
         factors=rand(1:size(bp.H,1), size(bp.H,1)÷2),
         callback=(it, ε, bp)->false)
     
-    ε = 0.0
+    errv = zeros(nvars(bp)); errf = zeros(nfactors(bp)); ε = 0.0
     for it = 1:maxiter
         Threads.@threads for i ∈ vars
-            errv = update_v!(bp, i, damp=damp, rein=rein)
-            errv == -1 && return -1,it
-            ε = max(ε, errv)
+            errv[i] = update_v!(bp, i, damp=damp, rein=rein)
+            errv[i] == -1 && return -1,it
+            # ε = max(ε, errv)
+            # ε += errv
         end
+        ε = maximum(errv)
         Threads.@threads for a ∈ factors
-            errf = update_f!(bp, a, factor_neigs[a], damp=damp)
-            errf == -1 && return -1,it
-            ε = max(ε, errf)
+            errf[a] = update_f!(bp, a, factor_neigs[a], damp=damp)
+            errf[a] == -1 && return -1,it
+            # ε = max(ε, errf)
+            # ε += errf
         end
+        ε = max(ε, maximum(errf))
         callback(it, ε, bp) && return ε,it
         ε < tol && return ε, it
-        ε = 0.0
         vars .= rand(1:size(bp.H,2), length(vars))
         factors .= rand(1:size(bp.H,1), length(factors))
     end
@@ -302,6 +305,20 @@ function cb_decimation(ε, nunsat, bp::BPFull, nfree, ovl, dist, iters, step, ma
 end
 
 
+function beliefs_as_fields(belief)
+    [Int((b[2]-b[1])/2) for b in belief]
+end
+
+function beliefs_hist(belief)
+    n = length(belief)
+    h = fill(0, -n:n)
+    for i in 1:n
+        b = belief[i]
+        bb = Int((b[2]-b[1])/2)
+        h[bb] += 1
+    end
+    h ./ sum(h)
+end
 
 
 

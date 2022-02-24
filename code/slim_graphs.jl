@@ -65,7 +65,7 @@ function leaf_removal(H::SparseMatrixCSC, Ht = permutedims(H);
             end
         end
     end
-    all(degs .==  0) || @warn "non-empty core"
+    all(degs .==  0) || (@warn "non-empty core")
     rowperm, dep, indep
 end
 

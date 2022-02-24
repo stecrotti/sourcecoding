@@ -4,7 +4,7 @@ using BlossomV, LinearAlgebra, SparseArrays
 # Xiaofeng Gu1, Kamesh Madduri, K. Subramani and Hong-Jian Lai
 
 function optimal_cycle(G)
-    G = sparse(G)
+    G = convert(SparseMatrixCSC,G)
     @assert issymmetric(G)
     rows, weights  = rowvals(G), nonzeros(G)
     ∂(i) = zip((@view rows[nzrange(G,i)]), (@view weights[nzrange(G,i)]))
@@ -78,7 +78,7 @@ function one_loop_flip!(A::SparseMatrixCSC, H::SparseMatrixCSC, σ, efield)
     return op, to_flip, w
 end
 
-function neutralize_leaves!(H::AbstractMatrix)
+function neutralize_leaves(H::AbstractMatrix)
     leaves = sum(H, dims=1) .== 1
     any(leaves) && (H = vcat(H, leaves))
     H
@@ -99,7 +99,7 @@ function findsol(H::SparseMatrixCSC, efield::Vector{<:Real},
     maxiter::Int=50,verbose::Bool=true) 
 
     # Close leaves in a loop
-    neutralize_leaves!(H)
+    H = neutralize_leaves(H)
     m,n = size(H)
     A = full_adjmat(H, eltype(efield))
     ovl = fill(NaN, maxiter)
@@ -122,6 +122,100 @@ function findsol(H::SparseMatrixCSC, efield::Vector{<:Real},
     end
     @warn "Optmal cycle: did not use all iters. Consider increasing `maxiter`"
     return -Inf, ovl, σ
+end
+
+### COMPUTE BELIEFS WITH OPTIMAL ALGO 
+# TODO: add escape if variable can't be fixed (i.e. a factor is a leaf)
+is_isolated(i::Integer, H) = isempty(nzrange(H, i))
+is_leaf(i::Integer, H) = length(nzrange(H, i)) == 1
+function exact_belief(H, efield, s, i::Integer; kw...)
+    is_isolated(i, H) && return -s[i]
+    # is_leaf(i, H) && 
+    n = length(s)
+    ef_original = efield[i]
+    efield[i] = +n
+    _,_,σ_plus = findsol(H, efield, s, verbose=false; kw...)
+    @assert σ_plus[i] == +1 "Couldn't fix variable $i to +1"
+    o_plus = -sum(σ_plus's)
+    efield[i] = -n
+    _,_,σ_minus = findsol(H, efield, s, verbose=false; kw...)
+    @assert σ_minus[i] == -1 "Couldn't fix variable $i to -1"
+    o_minus = -sum(σ_minus's)
+    efield[i] = ef_original
+    Int((o_plus - o_minus)/2)
+end
+
+function exact_beliefs!(h, H, s; indices=eachindex(s), kw...)
+    efield = copy(s)
+    for j in indices
+        b = exact_belief(H, efield, s, j; kw...)
+        h[b] += 1
+    end
+    h
+end
+exact_beliefs(H, s; kw...) = (n=length(s); h = fill(0, -n:n); exact_beliefs!(h, H, s; kw...); h)
+
+function exact_h_fields(H, Ht, s; showprogress=true, kw...)
+    h = zeros(Int, nnz(H))
+    n, m = size(Ht)
+    efield = copy(s)
+    prog = Progress(m, dt=showprogress ? 0.1 : Inf)
+    for a in 1:m
+        H_cavity = H[[1:a-1; a+1:end],:]
+        for k in nzrange(Ht, a)
+            i = Ht.rowval[k]
+            h[k] = exact_belief(H_cavity, s, efield, i)
+        end
+        next!(prog)
+    end
+    h
+end
+
+function exact_u_fields(H, Ht, s; showprogress=true, kw...)
+    u = zeros(Int, nnz(H))
+    n, m = size(Ht)
+    efield = copy(s)
+    prog = Progress(n, dt=showprogress ? 0.1 : Inf)
+    for i in 1:n
+        ∂i = nzrange(H, i)
+        efield_old = efield[i]
+        efield[i] = 0
+        ∂i_vars = @views H.rowval[∂i]
+        for k in ∂i
+            a = H.rowval[k]
+            ∂i_cavity = setdiff(∂i_vars, a)
+            H_cavity = H[setdiff(1:m, ∂i_cavity),:]
+            u[k] = exact_belief(H_cavity, s, efield, i)
+        end
+        efield[i] = efield_old
+        next!(prog)
+    end
+    u
+end
+
+using Graphs
+SG(H) = SimpleGraph(full_adjmat(H))
+# generate some tree starting from graph H
+function tree(H)
+    g = SG(H)
+    @assert is_connected(g)
+    t = SimpleGraphFromIterator( kruskal_mst(g) )
+    m = bipartite_map(t)
+    g1 = findall(m.==1); g2 = findall(m.==2)
+    d1 = maximum( degree.((t,), g1) ); d2 = maximum( degree.((t,), g2) )
+    fs, vs = argmax((d1,d2)) == 1 ? (g1,g2) : (g2,g1)
+    fdegrees = [(v,degree(t,v)) for v in fs]
+    # avoid factor leaves
+    for ff in fdegrees
+        ff[2]==1 || continue
+        @assert add_vertex!(t)
+        @assert add_edge!(t, ff[1], last(vertices(t)))
+    end
+    m = bipartite_map(t)
+    g1 = findall(m.==1); g2 = findall(m.==2)
+    d1 = maximum( degree.((t,), g1) ); d2 = maximum( degree.((t,), g2) )
+    fs, vs = argmax((d1,d2)) == 1 ? (g1,g2) : (g2,g1)
+    A = adjacency_matrix(t, Bool)[fs, vs]
 end
 
 

@@ -53,6 +53,22 @@ function bitmult_fast!(y::BitVector, B::BitMatrix, x::BitVector)
     y
 end
 
+function bitmult_fast_hamming(B::BitMatrix, x::BitVector)
+    n, k = size(B)
+    @assert k < 64 "Adjust code for k larger than 64" 
+    @assert mod(n, 64) == 0 "number of rows must be a multiple of 64. Can use `augment_basis`"
+    nchunks = Int(length(B.chunks) / k)
+    
+    for i in eachindex(y.chunks)
+        @inbounds for j in eachindex(x)
+            if x[j] != 0
+                y.chunks[i] ⊻= B.chunks[i + (j-1)*nchunks]
+            end
+        end
+    end
+    y
+end
+
 function bitmult_fast!(y::BitVector, B::BitMatrix, x::Integer)
     @assert 0 <= x <= UInt64(2) ^ 64 - 1
     z = falses(64)
@@ -157,22 +173,21 @@ function plot_wef!(pl::Plots.Plot, h::Vector{<:Real};
         normalize=true, kw...)
     n = length(h) - 1
     ff = findfirst(!iszero, h)
-    ylab = "normalized counts"
-    xlab = "distortion"
+    ylab = "counts"
+    xlab = "normalized weight"
     if ff === nothing 
         @warn "WEF vector is empty"
         plotmin = false
         return Plots.plot!(pl, [0.5], [NaN], label=label, xlabel=xlab, ylabel=ylab; kw...)
     end
     if normalize
-        h = h ./ sum(h) .* n
+        h = h ./ mean(h)
+        ylab = "normalized "*ylab
     end
     m = ff - 1
-    x = 0:n
-    x = x ./ n
-    m = m / n
+    x = (0:n) ./ n
     Plots.plot!(pl, x, h, label=label, xlabel=xlab, ylabel=ylab, st=seriestype; kw...)
-    plotmin && Plots.vline!(pl, [m], label="min=$m")
+    plotmin && Plots.vline!(pl, [m/n], label="min=$(m/n)")
     pl
 end
 
@@ -295,6 +310,29 @@ function basis_wef(B, w=zeros(Int, size(B,1)))
         w[x] += 1
     end
     w
+end
+
+function findsol_bruteforce(B, efield, x0=sign.(efield).==-1;
+        x = falses(size(B,2)), xmin = falses(length(efield)), yy = copy(xmin), y = falses(size(B,1)))
+    n, k = size(B)
+    @assert k < 64 "Adjust code for k larger than 64" 
+    @assert mod(n, 64) == 0 "number of rows must be a multiple of 64. Can use `augment_basis`"
+
+    n = length(efield)
+    Emin = typemax(Int)
+    dmin = n
+    for i in 0:2^k-1
+        x = bitarray(i, k)
+        bitmult_fast!(y, B, x)
+        yy .= y[1:n]
+        d = hamming(yy, x0)
+        E = -sum(efield[i]*bool2spin(yy[i]) for i in eachindex(yy))
+        if E < Emin
+            Emin = E; dmin = d
+            xmin .= yy
+        end
+    end
+    xmin, Emin, dmin 
 end
 
 ### STUFF FOR CLUSTER EXPLORATION 2 NOTEBOOK

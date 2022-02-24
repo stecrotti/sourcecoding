@@ -203,3 +203,13 @@ function cycle_code(n::Int, R::Real; kw...)
     K ./ sum(K)
     H = permutedims(ldpc_matrix(n, m, nedges, Lambda, K; kw...))
 end
+
+function cycle_code(n::Int, K::Vector{Int}; kw...)
+    nedges = 2n
+    m = round(Int, nedges / sum(j*K[j] for j in eachindex(K)) )
+    Lambda = [0, 1]
+    Ht = ldpc_matrix(n, m, nedges, Lambda, K; kw...)
+    H = permutedims(Ht)
+    H, Ht
+end
+

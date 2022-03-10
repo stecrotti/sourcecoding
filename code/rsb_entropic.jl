@@ -27,16 +27,17 @@ function BP_tu(s, ths)
 end
 
 conv(h1::Tuple, h2::Tuple) = tuple(h1[1]*h2[1]+h1[2]*h2[2], h1[1]*h2[2]+h1[2]*h2[1]) 
-function BP_th_conv(H, tus)
-    th = (exp(H), exp(-H))
+function BP_th_conv(sH, tus)
+    th = (exp(sH), exp(-sH))
     for tu in tus
         th = th.*tu
     end
     th ./ sum(th)
 end
-function BP_tu_conv(s, ths)
-   tu = s==1 ? tuple(1.0,0.0) : tuple(0.0,1.0)
-   for i in eachindex(ths)
+function BP_tu_conv(ths)
+    # tu = s==1 ? tuple(1.0,0.0) : tuple(0.0,1.0)
+    tu = (1.0, 0.0)
+    for i in eachindex(ths)
        tu = conv(tu, ths[i]) 
     end
     tu
@@ -79,8 +80,7 @@ function RS(Λ, K, H;
             k = sample(eachindex(K1), wK1)
             ind_ths = rand(1:popsize, k)
             ths = popP_RS[ind_ths]            
-            s = rand((-1,1))
-            popQ_RS[i] = BP_tu_conv(s, ths)
+            popQ_RS[i] = BP_tu_conv(ths)
         end
         
         q0[t]=0.0
@@ -89,7 +89,8 @@ function RS(Λ, K, H;
             d = sample(collect(eachindex(Λ1)), wΛ1)#d = sample(eachindex(Λ1), wΛ1)
             ind_tus = rand(1:popsize, d)
             tus = popQ_RS[ind_tus]
-            popP_RS[i] = BP_th_conv(H, tus)
+            s = rand((-1,1))
+            popP_RS[i] = BP_th_conv(H*s, tus)
             
             q0[t]+=(popP_RS[i][1]-popP_RS[i][2])^2
         end
@@ -112,7 +113,8 @@ function distorsion_RS(Λ, K, H, popP_RS, popQ_RS;
         d = sample(eachindex(Λ), wΛ)
         ind_tus = rand(1:popsize, d)
         tus = popQ_RS[ind_tus]
-        th = BP_th_conv(H, tus)
+        s = rand((-1,1))
+        th = BP_th_conv(H*s, tus)
         O += th[1]-th[2]
     end
     O =O/maxiter
@@ -255,8 +257,7 @@ function RSB_entropic_m1(Λ, K, H, popP_RS, popQ_RS;
             k = sample(eachindex(K1), wK1)
             ind_ths = rand(1:popsize, k)
             ths = popP[:,ind_ths]            
-            s = rand((-1,1))
-            popQ[0,i] = BP_tu_conv(s, ths[0,:])
+            popQ[0,i] = BP_tu_conv(ths[0,:])
             #@show ind_ths, s
             
             ν = fill(0.0, 1:2^k)
@@ -267,7 +268,7 @@ function RSB_entropic_m1(Λ, K, H, popP_RS, popQ_RS;
             σ = convert.(Int64, σs[ind])
             #@show σ
             elts = [ths[s,i] for (i,s) ∈ zip(eachindex(σ), σ)]
-            popQ[1,i] = BP_tu_conv(s, elts)
+            popQ[1,i] = BP_tu_conv(elts)
 
             ν = fill(0.0, 1:2^k)
             σs = fill(tuple(fill(NaN, k)...), 1:2^k)
@@ -277,7 +278,7 @@ function RSB_entropic_m1(Λ, K, H, popP_RS, popQ_RS;
             σ = convert.(Int64, σs[ind])
             #@show σ
             elts = [ths[s,i] for (i,s) ∈ zip(eachindex(σ), σ)]
-            popQ[-1,i] = BP_tu_conv(s, elts)
+            popQ[-1,i] = BP_tu_conv(elts)
         end
 
         for i = 1:popsize
@@ -285,9 +286,10 @@ function RSB_entropic_m1(Λ, K, H, popP_RS, popQ_RS;
             ind_tus = rand(1:popsize, d)
             tus = popQ[:,ind_tus]
             #@show ind_tus
-            popP[0,i] = BP_th_conv(H, tus[0,:])
-            popP[-1,i] = BP_th_conv(H, tus[-1,:])
-            popP[1,i] = BP_th_conv(H, tus[1,:])
+            s = rand((-1,1))
+            popP[0,i] = BP_th_conv(H*s, tus[0,:])
+            popP[-1,i] = BP_th_conv(H*s, tus[-1,:])
+            popP[1,i] = BP_th_conv(H*s, tus[1,:])
             
             m0 = popP[0,i][1]-popP[0,i][2]; m1 = popP[1,i][1]-popP[1,i][2]; mm1 = popP[-1,i][1]-popP[-1,i][2]
             q0[t]+= m0^2

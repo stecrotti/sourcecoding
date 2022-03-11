@@ -79,7 +79,7 @@ function RS(Λ, K, H;
         for i = 1:popsize
             k = sample(eachindex(K1), wK1)
             ind_ths = rand(1:popsize, k)
-            ths = popP_RS[ind_ths]            
+            ths = @view popP_RS[ind_ths]            
             popQ_RS[i] = BP_tu_conv(ths)
         end
         
@@ -88,7 +88,7 @@ function RS(Λ, K, H;
         for i = 1:popsize
             d = sample(collect(eachindex(Λ1)), wΛ1)#d = sample(eachindex(Λ1), wΛ1)
             ind_tus = rand(1:popsize, d)
-            tus = popQ_RS[ind_tus]
+            tus = @view popQ_RS[ind_tus]
             s = rand((-1,1))
             popP_RS[i] = BP_th_conv(H*s, tus)
             

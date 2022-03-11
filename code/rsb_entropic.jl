@@ -37,8 +37,8 @@ end
 function BP_tu_conv(ths)
     # tu = s==1 ? tuple(1.0,0.0) : tuple(0.0,1.0)
     tu = (1.0, 0.0)
-    for i in eachindex(ths)
-       tu = conv(tu, ths[i]) 
+    for t in ths
+       tu = conv(tu, t)
     end
     tu
 end
@@ -55,7 +55,7 @@ function dist_sigmas(s, ths_0, σs, ν)
         end
     end
     ν ./= sum(ν)
-    ν, σs
+    ν
 end
 
 function RS(Λ, K, H; 
@@ -262,27 +262,28 @@ function RSB_entropic_m1(Λ, K, H, popP_RS, popQ_RS;
             
             ν = fill(0.0, 2^k)
             σs = fill(tuple(fill(NaN, k)...), 2^k)
-            ν, σs2 = dist_sigmas(1, ths[0,:], σs, ν)
+            ν = dist_sigmas(1, ths[0,:], σs, ν)
             wν = weights(ν)
             ind = sample(eachindex(ν), wν)
-            σ = convert.(Int64, σs2[ind])
+            σ = convert.(Int64, σs[ind])
             #@show σ
-            elts = [ths[s,i] for (i,s) ∈ zip(eachindex(σ), σ)]
+            elts = (ths[s,i] for (i,s) ∈ enumerate(σ))
             popQ[1,i] = BP_tu_conv(elts)
 
             ν .= 0
-            σs .= Ref(tuple(fill(NaN, k)...))
-            ν, σs2 = dist_sigmas(-1, ths[0,:], σs, ν)
+            fill!(σs, tuple(fill(NaN, k)...))
+            ν  = dist_sigmas(-1, ths[0,:], σs, ν)
             wν = weights(ν)
             ind = sample(eachindex(ν), wν)
-            σ = convert.(Int64, σs2[ind])
+            σ = convert.(Int64, σs[ind])
             #@show σ
-            elts = [ths[s,i] for (i,s) ∈ zip(eachindex(σ), σ)]
+            elts = (ths[s,i] for (i,s) ∈ enumerate(σ))
             popQ[-1,i] = BP_tu_conv(elts)
         end
 
         for i = 1:popsize
-            d = sample(collect(eachindex(Λ1)), wΛ1)#d = sample(eachindex(Λ1), wΛ1)
+            #d = sample(collect(eachindex(Λ1)), wΛ1)
+            d = sample(eachindex(Λ1), wΛ1)
             ind_tus = rand(1:popsize, d)
             tus = @view popQ[:,ind_tus]
             #@show ind_tus
@@ -348,7 +349,7 @@ function factor_internal_freeenergy(K, popP, maxiter)
         s = rand((-1,1))
         ν = fill(0.0, 1:2^k)
         σs = fill(tuple(fill(NaN, k)...), 1:2^k)
-        ν, σs = dist_sigmas(s, ths[0,:], σs, ν)
+        ν = dist_sigmas(s, ths[0,:], σs, ν)
         wν = weights(ν)
         ind = sample(eachindex(ν), wν)
         σ = convert.(Int64, σs[ind])

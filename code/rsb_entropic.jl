@@ -271,7 +271,7 @@ function RSB_entropic_m1(Λ, K, H, popP_RS, popQ_RS;
             popQ[1,i] = BP_tu_conv(elts)
 
             ν .= 0
-            σs .= tuple(fill(NaN, k)...)
+            σs .= Ref(tuple(fill(NaN, k)...))
             ν, σs2 = dist_sigmas(-1, ths[0,:], σs, ν)
             wν = weights(ν)
             ind = sample(eachindex(ν), wν)

@@ -97,7 +97,7 @@ function RS(Λ, K, H;
         
         q0[t] = q0[t]/length(popP_RS)
         dist_RS[t]=distorsion_RS(Λ, K, H, popP_RS, popQ_RS)
-        Fe_RS[t]=F_RS(Λ, K, H, popP_RS, popQ_RS, maxiter=10^5)
+        #Fe_RS[t]=F_RS(Λ, K, H, popP_RS, popQ_RS, maxiter=10^5)
     end
     popP_RS, popQ_RS, q0, dist_RS, Fe_RS
 end
@@ -115,7 +115,7 @@ function distorsion_RS(Λ, K, H, popP_RS, popQ_RS;
         tus = popQ_RS[ind_tus]
         s = rand((-1,1))
         th = BP_th_conv(H*s, tus)
-        O += th[1]-th[2]
+        O += s*(th[1]-th[2])
     end
     O =O/maxiter
     (1-O)/2
@@ -262,7 +262,7 @@ function RSB_entropic_m1(Λ, K, H, popP_RS, popQ_RS;
             
             ν = fill(0.0, 1:2^k)
             σs = fill(tuple(fill(NaN, k)...), 1:2^k)
-            ν, σs = dist_sigmas(s, ths[0,:], σs, ν)
+            ν, σs = dist_sigmas(1, ths[0,:], σs, ν)
             wν = weights(ν)
             ind = sample(eachindex(ν), wν)
             σ = convert.(Int64, σs[ind])
@@ -272,7 +272,7 @@ function RSB_entropic_m1(Λ, K, H, popP_RS, popQ_RS;
 
             ν = fill(0.0, 1:2^k)
             σs = fill(tuple(fill(NaN, k)...), 1:2^k)
-            ν, σs = dist_sigmas(-s, ths[0,:], σs, ν)
+            ν, σs = dist_sigmas(-1, ths[0,:], σs, ν)
             wν = weights(ν)
             ind = sample(eachindex(ν), wν)
             σ = convert.(Int64, σs[ind])
@@ -301,7 +301,7 @@ function RSB_entropic_m1(Λ, K, H, popP_RS, popQ_RS;
         V[t] = V[t]/size(popP, 2)
         p1[t] = p1[t]./size(popP, 2)
         pm1[t] = pm1[t]./size(popP, 2)
-        int_freenrj[t] = internal_freeenergy(Λ, K, H, popP, popQ, maxiter=10^5)
+        #int_freenrj[t] = internal_freeenergy(Λ, K, H, popP, popQ, maxiter=10^5)
     end    
     V = V .- q0
     #popP, popQ

@@ -261,21 +261,21 @@ function RSB_entropic_m1(Λ, K, H, popP_RS, popQ_RS;
             #@show ind_ths, s
             
             ν = fill(0.0, 2^k)
-            σs = fill(tuple(fill(NaN, k)...), 2^k)
-            ν = dist_sigmas(1, ths[0,:], σs, ν)
+            σs = fill(tuple(fill(0, k)...), 2^k)
+            ν = @views dist_sigmas(1, ths[0,:], σs, ν)
             wν = weights(ν)
             ind = sample(eachindex(ν), wν)
-            σ = convert.(Int64, σs[ind])
+            σ = σs[ind]
             #@show σ
             elts = (ths[s,i] for (i,s) ∈ enumerate(σ))
             popQ[1,i] = BP_tu_conv(elts)
 
             ν .= 0
-            fill!(σs, tuple(fill(NaN, k)...))
-            ν  = dist_sigmas(-1, ths[0,:], σs, ν)
+            # fill!(σs, tuple(fill(NaN, k)...))
+            ν  = @views dist_sigmas(-1, ths[0,:], σs, ν)
             wν = weights(ν)
             ind = sample(eachindex(ν), wν)
-            σ = convert.(Int64, σs[ind])
+            σ = σs[ind]
             #@show σ
             elts = (ths[s,i] for (i,s) ∈ enumerate(σ))
             popQ[-1,i] = BP_tu_conv(elts)

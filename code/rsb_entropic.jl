@@ -112,7 +112,7 @@ function distorsion_RS(Λ, K, H, popP_RS, popQ_RS;
     for t = 1:maxiter
         d = sample(eachindex(Λ), wΛ)
         ind_tus = rand(1:popsize, d)
-        tus = popQ_RS[ind_tus]
+        tus = @view popQ_RS[ind_tus]
         s = rand((-1,1))
         th = BP_th_conv(H*s, tus)
         O += s*(th[1]-th[2])
@@ -256,7 +256,7 @@ function RSB_entropic_m1(Λ, K, H, popP_RS, popQ_RS;
         for i = 1:popsize
             k = sample(eachindex(K1), wK1)
             ind_ths = rand(1:popsize, k)
-            ths = popP[:,ind_ths]            
+            ths = @view popP[:,ind_ths]            
             popQ[0,i] = BP_tu_conv(ths[0,:])
             #@show ind_ths, s
             
@@ -270,8 +270,8 @@ function RSB_entropic_m1(Λ, K, H, popP_RS, popQ_RS;
             elts = [ths[s,i] for (i,s) ∈ zip(eachindex(σ), σ)]
             popQ[1,i] = BP_tu_conv(elts)
 
-            ν = fill(0.0, 1:2^k)
-            σs = fill(tuple(fill(NaN, k)...), 1:2^k)
+            ν .= 0
+            σs .= tuple(fill(NaN, k)...)
             ν, σs = dist_sigmas(-1, ths[0,:], σs, ν)
             wν = weights(ν)
             ind = sample(eachindex(ν), wν)
@@ -284,7 +284,7 @@ function RSB_entropic_m1(Λ, K, H, popP_RS, popQ_RS;
         for i = 1:popsize
             d = sample(collect(eachindex(Λ1)), wΛ1)#d = sample(eachindex(Λ1), wΛ1)
             ind_tus = rand(1:popsize, d)
-            tus = popQ[:,ind_tus]
+            tus = @view popQ[:,ind_tus]
             #@show ind_tus
             s = rand((-1,1))
             popP[0,i] = BP_th_conv(H*s, tus[0,:])
